@@ -16,7 +16,12 @@ function getDashboardSummary(req, res) {
     const scopedKYC = filterByLocation(db.kycRecords, user);
     const scopedAgentPayments = filterByLocation(db.agentPayments, user);
     const scopedVendorPayments = filterByLocation(db.vendorPayments, user);
-    const scopedPincodes = filterByLocation(db.pincodeDetails, user);
+    const allUsers = Array.from(db.users || []);
+    const pinAdmins = allUsers.filter(u => {
+      const isPinAdmin = u.role === 'Pincode Admin' || (u.role || '').toLowerCase().includes('pincode admin');
+      return isPinAdmin && u.status === 'active';
+    });
+    const scopedPincodes = filterByLocation(pinAdmins, user);
 
     const totalRevenue = scopedOrders.reduce((sum, o) => sum + (o.netPayable || o.totalAmount || 0), 0);
     const pendingAgentPayouts = scopedAgentPayments

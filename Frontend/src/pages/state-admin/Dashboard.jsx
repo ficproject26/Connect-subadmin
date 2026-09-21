@@ -42,6 +42,7 @@ export function StateAdminDashboard() {
   const [summaryData, setSummaryData] = useState(null);
   const [districtsCount, setDistrictsCount] = useState(0);
   const [divisionsCount, setDivisionsCount] = useState(0);
+  const [pincodesCount, setPincodesCount] = useState(0);
   const [adminsCount, setAdminsCount] = useState(0);
 
   useEffect(() => {
@@ -50,12 +51,14 @@ export function StateAdminDashboard() {
       dataService.getDashboardSummary().catch(() => null),
       dataService.getDistricts().catch(() => null),
       dataService.getDivisions().catch(() => null),
+      dataService.getPincodes().catch(() => null),
       dataService.getSubordinateAdmins().catch(() => null)
-    ]).then(([summary, dstRes, divRes, subRes]) => {
+    ]).then(([summary, dstRes, divRes, pinRes, subRes]) => {
       if (!isMounted) return;
       if (summary?.success) setSummaryData(summary);
       if (dstRes?.districts) setDistrictsCount(dstRes.districts.length);
       if (divRes?.divisions) setDivisionsCount(divRes.divisions.length);
+      if (pinRes?.pincodes) setPincodesCount(pinRes.pincodes.length);
       if (subRes?.admins) setAdminsCount(subRes.admins.length);
     });
     return () => { isMounted = false; };
@@ -89,7 +92,7 @@ export function StateAdminDashboard() {
     },
     {
       label: 'Total Pincodes',
-      value: String(metrics.totalPincodes || 0),
+      value: String(pincodesCount || metrics.totalPincodes || 0),
       icon: MapPin,
       path: '/state-admin/pincodes',
       highlight: 'Micro Coverage',

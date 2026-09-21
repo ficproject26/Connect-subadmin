@@ -31,16 +31,19 @@ export function DistrictAdminDashboard() {
 
   const [summaryData, setSummaryData] = useState(null);
   const [divisions, setDivisions] = useState([]);
+  const [pincodes, setPincodes] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
     Promise.all([
       dataService.getDashboardSummary().catch(() => null),
-      dataService.getDivisions().catch(() => null)
-    ]).then(([summary, divRes]) => {
+      dataService.getDivisions().catch(() => null),
+      dataService.getPincodes().catch(() => null)
+    ]).then(([summary, divRes, pinRes]) => {
       if (!isMounted) return;
       if (summary?.success) setSummaryData(summary);
       if (divRes?.divisions) setDivisions(divRes.divisions);
+      if (pinRes?.pincodes) setPincodes(pinRes.pincodes);
     });
     return () => { isMounted = false; };
   }, []);
@@ -48,7 +51,7 @@ export function DistrictAdminDashboard() {
   const metrics = summaryData?.metrics || {};
   const stats = {
     totalDivisions: divisions.length,
-    totalPincodes: metrics.totalPincodes || 0,
+    totalPincodes: pincodes.length || metrics.totalPincodes || 0,
     totalCustomers: metrics.totalCustomers || 0,
     totalVendors: metrics.totalVendors || 0,
     totalOrders: metrics.totalOrders || 0,
