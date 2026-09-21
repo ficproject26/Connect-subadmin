@@ -24,18 +24,18 @@ function locationMiddleware(req, res, next) {
     }
   }
 
-  // Divisional Admin cannot query a different division or different state/district
-  if (role === 'Divisional Admin') {
+  // Divisional Admin / Division Admin cannot query a different division or different state/district
+  if (role === 'Divisional Admin' || role === 'Division Admin') {
     if (queryDivision && queryDivision !== division) {
       return res.status(403).json({
         success: false,
-        message: `Forbidden: Divisional Admin is restricted to Division ${division} and cannot query ${queryDivision}.`
+        message: `Forbidden: Division Admin is restricted to Division ${division} and cannot query ${queryDivision}.`
       });
     }
     if (queryDistrict && queryDistrict !== district) {
       return res.status(403).json({
         success: false,
-        message: `Forbidden: Divisional Admin is restricted to District ${district}.`
+        message: `Forbidden: Division Admin is restricted to District ${district}.`
       });
     }
   }

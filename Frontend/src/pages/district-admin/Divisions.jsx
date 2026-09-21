@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -11,8 +11,58 @@ import {
   Phone,
   Building2,
   GraduationCap,
-  MapPin
+  FileText,
+  MapPin,
+  Plus,
+  User,
+  Home,
+  Landmark,
+  ShieldCheck,
+  KeyRound,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  Upload,
+  Eye,
+  EyeOff
 } from 'lucide-react';
+import { getDivisionsForDistrict } from '../../utils/indiaPostalData';
+
+const STEPS = [
+  { id: 1, label: 'Personal',   icon: User },
+  { id: 2, label: 'Address',    icon: Home },
+  { id: 3, label: 'Document',   icon: FileText },
+  { id: 4, label: 'Bank',       icon: Landmark },
+  { id: 5, label: 'Assignment', icon: ShieldCheck },
+  { id: 6, label: 'Login',      icon: KeyRound },
+];
+
+const EMPTY_FORM = {
+  // step 1
+  fullName: '', email: '', mobile: '', dob: '', profilePhoto: null, profilePhotoPreview: '',
+  // step 2
+  doorStreet: '', area: '', city: '', district: '', state: '', pincode: '',
+  // step 3 - Documents
+  aadharNumber: '', aadharPhoto: null, aadharPhotoPreview: '',
+  panNumber: '', panPhoto: null, panPhotoPreview: '',
+  // step 4
+  accountHolderName: '', bankName: '', accountNumber: '', ifscCode: '', branchName: '',
+  // step 5
+  assignedState: '', assignedDistrict: '', divisionName: '', status: 'Active',
+  // step 6
+  loginId: '', password: '', confirmPassword: '',
+};
+
+function FieldInput({ label, required, children }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+        {label} {required && <span className="text-rose-500">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 export function DistrictDivisions() {
   const { user } = useAuth();
@@ -22,6 +72,33 @@ export function DistrictDivisions() {
   const [divisions, setDivisions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
+
+  // Add Division Admin Wizard State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [addSuccess, setAddSuccess] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const fileRef = useRef();
+  const aadharFileRef = useRef();
+  const panFileRef = useRef();
+
+  const setF = (patch) => setForm(f => ({ ...f, ...patch }));
+
+  // Auto-fill state & district from logged-in District Admin
+  useEffect(() => {
+    if (user) {
+      setF({
+        assignedState: user.state || 'Tamil Nadu',
+        state: user.state || 'Tamil Nadu',
+        assignedDistrict: user.district || '',
+        district: user.district || ''
+      });
+    }
+  }, [user]);
 
   const getAdminDetails = (row) => {
     const adminName = row.adminName || row.assignedAdmin || 'Unassigned';
@@ -34,16 +111,23 @@ export function DistrictDivisions() {
       emergencyPhone: '-',
       division: row.name || row.divisionName || '-',
       code: row.id || (row.name ? `DIV-${row.name.slice(0, 3).toUpperCase()}` : '-'),
-      district: row.districtName || user?.district || 'Salem',
+      district: row.districtName || user?.district || 'Assigned District',
       state: row.stateName || user?.state || 'Tamil Nadu',
       pincodesCount: row.pincodes?.length || row.pincodesCount || 0,
       pincodes: row.pincodes || [],
       status: row.status || 'Active',
-      joinedDate: row.joinedDate || '-',
-      qualification: row.qualification || '-',
-      experience: row.experience || '-',
-      specialization: row.specialization || '-',
-      address: row.address || `Divisional Office, ${row.name || ''}, ${row.districtName || ''}`
+      joinedDate: row.adminCreatedAt ? new Date(row.adminCreatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
+      qualification: row.adminQualification || row.qualification || '-',
+      course: row.adminCourse || '-',
+      institution: row.adminInstitution || '-',
+      passingYear: row.adminPassingYear || '-',
+      accountHolderName: row.adminAccountHolder || '-',
+      bankName: row.adminBankName || '-',
+      accountNumber: row.adminAccountNumber || '-',
+      ifscCode: row.adminIfsc || '-',
+      branchName: row.adminBranch || '-',
+      loginId: row.adminLoginId || '-',
+      address: row.adminAddress || `Divisional Office, ${row.name || ''}, ${row.districtName || ''}`
     };
   };
 
@@ -52,11 +136,14 @@ export function DistrictDivisions() {
     try {
       const res = await dataService.getDivisions();
       if (res.success) {
-        const districtName = (user?.district || 'Salem').toLowerCase();
-        const filtered = (res.divisions || []).filter(
-          d => (d.districtName || '').toLowerCase() === districtName
-        );
-        setDivisions(filtered.length > 0 ? filtered : res.divisions);
+        const districtName = (user?.district || '').toLowerCase();
+        let list = res.divisions || [];
+        if (districtName) {
+          list = list.filter(
+            d => (d.districtName || '').toLowerCase() === districtName
+          );
+        }
+        setDivisions(list);
       }
     } catch (e) {
       console.error(e);
@@ -67,7 +154,7 @@ export function DistrictDivisions() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [user]);
 
   const handleToggleStatus = async (row) => {
     const currentStatus = row.status || 'Active';
@@ -84,6 +171,416 @@ export function DistrictDivisions() {
       setDivisions(prev =>
         prev.map(d => (d.id === row.id || d.name === row.name ? { ...d, status: currentStatus } : d))
       );
+    }
+  };
+
+  const openAdd = () => {
+    setForm({
+      ...EMPTY_FORM,
+      assignedState: user?.state || 'Tamil Nadu',
+      state: user?.state || 'Tamil Nadu',
+      assignedDistrict: user?.district || '',
+      district: user?.district || ''
+    });
+    setCurrentStep(1);
+    setAddError('');
+    setAddSuccess('');
+    setShowAddModal(true);
+  };
+
+  const closeAdd = () => {
+    setShowAddModal(false);
+    setCurrentStep(1);
+    setAddError('');
+    setAddSuccess('');
+  };
+
+  const canNextStep = () => {
+    switch (currentStep) {
+      case 1:
+        return !!form.fullName.trim() && !!form.email.trim() && !!form.mobile.trim();
+      case 2:
+        return true;
+      case 3:
+        return true;
+      case 4:
+        return true;
+      case 5:
+        return !!form.divisionName.trim();
+      case 6:
+        return (
+          !!form.loginId.trim() &&
+          form.password.length >= 6 &&
+          form.password === form.confirmPassword
+        );
+      default:
+        return true;
+    }
+  };
+
+  const handleSubmit = async () => {
+    setAddError('');
+    if (!form.fullName.trim() || !form.email.trim() || !form.divisionName.trim()) {
+      setAddError('Full name, email, and division name are required.');
+      return;
+    }
+    if (form.password && form.password !== form.confirmPassword) {
+      setAddError('Passwords do not match.');
+      return;
+    }
+
+    setAddLoading(true);
+    try {
+      const payload = {
+        adminName: form.fullName,
+        email: form.email,
+        phone: form.mobile,
+        dob: form.dob,
+        address: [form.doorStreet, form.area, form.city].filter(Boolean).join(', '),
+        city: form.city,
+        state: form.state || form.assignedState,
+        pincode: form.pincode,
+        // documents
+        aadharNumber: form.aadharNumber,
+        panNumber: form.panNumber,
+        accountHolderName: form.accountHolderName,
+        bankName: form.bankName,
+        accountNumber: form.accountNumber,
+        ifscCode: form.ifscCode,
+        branchName: form.branchName,
+        assignedState: form.assignedState,
+        assignedDistrict: form.assignedDistrict,
+        divisionName: form.divisionName,
+        status: form.status,
+        loginId: form.loginId,
+        password: form.password || 'admin123',
+      };
+
+      const res = await dataService.addDivisionAdmin(payload);
+      if (res.success) {
+        setAddSuccess(res.message || 'Division Admin registered successfully.');
+        loadData();
+      } else {
+        setAddError(res.message || 'Failed to register Division Admin.');
+      }
+    } catch (err) {
+      setAddError(err.message || 'An error occurred. Please try again.');
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const inputCls = `w-full px-3 py-2 rounded-xl text-xs sm:text-sm border transition focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+    isDark
+      ? 'bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-blue-500'
+      : 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-600'
+  }`;
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldInput label="Full Name" required>
+                <input type="text" className={inputCls} placeholder="e.g. Rajesh Kannan"
+                  value={form.fullName} onChange={e => setF({ fullName: e.target.value })} />
+              </FieldInput>
+              <FieldInput label="Email Address" required>
+                <input type="email" className={inputCls} placeholder="e.g. rajesh.division@admin.com"
+                  value={form.email} onChange={e => setF({ email: e.target.value })} />
+              </FieldInput>
+              <FieldInput label="Mobile Number" required>
+                <input type="tel" className={inputCls} placeholder="e.g. 9876543212"
+                  value={form.mobile} onChange={e => setF({ mobile: e.target.value })} />
+              </FieldInput>
+              <FieldInput label="Date of Birth">
+                <input type="date" className={inputCls}
+                  value={form.dob} onChange={e => setF({ dob: e.target.value })} />
+              </FieldInput>
+            </div>
+            <FieldInput label="Profile Photo">
+              <div className="flex items-center gap-4">
+                {form.profilePhotoPreview ? (
+                  <img src={form.profilePhotoPreview} alt="preview"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-blue-300 shadow" />
+                ) : (
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center border-2 border-dashed ${isDark ? 'border-slate-600 bg-slate-800' : 'border-slate-300 bg-slate-50'}`}>
+                    <User className="w-7 h-7 text-slate-400" />
+                  </div>
+                )}
+                <div>
+                  <button type="button" onClick={() => fileRef.current?.click()}
+                    className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition ${isDark ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                    <Upload className="w-3.5 h-3.5" /> Upload Photo
+                  </button>
+                  <p className="text-[10px] text-slate-400 mt-1">JPG, PNG up to 2MB</p>
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      setF({ profilePhoto: file, profilePhotoPreview: URL.createObjectURL(file) });
+                    }} />
+                </div>
+              </div>
+            </FieldInput>
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <FieldInput label="Door No / Street">
+                <input type="text" className={inputCls} placeholder="e.g. 15, Gandhi Road"
+                  value={form.doorStreet} onChange={e => setF({ doorStreet: e.target.value })} />
+              </FieldInput>
+            </div>
+            <FieldInput label="Area">
+              <input type="text" className={inputCls} placeholder="e.g. Rayakottai Road"
+                value={form.area} onChange={e => setF({ area: e.target.value })} />
+            </FieldInput>
+            <FieldInput label="City">
+              <input type="text" className={inputCls} placeholder="e.g. Hosur"
+                value={form.city} onChange={e => setF({ city: e.target.value })} />
+            </FieldInput>
+            <FieldInput label="District">
+              <input type="text" className={inputCls} placeholder="e.g. Krishnagiri"
+                value={form.district} onChange={e => setF({ district: e.target.value })} />
+            </FieldInput>
+            <FieldInput label="State">
+              <input type="text" className={inputCls} placeholder="e.g. Tamil Nadu"
+                value={form.state} onChange={e => setF({ state: e.target.value })} />
+            </FieldInput>
+            <FieldInput label="Pincode">
+              <input type="text" className={inputCls} placeholder="e.g. 635109"
+                value={form.pincode} onChange={e => setF({ pincode: e.target.value })} />
+            </FieldInput>
+          </div>
+        );
+
+      // ===== STEP 3: Document Details =====
+      case 3:
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldInput label="Aadhaar Number">
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="12-digit Aadhaar Number"
+                  maxLength={12}
+                  value={form.aadharNumber}
+                  onChange={e => setF({ aadharNumber: e.target.value.replace(/\D/g, '') })}
+                />
+              </FieldInput>
+
+              <FieldInput label="Aadhaar Photo">
+                <div
+                  onClick={() => aadharFileRef.current?.click()}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
+                    isDark ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400' : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+                  }`}
+                >
+                  <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="text-xs text-slate-500 truncate">
+                    {form.aadharPhoto ? form.aadharPhoto.name : 'Upload Aadhaar Photo'}
+                  </span>
+                  <input
+                    ref={aadharFileRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setF({ aadharPhoto: file, aadharPhotoPreview: URL.createObjectURL(file) });
+                      }
+                    }}
+                  />
+                </div>
+              </FieldInput>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldInput label="PAN Card Number">
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="10-digit PAN (e.g. ABCDE1234F)"
+                  maxLength={10}
+                  value={form.panNumber}
+                  onChange={e => setF({ panNumber: e.target.value.toUpperCase() })}
+                />
+              </FieldInput>
+
+              <FieldInput label="PAN Photo">
+                <div
+                  onClick={() => panFileRef.current?.click()}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
+                    isDark ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400' : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+                  }`}
+                >
+                  <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                  <span className="text-xs text-slate-500 truncate">
+                    {form.panPhoto ? form.panPhoto.name : 'Upload PAN Photo'}
+                  </span>
+                  <input
+                    ref={panFileRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setF({ panPhoto: file, panPhotoPreview: URL.createObjectURL(file) });
+                      }
+                    }}
+                  />
+                </div>
+              </FieldInput>
+            </div>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <FieldInput label="Account Holder Name">
+                <input type="text" className={inputCls} placeholder="e.g. Rajesh Kannan"
+                  value={form.accountHolderName} onChange={e => setF({ accountHolderName: e.target.value })} />
+              </FieldInput>
+            </div>
+            <FieldInput label="Bank Name">
+              <input type="text" className={inputCls} placeholder="e.g. State Bank of India"
+                value={form.bankName} onChange={e => setF({ bankName: e.target.value })} />
+            </FieldInput>
+            <FieldInput label="Account Number">
+              <input type="text" className={inputCls} placeholder="e.g. 987654321098"
+                value={form.accountNumber} onChange={e => setF({ accountNumber: e.target.value })} />
+            </FieldInput>
+            <FieldInput label="IFSC Code">
+              <input type="text" className={inputCls} placeholder="e.g. SBIN0001235"
+                value={form.ifscCode} onChange={e => setF({ ifscCode: e.target.value.toUpperCase() })} />
+            </FieldInput>
+            <FieldInput label="Branch Name">
+              <input type="text" className={inputCls} placeholder="e.g. Hosur Main"
+                value={form.branchName} onChange={e => setF({ branchName: e.target.value })} />
+            </FieldInput>
+          </div>
+        );
+
+      case 5:
+        return (
+          <div className="space-y-4">
+            <div className={`p-3 rounded-xl border text-xs ${isDark ? 'bg-slate-800/60 border-slate-700 text-slate-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+              <strong>Jurisdiction Scope:</strong> Assigned District is automatically set to your district. Enter the Division Name to be created and assigned to this Division Admin.
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldInput label="Assigned State">
+                <input type="text" className={`${inputCls} opacity-70 cursor-not-allowed`}
+                  value={form.assignedState} readOnly />
+              </FieldInput>
+              <FieldInput label="Assigned District">
+                <input type="text" className={`${inputCls} opacity-70 cursor-not-allowed`}
+                  value={form.assignedDistrict} readOnly />
+              </FieldInput>
+              <div className="sm:col-span-2">
+                <FieldInput label="Division Name" required>
+                  <select
+                    className={inputCls}
+                    value={form.divisionName}
+                    onChange={e => setF({ divisionName: e.target.value })}
+                  >
+                    <option value="">Select Postal Division</option>
+                    {getDivisionsForDistrict(form.assignedState || user?.state || 'Tamil Nadu', form.assignedDistrict || user?.district || 'Salem').map((divName, idx) => {
+                      const existing = divisions.find(d => d.name?.toLowerCase() === divName.toLowerCase());
+                      const count = (existing && existing.adminName && existing.adminName !== 'Unassigned') ? 1 : 0;
+                      const isFull = count >= 1;
+                      return (
+                        <option key={idx} value={divName} disabled={isFull}>
+                          {divName} — {count}/1 Admin {isFull ? '(FULL)' : '(Available)'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">Select from official India Post postal divisions under your district.</p>
+                </FieldInput>
+              </div>
+              <div className="sm:col-span-2">
+                <FieldInput label="Status">
+                  <div className="flex gap-3 mt-1">
+                    {['Active', 'Inactive'].map(s => (
+                      <label key={s} className="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="divStatus" value={s}
+                          checked={form.status === s}
+                          onChange={() => setF({ status: s })}
+                          className="w-4 h-4 accent-blue-600" />
+                        <span className={`text-sm font-semibold ${s === 'Active' ? 'text-emerald-600' : 'text-rose-500'}`}>{s}</span>
+                      </label>
+                    ))}
+                  </div>
+                </FieldInput>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 6:
+        return (
+          <div className="space-y-4">
+            <div className={`p-3 rounded-xl border text-xs ${isDark ? 'bg-slate-800/60 border-slate-700 text-slate-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+              <strong>Account Setup:</strong> Login ID must be unique. Password must be at least 6 characters.
+            </div>
+            <FieldInput label="Login ID / Username" required>
+              <input type="text" className={inputCls} placeholder="e.g. div.hosur.admin"
+                value={form.loginId} onChange={e => setF({ loginId: e.target.value })} />
+              <p className="text-[10px] text-slate-400 mt-1">Unique login ID for Division Admin portal sign-in.</p>
+            </FieldInput>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldInput label="Password" required>
+                <div className="relative">
+                  <input type={showPwd ? 'text' : 'password'} className={inputCls} placeholder="Min 6 characters"
+                    value={form.password} onChange={e => setF({ password: e.target.value })} />
+                  <button type="button" onClick={() => setShowPwd(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </FieldInput>
+              <FieldInput label="Confirm Password" required>
+                <div className="relative">
+                  <input type={showConfirmPwd ? 'text' : 'password'} className={`${inputCls} ${form.confirmPassword && form.password !== form.confirmPassword ? '!border-rose-400 !ring-rose-100' : ''}`}
+                    placeholder="Re-enter password"
+                    value={form.confirmPassword} onChange={e => setF({ confirmPassword: e.target.value })} />
+                  <button type="button" onClick={() => setShowConfirmPwd(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showConfirmPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {form.confirmPassword && form.password !== form.confirmPassword && (
+                  <p className="text-[10px] text-rose-500 mt-1 font-semibold">Passwords do not match</p>
+                )}
+              </FieldInput>
+            </div>
+            {/* Registration Summary */}
+            <div className={`p-3 rounded-xl border text-xs space-y-1 ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+              <p className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Registration Summary</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                <div><span className="text-slate-400">Name:</span> <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>{form.fullName || '—'}</span></div>
+                <div><span className="text-slate-400">Email:</span> <span className={`font-medium font-mono ${isDark ? 'text-white' : 'text-slate-800'}`}>{form.email || '—'}</span></div>
+                <div><span className="text-slate-400">Division:</span> <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>{form.divisionName || '—'}</span></div>
+                <div><span className="text-slate-400">District:</span> <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>{form.assignedDistrict || '—'}</span></div>
+                <div><span className="text-slate-400">Role:</span> <span className="font-semibold text-blue-600">Division Admin</span></div>
+                <div><span className="text-slate-400">Status:</span> <span className={`font-semibold ${form.status === 'Active' ? 'text-emerald-600' : 'text-rose-500'}`}>{form.status}</span></div>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
@@ -118,7 +615,7 @@ export function DistrictDivisions() {
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
               isDark ? 'bg-indigo-950/80 text-cyan-300 border border-indigo-800/60' : 'bg-blue-100 text-blue-700 border border-blue-200'
             }`}>
-              {admin.name[0]}
+              {(admin.name || 'U')[0]}
             </div>
             <div>
               <div className={`font-bold text-xs ${isDark ? 'text-white' : 'text-slate-900'}`}>
@@ -134,9 +631,9 @@ export function DistrictDivisions() {
     },
     {
       header: 'PINCODES',
-      accessor: (row) => row.pincodes?.length || 2,
+      accessor: (row) => row.pincodes?.length || 0,
       render: (row) => {
-        const pinCount = row.pincodes?.length || 2;
+        const pinCount = row.pincodes?.length || 0;
         const tooltipDetails = row.pincodes?.join(', ');
 
         return (
@@ -208,18 +705,15 @@ export function DistrictDivisions() {
           </p>
         </div>
 
-        {/* Drill down Breadcrumb */}
-        <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-xl border font-mono ${
-          isDark
-            ? 'bg-slate-800/80 border-slate-700 text-slate-400'
-            : 'bg-slate-100 border-slate-200 text-slate-600'
-        }`}>
-          <span>District</span>
-          <span>&rarr;</span>
-          <span className="text-blue-600 font-bold">Divisions</span>
-          <span>&rarr;</span>
-          <span>Pincodes</span>
-        </div>
+        {/* Replaced breadcrumb with + Add Division Admin button */}
+        <button
+          type="button"
+          onClick={openAdd}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold shadow bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Add Division Admin</span>
+        </button>
       </div>
 
       <DataTable
@@ -251,148 +745,165 @@ export function DistrictDivisions() {
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${
                   isDark ? 'bg-indigo-950 border border-indigo-700/60 text-cyan-300' : 'bg-blue-600 text-white shadow-sm'
                 }`}>
-                  {selectedAdmin.name[0]}
+                  {(selectedAdmin.name || 'U')[0]}
                 </div>
                 <div>
                   <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                     {selectedAdmin.name}
                   </h4>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <span>Division Administrator</span>
                     <span>•</span>
-                    <span className="font-mono">{selectedAdmin.employeeCode}</span>
+                    <span className="font-mono text-blue-500">{selectedAdmin.id}</span>
                   </div>
                 </div>
               </div>
-
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
                 selectedAdmin.status === 'Active'
-                  ? isDark
-                    ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/30'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : isDark
-                    ? 'bg-rose-950/70 text-rose-300 border-rose-500/30'
-                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400'
+                  : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400'
               }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${selectedAdmin.status === 'Active' ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${selectedAdmin.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
                 {selectedAdmin.status}
               </span>
             </div>
 
-            {/* Details Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Contact Card */}
-              <div className={`p-4 rounded-xl border space-y-3 ${
-                isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/60 pb-2">
-                  <Phone className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Contact Information</span>
+            {/* Profile Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className={`p-4 rounded-xl border space-y-2 ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
+                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-2 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-blue-500" />
+                  Personal Information
                 </div>
-
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Official Email:</span>
-                    <div className={`font-mono font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.email}</div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Mobile Number:</span>
-                    <div className={`font-mono font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.phone}</div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Emergency Contact:</span>
-                    <div className={`font-mono font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.emergencyPhone || 'N/A'}</div>
-                  </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                  <span className="text-slate-500">Email:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.email}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                  <span className="text-slate-500">Phone:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.phone}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">Login ID:</span>
+                  <span className="font-mono text-slate-800 dark:text-slate-200">{selectedAdmin.loginId || '-'}</span>
                 </div>
               </div>
 
-              {/* Jurisdiction Card */}
-              <div className={`p-4 rounded-xl border space-y-3 ${
-                isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/60 pb-2">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Jurisdiction & Scope</span>
+              <div className={`p-4 rounded-xl border space-y-2 ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
+                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-2 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+                  Territory Assignment
                 </div>
-
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Assigned Division:</span>
-                    <div className={`font-bold ${isDark ? 'text-cyan-300' : 'text-blue-600'}`}>
-                      {selectedAdmin.division} (Code: {selectedAdmin.code})
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Parent District:</span>
-                    <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>
-                      {selectedAdmin.district} District
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Supervisory Scope:</span>
-                    <div className={`font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>
-                      {selectedAdmin.pincodesCount} Pincodes ({selectedAdmin.pincodes?.join(', ')})
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Date of Appointment:</span>
-                    <div className={`font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.joinedDate}</div>
-                  </div>
+                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                  <span className="text-slate-500">Division:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.division}</span>
                 </div>
-              </div>
-
-              {/* Qualifications & Experience Card */}
-              <div className={`p-4 rounded-xl border space-y-3 md:col-span-2 ${
-                isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/60 pb-2">
-                  <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Qualification & Professional Credentials</span>
+                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                  <span className="text-slate-500">District:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.district}</span>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Academic Qualification:</span>
-                    <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.qualification}</div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Relevant Experience:</span>
-                    <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.experience}</div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-slate-500 dark:text-slate-400">Functional Domain:</span>
-                    <div className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{selectedAdmin.specialization}</div>
-                  </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">State:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.state}</span>
                 </div>
-              </div>
-
-              {/* Official Administrative Address */}
-              <div className={`p-4 rounded-xl border space-y-2 md:col-span-2 ${
-                isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/60 pb-2">
-                  <MapPin className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Official Divisional Secretariat Address</span>
-                </div>
-                <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  {selectedAdmin.address}
-                </p>
               </div>
             </div>
+          </div>
+        )}
+      </Modal>
 
-            {/* Modal Actions */}
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setSelectedAdmin(null)}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                Close Profile
+      {/* Add Division Admin Modal */}
+      <Modal isOpen={showAddModal} onClose={closeAdd} title="Add New Division Administrator" maxWidth="max-w-3xl">
+        {addSuccess ? (
+          <div className="py-8 text-center space-y-4">
+            <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/60 rounded-full flex items-center justify-center mx-auto text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+            <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Division Admin Registered!</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">{addSuccess}</p>
+            <button type="button" onClick={closeAdd}
+              className="mt-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow cursor-pointer transition">
+              Done
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Step Indicator */}
+            <div className="flex items-center gap-0">
+              {STEPS.map((step, idx) => {
+                const Icon = step.icon;
+                const done = currentStep > step.id;
+                const active = currentStep === step.id;
+                return (
+                  <React.Fragment key={step.id}>
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                        done ? 'bg-blue-600 border-blue-600 text-white'
+                          : active ? 'bg-blue-50 border-blue-600 text-blue-600 dark:bg-blue-950 dark:border-blue-400 dark:text-blue-300'
+                            : isDark ? 'bg-slate-800 border-slate-600 text-slate-500' : 'bg-slate-100 border-slate-300 text-slate-400'
+                      }`}>
+                        {done ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-3.5 h-3.5" />}
+                      </div>
+                      <span className={`text-[9px] font-semibold ${active ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{step.label}</span>
+                    </div>
+                    {idx < STEPS.length - 1 && (
+                      <div className={`flex-1 h-0.5 mb-4 mx-1 transition-all ${done ? 'bg-blue-500' : isDark ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* Step Title */}
+            <div className={`pb-3 border-b ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+              <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                Step {currentStep}: {STEPS[currentStep - 1].label} Details
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {currentStep === 1 && 'Enter personal details of the Division Admin.'}
+                {currentStep === 2 && 'Provide residential or official address.'}
+                {currentStep === 3 && 'Enter educational qualification details.'}
+                {currentStep === 4 && 'Provide bank account details.'}
+                {currentStep === 5 && 'Set division name and jurisdictional assignment.'}
+                {currentStep === 6 && 'Set up login credentials for the Division Admin.'}
+              </p>
+            </div>
+
+            {/* Error alert */}
+            {addError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300">
+                {addError}
+              </div>
+            )}
+
+            {/* Step content */}
+            <div className="min-h-[200px]">
+              {renderStep()}
+            </div>
+
+            {/* Navigation buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button type="button"
+                onClick={() => { setAddError(''); setCurrentStep(s => Math.max(1, s - 1)); }}
+                disabled={currentStep === 1}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'}`}>
+                <ChevronLeft className="w-4 h-4" /> Back
               </button>
+
+              <span className="text-xs text-slate-400 font-medium">{currentStep} / {STEPS.length}</span>
+
+              {currentStep < STEPS.length ? (
+                <button type="button"
+                  onClick={() => { setAddError(''); if (canNextStep()) setCurrentStep(s => s + 1); else setAddError('Please fill all required fields before proceeding.'); }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow transition cursor-pointer">
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button type="button" onClick={handleSubmit} disabled={addLoading || !canNextStep()}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+                  {addLoading ? 'Registering...' : <><CheckCircle2 className="w-4 h-4" /> Register Division Admin</>}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -400,3 +911,4 @@ export function DistrictDivisions() {
     </div>
   );
 }
+export default DistrictDivisions;

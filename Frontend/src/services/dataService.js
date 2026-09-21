@@ -8,13 +8,42 @@ export const dataService = {
   // Hierarchy & Geo
   getHierarchy: () => apiRequest('/admin/hierarchy'),
   getSubordinateAdmins: () => apiRequest('/admin/subordinates'),
+  getStates: () => apiRequest('/admin/states'),
+  addStateAdmin: (data) => apiRequest('/admin/states', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  updateStateStatus: (id, status) => apiRequest(`/admin/states/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  }),
   getDistricts: () => apiRequest('/admin/districts'),
+  addDistrictAdmin: (data) => apiRequest('/admin/districts', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
   updateDistrictStatus: (id, status) => apiRequest(`/admin/districts/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status })
   }),
   getDivisions: () => apiRequest('/admin/divisions'),
+  addDivisionAdmin: (data) => apiRequest('/admin/divisions', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
   updateDivisionStatus: (id, status) => apiRequest(`/admin/divisions/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  }),
+  getPincodes: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/admin/pincodes${qs ? `?${qs}` : ''}`);
+  },
+  addPincodeAdmin: (data) => apiRequest('/admin/pincodes', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  updatePincodeStatus: (id, status) => apiRequest(`/admin/pincodes/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status })
   }),
@@ -129,13 +158,13 @@ export const dataService = {
   getQualityCheckById: (id) => apiRequest(`/quality/${id}`),
 
   // Pincode Manager
-  getPincodes: (params = {}) => {
+  getPincodeDetails: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return apiRequest(`/pincodes${qs ? `?${qs}` : ''}`);
+    return apiRequest(`/admin/pincodes${qs ? `?${qs}` : ''}`);
   },
-  updatePincode: (pincode, data) => apiRequest(`/pincodes/${pincode}`, {
+  updatePincode: (id, status) => apiRequest(`/admin/pincodes/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
-    body: JSON.stringify(data)
+    body: JSON.stringify({ status })
   }),
 
   // Operations: Executives, Support Team, Agents
@@ -174,6 +203,10 @@ export const dataService = {
     body: JSON.stringify(data)
   }),
   rejectManager: (id, data = {}) => apiRequest(`/managers/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  addManager: (data) => apiRequest('/managers', {
     method: 'POST',
     body: JSON.stringify(data)
   })

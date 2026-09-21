@@ -135,7 +135,7 @@ export function DivisionalTechnicians() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Divisional Technicians Roster</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Field service specialists assigned to {user?.division || 'Salem North'} division.
+          Field service specialists assigned to {user?.division || 'assigned'} division.
         </p>
       </div>
 

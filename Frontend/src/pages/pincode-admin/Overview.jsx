@@ -5,8 +5,8 @@ import { HierarchyNavigator } from '../../components/HierarchyNavigator';
 
 export function PincodeOverview() {
   const { user } = useAuth();
-  const pincode = user?.pincode || '636001';
-  const areaName = user?.areaName || 'Salem Town Fort';
+  const pincode = user?.pincode || '-';
+  const areaName = user?.areaName || (pincode !== '-' ? `PIN ${pincode}` : 'Local Zone');
 
   return (
     <div className="space-y-6">
@@ -33,7 +33,7 @@ export function PincodeOverview() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Division: {user?.division || 'Salem North'} • District: {user?.district || 'Salem'} • State: {user?.state || 'Tamil Nadu'}
+                Division: {user?.division || '-'} • District: {user?.district || '-'} • State: {user?.state || '-'}
               </p>
             </div>
           </div>
@@ -41,7 +41,7 @@ export function PincodeOverview() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="text-xs text-slate-500 font-medium">Local Dispatch Office</div>
-              <div className="text-sm font-bold text-slate-900 dark:text-white">Salem Town Main Hub</div>
+              <div className="text-sm font-bold text-slate-900 dark:text-white">{areaName} Hub</div>
             </div>
           </div>
         </div>

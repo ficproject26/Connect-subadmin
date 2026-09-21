@@ -1,11 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { ShieldCheck, MapPin } from 'lucide-react';
 
 export function DistrictPincodeAdmins() {
   const { user } = useAuth();
   const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadAdmins = async () => {
+      setLoading(true);
+      try {
+        const res = await dataService.getPincodes();
+        if (res.success && res.pincodes) {
+          const district = user?.district || 'Salem';
+          const registered = res.pincodes
+            .filter(p => p.adminName && p.adminName !== 'Unassigned' && (!district || p.district?.toLowerCase() === district.toLowerCase()))
+            .map(p => ({
+              id: p.adminId || `ADM-PIN-${p.pincode}`,
+              name: p.adminName,
+              email: p.adminEmail || '-',
+              phone: p.adminPhone || '-',
+              pincode: p.pincode,
+              area: p.areaName || 'Assigned Zone',
+              division: p.division || p.divisionName || '-',
+              district: p.district || district,
+              status: p.status || 'Active'
+            }));
+          setAdmins(registered);
+        }
+      } catch (err) {
+        console.error('Failed to fetch district pincode admins:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadAdmins();
+  }, [user]);
 
   const columns = [
     {

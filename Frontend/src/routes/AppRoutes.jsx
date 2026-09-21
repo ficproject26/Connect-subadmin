@@ -9,6 +9,10 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 // Auth Pages
 import { Login } from '../pages/auth/Login';
 
+// Super Admin / Main Admin Pages
+import { SuperAdminDashboard } from '../pages/super-admin/Dashboard';
+import { SuperAdminStates } from '../pages/super-admin/States';
+
 // State Admin Pages
 import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
 import { StatesOverview } from '../pages/state-admin/StatesOverview';
@@ -127,12 +131,14 @@ import { PincodeAgentPayments } from '../pages/pincode-admin/AgentPayments';
 import { PincodeKYC } from '../pages/pincode-admin/KYC';
 import { PincodeQualityCheck } from '../pages/pincode-admin/QualityCheck';
 import { PincodeBusinessReports } from '../pages/pincode-admin/BusinessReports';
-import { PincodeManager } from '../pages/pincode-admin/PincodeManager';
 import { PincodePayments } from '../pages/pincode-admin/Payments';
 import { PincodeTasks } from '../pages/pincode-admin/Tasks';
 import { PincodeQueries } from '../pages/pincode-admin/Queries';
 import { PincodeProfile } from '../pages/pincode-admin/Profile';
 import { PincodeSettings } from '../pages/pincode-admin/Settings';
+
+// Manager Pages
+import { ManagerDashboard } from '../pages/manager/Dashboard';
 
 function RootRedirect() {
   const { user, isAuthenticated } = useAuth();
@@ -149,6 +155,28 @@ export function AppRoutes() {
       {/* Protected Dashboards Layout */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
+
+          {/* Super Admin / Main Admin Routes */}
+          <Route element={<RoleBasedRoute allowedRoles={['Super Admin', 'Main Admin']} />}>
+            <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+            <Route path="/super-admin/states" element={<SuperAdminStates />} />
+            <Route path="/super-admin/state-details" element={<SuperAdminStates />} />
+            <Route path="/super-admin/districts" element={<StateDistricts />} />
+            <Route path="/super-admin/district-admins" element={<StateDistrictAdmins />} />
+            <Route path="/super-admin/district-details" element={<StateDistrictDetails />} />
+            <Route path="/super-admin/divisions" element={<StateDivisions />} />
+            <Route path="/super-admin/division-admins" element={<StateDivisionAdmins />} />
+            <Route path="/super-admin/division-details" element={<StateDivisionDetails />} />
+            <Route path="/super-admin/pincodes" element={<StatePincodes />} />
+            <Route path="/super-admin/pincode-admins" element={<StatePincodeAdmins />} />
+            <Route path="/super-admin/pincode-details" element={<StatePincodeDetails />} />
+            <Route path="/super-admin/managers" element={<StateManagers level="state" />} />
+            <Route path="/super-admin/managers/state" element={<StateManagers level="state" />} />
+            <Route path="/super-admin/managers/district" element={<StateManagers level="district" />} />
+            <Route path="/super-admin/managers/divisional" element={<StateManagers level="divisional" />} />
+            <Route path="/super-admin/managers/pincode" element={<StateManagers level="pincode" />} />
+            <Route path="/super-admin/settings" element={<StateSettings />} />
+          </Route>
 
           {/* State Admin Routes */}
           <Route element={<RoleBasedRoute allowedRoles={['State Admin']} />}>
@@ -238,7 +266,7 @@ export function AppRoutes() {
           </Route>
 
           {/* Divisional Admin Routes */}
-          <Route element={<RoleBasedRoute allowedRoles={['Divisional Admin']} />}>
+          <Route element={<RoleBasedRoute allowedRoles={['Divisional Admin', 'Division Admin']} />}>
             <Route path="/divisional-admin/dashboard" element={<DivisionalAdminDashboard />} />
             <Route path="/divisional-admin/overview" element={<DivisionalOverview />} />
             <Route path="/divisional-admin/pincodes" element={<DivisionalPincodes />} />
@@ -273,6 +301,10 @@ export function AppRoutes() {
             <Route path="/divisional-admin/settings" element={<DivisionalSettings />} />
           </Route>
 
+          {/* Division Admin URL Aliases */}
+          <Route path="/division-admin/dashboard" element={<Navigate to="/divisional-admin/dashboard" replace />} />
+          <Route path="/division-admin/*" element={<Navigate to="/divisional-admin/dashboard" replace />} />
+
           {/* Pincode Admin Routes */}
           <Route element={<RoleBasedRoute allowedRoles={['Pincode Admin']} />}>
             <Route path="/pincode-admin/dashboard" element={<PincodeAdminDashboard />} />
@@ -297,12 +329,20 @@ export function AppRoutes() {
             <Route path="/pincode-admin/business-reports" element={<PincodeBusinessReports />} />
             <Route path="/pincode-admin/managers" element={<StateManagers level="pincode" />} />
             <Route path="/pincode-admin/managers/pincode" element={<StateManagers level="pincode" />} />
-            <Route path="/pincode-admin/pincode-manager" element={<PincodeManager />} />
+            <Route path="/pincode-admin/pincode-manager" element={<Navigate to="/pincode-admin/managers" replace />} />
             <Route path="/pincode-admin/payments" element={<PincodePayments />} />
             <Route path="/pincode-admin/tasks" element={<PincodeTasks />} />
             <Route path="/pincode-admin/queries" element={<PincodeQueries />} />
             <Route path="/pincode-admin/profile" element={<PincodeProfile />} />
             <Route path="/pincode-admin/settings" element={<PincodeSettings />} />
+          </Route>
+
+          {/* Manager Routes */}
+          <Route element={<RoleBasedRoute allowedRoles={['Manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager']} />}>
+            <Route path="/manager/dashboard" element={<ManagerDashboard />} />
+            <Route path="/manager/overview" element={<Navigate to="/manager/dashboard" replace />} />
+            <Route path="/manager/profile" element={<StateProfile />} />
+            <Route path="/manager/settings" element={<StateSettings />} />
           </Route>
 
         </Route>

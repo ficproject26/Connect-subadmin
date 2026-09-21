@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { useTheme } from '../../context/ThemeContext';
@@ -12,15 +13,53 @@ import {
   Building2, 
   Layers, 
   Users, 
-  ShieldCheck 
+  ShieldCheck,
+  Loader2
 } from 'lucide-react';
 
 export function StatePincodeAdmins() {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [admins] = useState([]);
+  useEffect(() => {
+    const loadAdmins = async () => {
+      setLoading(true);
+      try {
+        const res = await dataService.getPincodes();
+        if (res.success && res.pincodes) {
+          const registered = res.pincodes
+            .filter(p => p.adminName && p.adminName !== 'Unassigned')
+            .map(p => ({
+              id: p.adminId || `ADM-PIN-${p.pincode}`,
+              employeeCode: p.employeeCode || `EMP-${p.pincode}`,
+              name: p.adminName,
+              email: p.adminEmail || '-',
+              phone: p.adminPhone || '-',
+              pincode: p.pincode,
+              area: p.areaName || 'Assigned Hub',
+              division: p.division || p.divisionName || '-',
+              district: p.district || p.districtName || '-',
+              state: p.state || user?.state || 'Tamil Nadu',
+              status: p.status || 'Active',
+              joinedDate: p.adminCreatedAt ? new Date(p.adminCreatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Active',
+              address: p.adminAddress || `Pincode Station ${p.pincode}`,
+              qualification: '-',
+              experience: '-',
+              specialization: '-'
+            }));
+          setAdmins(registered);
+        }
+      } catch (err) {
+        console.error('Failed to fetch pincode admins:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadAdmins();
+  }, [user]);
 
   const columns = [
     {
@@ -215,31 +254,6 @@ export function StatePincodeAdmins() {
                   <div>
                     <span className="text-slate-500 dark:text-slate-400">Date of Appointment:</span>
                     <div className={`font-medium ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.joinedDate}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Qualifications & Experience Card */}
-              <div className={`p-4 rounded-xl border space-y-3 md:col-span-2 ${
-                isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/60 pb-2">
-                  <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Qualification & Professional Credentials</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Academic Qualification:</span>
-                    <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.qualification}</div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Relevant Experience:</span>
-                    <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.experience}</div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-slate-500 dark:text-slate-400">Functional Domain:</span>
-                    <div className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{selectedAdmin.specialization}</div>
                   </div>
                 </div>
               </div>

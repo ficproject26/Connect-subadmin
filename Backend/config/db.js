@@ -271,30 +271,7 @@ function initUsers() {
   }
 }
 
-// Harmonize Tamil Nadu Salem pincodes into pincodesCollection if missing
-function initPincodes() {
-  const existingCodes = new Set(Array.from(pincodesCollection).map(p => p.code));
-  const salemPincodes = [
-    { _id: 'pin_636001', code: '636001', areaName: 'Salem Fort / Bazaar / Town', divisionId: 'div_dist_salem_urban', districtId: 'dist_salem', stateId: 'state_tn' },
-    { _id: 'pin_636002', code: '636002', areaName: 'Shevapet / Gugai / Market', divisionId: 'div_dist_salem_urban', districtId: 'dist_salem', stateId: 'state_tn' },
-    { _id: 'pin_636003', code: '636003', areaName: 'Suramangalam / Junction', divisionId: 'div_dist_salem_rural', districtId: 'dist_salem', stateId: 'state_tn' },
-    { _id: 'pin_636004', code: '636004', areaName: 'Hasthampatti / Ammapet', divisionId: 'div_dist_salem_rural', districtId: 'dist_salem', stateId: 'state_tn' }
-  ];
-
-  for (const pin of salemPincodes) {
-    if (!existingCodes.has(pin.code)) {
-      pincodesCollection.push({
-        ...pin,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      existingCodes.add(pin.code);
-    }
-  }
-}
-
 initUsers();
-initPincodes();
 
 // Full database store
 const db = {
@@ -313,6 +290,7 @@ const db = {
       u.role === 'State Admin' || 
       u.role === 'District Admin' || 
       u.role === 'Divisional Admin' || 
+      u.role === 'Division Admin' ||
       u.role === 'Pincode Admin' ||
       u.role === 'Super Admin'
     );
@@ -335,6 +313,62 @@ const db = {
   kycRecords: JSON.parse(JSON.stringify(seed.kycRecords)),
   qualityCheckRecords: JSON.parse(JSON.stringify(seed.qualityCheckRecords || []))
 };
+
+// Bootstrap hierarchy from users so registered districts/divisions are always available
+function syncHierarchyFromUsers() {
+  db.hierarchy.states = [];
+  const allUsers = Array.from(usersCollection);
+
+  allUsers.forEach(u => {
+    if (!u.state || u.state === 'All India') return;
+    const stateName = u.state.trim();
+    let stateObj = db.hierarchy.states.find(s => s.name?.toLowerCase() === stateName.toLowerCase());
+    if (!stateObj) {
+      stateObj = {
+        id: u.stateId || (stateName === 'Tamil Nadu' ? 'state_tn' : `ST-${stateName.slice(0, 3).toUpperCase()}`),
+        name: stateName,
+        code: stateName.slice(0, 2).toUpperCase(),
+        districts: []
+      };
+      db.hierarchy.states.push(stateObj);
+    }
+
+    if (u.district) {
+      const dName = u.district.trim();
+      let dist = stateObj.districts.find(d => d.name?.toLowerCase() === dName.toLowerCase());
+      if (!dist) {
+        dist = {
+          id: u.districtId || (dName.toLowerCase() === 'salem' ? 'dist_salem' : `DST-${dName.replace(/\s+/g, '-').toUpperCase()}`),
+          name: dName,
+          code: dName.slice(0, 3).toUpperCase(),
+          status: u.status === 'inactive' ? 'Inactive' : 'Active',
+          divisions: []
+        };
+        stateObj.districts.push(dist);
+      }
+
+      if (u.division) {
+        const divName = u.division.trim();
+        let div = dist.divisions.find(d => d.name?.toLowerCase() === divName.toLowerCase());
+        if (!div) {
+          div = {
+            id: u.divisionId || `DIV-${divName.replace(/\s+/g, '-').toUpperCase()}`,
+            name: divName,
+            code: divName.slice(0, 3).toUpperCase(),
+            pincodes: []
+          };
+          dist.divisions.push(div);
+        }
+
+        if (u.role === 'Pincode Admin' && u.pincode && !div.pincodes.includes(u.pincode)) {
+          div.pincodes.push(u.pincode);
+        }
+      }
+    }
+  });
+}
+
+syncHierarchyFromUsers();
 
 /**
  * Enhanced location filter supporting both Sub-Admin roles and Field Manager roles.

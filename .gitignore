@@ -31,3 +31,6 @@ yarn-error.log*
 *.sw?
 .DS_Store
 Thumbs.db
+
+# Temp data
+Backend/data/[0-9]*.json

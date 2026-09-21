@@ -96,7 +96,7 @@ export function StateTechnicians() {
             <span>PIN: {row.pincode}</span>
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-4.5 mt-0.5">
-            {row.district ? `${row.district}${row.division ? `, ${row.division}` : ''}` : 'Salem District'}
+            {row.district ? `${row.district}${row.division ? `, ${row.division}` : ''}` : '-'}
           </div>
         </div>
       )

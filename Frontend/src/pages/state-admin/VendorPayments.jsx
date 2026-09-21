@@ -50,8 +50,8 @@ export function StateVendorPayments() {
       accessor: 'pincode',
       render: (row) => (
         <div className="text-xs">
-          <span className="font-semibold text-slate-900 dark:text-white">{row.district || 'Salem'}</span>
-          <div className="text-slate-500 font-mono text-[11px]">PIN: {row.pincode}</div>
+          <span className="font-semibold text-slate-900 dark:text-white">{row.district || '-'}</span>
+          <div className="text-slate-500 font-mono text-[11px]">{row.pincode ? `PIN: ${row.pincode}` : '-'}</div>
         </div>
       )
     },

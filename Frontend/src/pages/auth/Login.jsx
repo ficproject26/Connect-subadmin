@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getRoleDashboardPath } from '../../utils/permissions';
-import { Mail, Lock, Eye, EyeOff, Shield, ShieldCheck, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -11,10 +11,16 @@ export function Login() {
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showDemoDrawer, setShowDemoDrawer] = useState(false);
 
-  const { login, loginAsRole, demoAdmins } = useAuth();
+  const { user, isAuthenticated, login } = useAuth();
   const navigate = useNavigate();
+
+  // If already logged in, automatically redirect to assigned role dashboard
+  useEffect(() => {
+    if (isAuthenticated && user?.role) {
+      navigate(getRoleDashboardPath(user.role), { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleManualLogin = async (e) => {
     e.preventDefault();
@@ -23,27 +29,10 @@ export function Login() {
     try {
       const res = await login(email, password);
       if (res.success && res.user) {
-        navigate(getRoleDashboardPath(res.user.role));
+        navigate(getRoleDashboardPath(res.user.role), { replace: true });
       }
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoSelect = async (demoEmail) => {
-    setEmail(demoEmail);
-    setPassword('admin123');
-    setError('');
-    setLoading(true);
-    try {
-      const res = await loginAsRole(demoEmail);
-      if (res.success && res.user) {
-        navigate(getRoleDashboardPath(res.user.role));
-      }
-    } catch (err) {
-      setError(err.message || 'Demo login failed.');
     } finally {
       setLoading(false);
     }
@@ -221,52 +210,6 @@ export function Login() {
             {loading ? 'Signing in...' : 'Login'}
           </button>
         </form>
-
-        {/* Divider with "or" */}
-        <div className="relative flex items-center justify-center my-5">
-          <div className="border-t border-slate-200 w-full"></div>
-          <span className="bg-white px-3 text-xs text-slate-400 font-normal">or</span>
-        </div>
-
-        {/* Admin Access Only Badge + Quick Role Picker Toggle */}
-        <div className="flex flex-col items-center justify-center">
-          <button
-            type="button"
-            onClick={() => setShowDemoDrawer(!showDemoDrawer)}
-            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 font-medium py-1 px-3 rounded-lg hover:bg-slate-50 transition cursor-pointer"
-          >
-            <div className="w-4 h-4 rounded-full border border-slate-400 flex items-center justify-center text-[10px] text-slate-500 font-bold">
-              +
-            </div>
-            <span>Admin Access Only</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showDemoDrawer ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* 1-Click Role Credentials Drawer */}
-          {showDemoDrawer && (
-            <div className="w-full mt-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/90 text-left space-y-2 animate-fadeIn">
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
-                Select Admin Role:
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {demoAdmins.map((admin) => (
-                  <button
-                    key={admin.email}
-                    onClick={() => handleDemoSelect(admin.email)}
-                    className="p-2.5 rounded-xl bg-white border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 text-left transition group shadow-2xs"
-                  >
-                    <div className="font-bold text-slate-900 group-hover:text-blue-600 text-[11px]">
-                      {admin.role}
-                    </div>
-                    <div className="text-[10px] text-slate-500 truncate">
-                      {admin.state || admin.district || admin.pincode}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Footer Copyright */}

@@ -24,7 +24,8 @@ import {
   CreditCard,
   UserCheck,
   Maximize2,
-  Download
+  Download,
+  Clock
 } from 'lucide-react';
 
 export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdated }) {
@@ -39,7 +40,9 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
 
   if (!manager) return null;
 
-  const isPending = manager.status === 'under_review' || manager.status === 'pending';
+  const isPendingAdmin = manager.status === 'under_review' || manager.status === 'pending' || manager.status === 'pending_admin_approval';
+  const isPendingKyc = manager.status === 'pending_kyc';
+  const isPending = isPendingAdmin || isPendingKyc;
   const isActive = manager.status === 'active';
   const isRejected = manager.status === 'rejected';
 
@@ -57,7 +60,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
     try {
       const res = await dataService.approveManager(manager.id || manager._id);
       if (res.success) {
-        setSuccessMsg(res.message || 'Manager approved successfully! Their account is now active.');
+        setSuccessMsg(res.message || 'Registration accepted & approved! Manager account is now Active and login is enabled.');
         if (onManagerUpdated) onManagerUpdated(res.manager);
         setTimeout(() => {
           onClose();
@@ -224,6 +227,14 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                     {manager.pincodeCode || (manager.pincodeId ? manager.pincodeId.replace('pin_', '') : 'N/A')}
                   </span>
                 </div>
+                {manager.targetAdminRole && (
+                  <div className="flex justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-500">Designated Authority:</span>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      {manager.targetAdminRole}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -387,6 +398,21 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
             </div>
           )}
 
+          {/* Designated Reviewer Notice if viewer is not the authorized admin */}
+          {isPending && manager.canApprove === false && (
+            <div className="p-3.5 rounded-xl bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <div className="font-bold text-blue-900 dark:text-blue-200">
+                  Designated Approval Authority: {manager.targetAdminRole}
+                </div>
+                <div className="text-blue-700/90 dark:text-blue-300 mt-0.5">
+                  Registration requests for this jurisdiction must be approved by the designated <strong>{manager.targetAdminRole}</strong> ({manager.targetJurisdiction || manager.jurisdiction}). You are viewing this candidate in supervisory overview mode.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Rejection Reason Input Box */}
           {showRejectBox && (
             <div className="p-4 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20 space-y-3 animate-fadeIn">
@@ -430,7 +456,13 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
               Close
             </button>
 
-            {!isActive && !showRejectBox && (
+            {isPending && manager.canApprove === false && (
+              <span className="text-xs font-semibold text-slate-500 italic px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                Authority designated to {manager.targetAdminRole}
+              </span>
+            )}
+
+            {!isActive && !showRejectBox && manager.canApprove !== false && (
               <>
                 {!isRejected && (
                   <button
@@ -451,7 +483,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                   className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
-                  {loading ? 'Approving...' : (isRejected ? 'Reconsider & Approve Account' : 'Approve & Activate Account')}
+                  {loading ? 'Approving & Activating...' : (isRejected ? 'Reconsider & Approve Manager' : 'Accept & Approve Manager')}
                 </button>
               </>
             )}

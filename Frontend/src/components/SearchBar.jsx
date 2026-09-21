@@ -10,6 +10,8 @@ export function SearchBar({ value, onChange, placeholder = 'Search by keyword...
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        autoComplete="off"
+        spellCheck="false"
         className="w-full h-9 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200 dark:border-slate-700/80 focus:border-blue-500 rounded-xl pl-9 pr-8 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none transition-all shadow-xs"
       />
       {value && (

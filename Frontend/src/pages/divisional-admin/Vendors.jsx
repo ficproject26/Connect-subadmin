@@ -26,8 +26,8 @@ import {
 
 export function DivisionalVendors() {
   const { user } = useAuth();
-  const divisionName = user?.division || 'Salem North';
-  const districtName = user?.district || 'Salem';
+  const divisionName = user?.division || '';
+  const districtName = user?.district || '';
   const [searchParams] = useSearchParams();
   const pincodeParam = searchParams.get('pincode');
 

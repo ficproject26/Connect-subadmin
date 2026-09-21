@@ -608,254 +608,6 @@
     "updatedAt": "2026-09-09T11:01:29.055Z"
   },
   {
-    "_id": "div_chn_north",
-    "name": "Chennai North Division",
-    "districtId": "dist_chennai",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_chn_central",
-    "name": "Chennai Central Division",
-    "districtId": "dist_chennai",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_chn_south",
-    "name": "Chennai South Division",
-    "districtId": "dist_chennai",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_tiruvallur_urban",
-    "name": "Tiruvallur Urban Division",
-    "districtId": "dist_tiruvallur",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_tiruvallur_rural",
-    "name": "Tiruvallur Rural Division",
-    "districtId": "dist_tiruvallur",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_kanchipuram_urban",
-    "name": "Kanchipuram Urban Division",
-    "districtId": "dist_kanchipuram",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_kanchipuram_rural",
-    "name": "Kanchipuram Rural Division",
-    "districtId": "dist_kanchipuram",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_vellore_urban",
-    "name": "Vellore Urban Division",
-    "districtId": "dist_vellore",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_vellore_rural",
-    "name": "Vellore Rural Division",
-    "districtId": "dist_vellore",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_madurai_urban",
-    "name": "Madurai Urban Division",
-    "districtId": "dist_madurai",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_madurai_rural",
-    "name": "Madurai Rural Division",
-    "districtId": "dist_madurai",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_tirunelveli_urban",
-    "name": "Tirunelveli Urban Division",
-    "districtId": "dist_tirunelveli",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_tirunelveli_rural",
-    "name": "Tirunelveli Rural Division",
-    "districtId": "dist_tirunelveli",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_kanyakumari_urban",
-    "name": "Kanyakumari Urban Division",
-    "districtId": "dist_kanyakumari",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_kanyakumari_rural",
-    "name": "Kanyakumari Rural Division",
-    "districtId": "dist_kanyakumari",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_thoothukudi_urban",
-    "name": "Thoothukudi Urban Division",
-    "districtId": "dist_thoothukudi",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_thoothukudi_rural",
-    "name": "Thoothukudi Rural Division",
-    "districtId": "dist_thoothukudi",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_trichy_urban",
-    "name": "Tiruchirappalli Urban Division",
-    "districtId": "dist_trichy",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_trichy_rural",
-    "name": "Tiruchirappalli Rural Division",
-    "districtId": "dist_trichy",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_thanjavur_urban",
-    "name": "Thanjavur Urban Division",
-    "districtId": "dist_thanjavur",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_thanjavur_rural",
-    "name": "Thanjavur Rural Division",
-    "districtId": "dist_thanjavur",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_nagapattinam_urban",
-    "name": "Nagapattinam Urban Division",
-    "districtId": "dist_nagapattinam",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_nagapattinam_rural",
-    "name": "Nagapattinam Rural Division",
-    "districtId": "dist_nagapattinam",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_coimbatore_urban",
-    "name": "Coimbatore Urban Division",
-    "districtId": "dist_coimbatore",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_coimbatore_rural",
-    "name": "Coimbatore Rural Division",
-    "districtId": "dist_coimbatore",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_salem_urban",
-    "name": "Salem Urban Division",
-    "districtId": "dist_salem",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_salem_rural",
-    "name": "Salem Rural Division",
-    "districtId": "dist_salem",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_erode_urban",
-    "name": "Erode Urban Division",
-    "districtId": "dist_erode",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_erode_rural",
-    "name": "Erode Rural Division",
-    "districtId": "dist_erode",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_tiruppur_urban",
-    "name": "Tiruppur Urban Division",
-    "districtId": "dist_tiruppur",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
-    "_id": "div_dist_tiruppur_rural",
-    "name": "Tiruppur Rural Division",
-    "districtId": "dist_tiruppur",
-    "stateId": "state_tn",
-    "createdAt": "2026-09-09T11:01:29.055Z",
-    "updatedAt": "2026-09-09T11:01:29.055Z"
-  },
-  {
     "_id": "div_dist_new_delhi_urban",
     "name": "New Delhi Urban Division",
     "districtId": "dist_new_delhi",
@@ -4454,5 +4206,757 @@
     "stateId": "state_ld",
     "createdAt": "2026-09-09T11:01:29.057Z",
     "updatedAt": "2026-09-09T11:01:29.057Z"
+  },
+  {
+    "_id": "div_salem_salem",
+    "name": "Salem",
+    "districtId": "dist_salem",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_salem_attur",
+    "name": "Attur",
+    "districtId": "dist_salem",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_salem_mettur",
+    "name": "Mettur",
+    "districtId": "dist_salem",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_salem_sankari",
+    "name": "Sankari",
+    "districtId": "dist_salem",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_chennai_chennai_north",
+    "name": "Chennai North",
+    "districtId": "dist_chennai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_chennai_chennai_central",
+    "name": "Chennai Central",
+    "districtId": "dist_chennai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_chennai_chennai_south",
+    "name": "Chennai South",
+    "districtId": "dist_chennai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_coimbatore_coimbatore_north",
+    "name": "Coimbatore North",
+    "districtId": "dist_coimbatore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_coimbatore_coimbatore_south",
+    "name": "Coimbatore South",
+    "districtId": "dist_coimbatore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_coimbatore_pollachi",
+    "name": "Pollachi",
+    "districtId": "dist_coimbatore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_madurai_madurai",
+    "name": "Madurai",
+    "districtId": "dist_madurai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_madurai_melur",
+    "name": "Melur",
+    "districtId": "dist_madurai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_madurai_tirumangalam",
+    "name": "Tirumangalam",
+    "districtId": "dist_madurai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_madurai_usilampatti",
+    "name": "Usilampatti",
+    "districtId": "dist_madurai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruchirappalli_tiruchirappalli",
+    "name": "Tiruchirappalli",
+    "districtId": "dist_trichy",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruchirappalli_srirangam",
+    "name": "Srirangam",
+    "districtId": "dist_trichy",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruchirappalli_lalgudi",
+    "name": "Lalgudi",
+    "districtId": "dist_trichy",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruchirappalli_musiri",
+    "name": "Musiri",
+    "districtId": "dist_trichy",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_erode_erode",
+    "name": "Erode",
+    "districtId": "dist_erode",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_erode_gobichettipalayam",
+    "name": "Gobichettipalayam",
+    "districtId": "dist_erode",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruppur_tiruppur",
+    "name": "Tiruppur",
+    "districtId": "dist_tiruppur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruppur_dharapuram",
+    "name": "Dharapuram",
+    "districtId": "dist_tiruppur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruppur_udumalaipettai",
+    "name": "Udumalaipettai",
+    "districtId": "dist_tiruppur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_dindigul_dindigul",
+    "name": "Dindigul",
+    "districtId": "dist_dindigul",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_dindigul_palani",
+    "name": "Palani",
+    "districtId": "dist_dindigul",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_dindigul_kodaikanal",
+    "name": "Kodaikanal",
+    "districtId": "dist_dindigul",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_namakkal_namakkal",
+    "name": "Namakkal",
+    "districtId": "dist_namakkal",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_namakkal_tiruchengode",
+    "name": "Tiruchengode",
+    "districtId": "dist_namakkal",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_dharmapuri_dharmapuri",
+    "name": "Dharmapuri",
+    "districtId": "dist_dharmapuri",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_dharmapuri_harur",
+    "name": "Harur",
+    "districtId": "dist_dharmapuri",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_krishnagiri_krishnagiri",
+    "name": "Krishnagiri",
+    "districtId": "dist_krishnagiri",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_krishnagiri_hosur",
+    "name": "Hosur",
+    "districtId": "dist_krishnagiri",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_vellore_vellore",
+    "name": "Vellore",
+    "districtId": "dist_vellore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_vellore_gudiyatham",
+    "name": "Gudiyatham",
+    "districtId": "dist_vellore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tirupathur_tirupathur",
+    "name": "Tirupathur",
+    "districtId": "dist_tirupathur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tirupathur_vaniyambadi",
+    "name": "Vaniyambadi",
+    "districtId": "dist_tirupathur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_ranipet_ranipet",
+    "name": "Ranipet",
+    "districtId": "dist_ranipet",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_ranipet_arakkonam",
+    "name": "Arakkonam",
+    "districtId": "dist_ranipet",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvallur_tiruvallur",
+    "name": "Tiruvallur",
+    "districtId": "dist_tiruvallur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvallur_ponneri",
+    "name": "Ponneri",
+    "districtId": "dist_tiruvallur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvallur_tiruttani",
+    "name": "Tiruttani",
+    "districtId": "dist_tiruvallur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_kanchipuram_kanchipuram",
+    "name": "Kanchipuram",
+    "districtId": "dist_kanchipuram",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_kanchipuram_sriperumbudur",
+    "name": "Sriperumbudur",
+    "districtId": "dist_kanchipuram",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_chengalpattu_chengalpattu",
+    "name": "Chengalpattu",
+    "districtId": "dist_chengalpattu",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_chengalpattu_tambaram",
+    "name": "Tambaram",
+    "districtId": "dist_chengalpattu",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_chengalpattu_madurantakam",
+    "name": "Madurantakam",
+    "districtId": "dist_chengalpattu",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_viluppuram_viluppuram",
+    "name": "Viluppuram",
+    "districtId": "dist_viluppuram",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_viluppuram_tindivanam",
+    "name": "Tindivanam",
+    "districtId": "dist_viluppuram",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_kallakurichi_kallakurichi",
+    "name": "Kallakurichi",
+    "districtId": "dist_kallakurichi",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_kallakurichi_tirukkoyilur",
+    "name": "Tirukkoyilur",
+    "districtId": "dist_kallakurichi",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_cuddalore_cuddalore",
+    "name": "Cuddalore",
+    "districtId": "dist_cuddalore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_cuddalore_chidambaram",
+    "name": "Chidambaram",
+    "districtId": "dist_cuddalore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_cuddalore_vriddhachalam",
+    "name": "Vriddhachalam",
+    "districtId": "dist_cuddalore",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_mayiladuthurai_mayiladuthurai",
+    "name": "Mayiladuthurai",
+    "districtId": "dist_mayiladuthurai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_mayiladuthurai_sirkazhi",
+    "name": "Sirkazhi",
+    "districtId": "dist_mayiladuthurai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_nagapattinam_nagapattinam",
+    "name": "Nagapattinam",
+    "districtId": "dist_nagapattinam",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_nagapattinam_vedaranyam",
+    "name": "Vedaranyam",
+    "districtId": "dist_nagapattinam",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvarur_tiruvarur",
+    "name": "Tiruvarur",
+    "districtId": "dist_tiruvarur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvarur_mannargudi",
+    "name": "Mannargudi",
+    "districtId": "dist_tiruvarur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_thanjavur_thanjavur",
+    "name": "Thanjavur",
+    "districtId": "dist_thanjavur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_thanjavur_kumbakonam",
+    "name": "Kumbakonam",
+    "districtId": "dist_thanjavur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_thanjavur_pattukkottai",
+    "name": "Pattukkottai",
+    "districtId": "dist_thanjavur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_pudukkottai_pudukkottai",
+    "name": "Pudukkottai",
+    "districtId": "dist_pudukkottai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_pudukkottai_aranthangi",
+    "name": "Aranthangi",
+    "districtId": "dist_pudukkottai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_pudukkottai_illuppur",
+    "name": "Illuppur",
+    "districtId": "dist_pudukkottai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_sivaganga_sivaganga",
+    "name": "Sivaganga",
+    "districtId": "dist_sivaganga",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_sivaganga_devakottai",
+    "name": "Devakottai",
+    "districtId": "dist_sivaganga",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_ramanathapuram_ramanathapuram",
+    "name": "Ramanathapuram",
+    "districtId": "dist_ramanathapuram",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_ramanathapuram_paramakudi",
+    "name": "Paramakudi",
+    "districtId": "dist_ramanathapuram",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_virudhunagar_aruppukkottai",
+    "name": "Aruppukkottai",
+    "districtId": "dist_virudhunagar",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_virudhunagar_sivakasi",
+    "name": "Sivakasi",
+    "districtId": "dist_virudhunagar",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_virudhunagar_sattur",
+    "name": "Sattur",
+    "districtId": "dist_virudhunagar",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_theni_theni",
+    "name": "Theni",
+    "districtId": "dist_theni",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_theni_uthamapalayam",
+    "name": "Uthamapalayam",
+    "districtId": "dist_theni",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tenkasi_tenkasi",
+    "name": "Tenkasi",
+    "districtId": "dist_tenkasi",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tenkasi_sankarankovil",
+    "name": "Sankarankovil",
+    "districtId": "dist_tenkasi",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tirunelveli_tirunelveli",
+    "name": "Tirunelveli",
+    "districtId": "dist_tirunelveli",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tirunelveli_cheranmahadevi",
+    "name": "Cheranmahadevi",
+    "districtId": "dist_tirunelveli",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_thoothukudi_thoothukudi",
+    "name": "Thoothukudi",
+    "districtId": "dist_thoothukudi",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_thoothukudi_kovilpatti",
+    "name": "Kovilpatti",
+    "districtId": "dist_thoothukudi",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_thoothukudi_tiruchendur",
+    "name": "Tiruchendur",
+    "districtId": "dist_thoothukudi",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_kanyakumari_nagercoil",
+    "name": "Nagercoil",
+    "districtId": "dist_kanyakumari",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_kanyakumari_padmanabhapuram",
+    "name": "Padmanabhapuram",
+    "districtId": "dist_kanyakumari",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_nilgiris_udhagamandalam",
+    "name": "Udhagamandalam",
+    "districtId": "dist_nilgiris",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_nilgiris_coonoor",
+    "name": "Coonoor",
+    "districtId": "dist_nilgiris",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_nilgiris_gudalur",
+    "name": "Gudalur",
+    "districtId": "dist_nilgiris",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_karur_karur",
+    "name": "Karur",
+    "districtId": "dist_karur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_karur_kulithalai",
+    "name": "Kulithalai",
+    "districtId": "dist_karur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_perambalur_perambalur",
+    "name": "Perambalur",
+    "districtId": "dist_perambalur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_ariyalur_ariyalur",
+    "name": "Ariyalur",
+    "districtId": "dist_ariyalur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_ariyalur_udayarpalayam",
+    "name": "Udayarpalayam",
+    "districtId": "dist_ariyalur",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvannamalai_tiruvannamalai",
+    "name": "Tiruvannamalai",
+    "districtId": "dist_tiruvannamalai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvannamalai_arani",
+    "name": "Arani",
+    "districtId": "dist_tiruvannamalai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
+  },
+  {
+    "_id": "div_tiruvannamalai_cheyyar",
+    "name": "Cheyyar",
+    "districtId": "dist_tiruvannamalai",
+    "stateId": "state_tn",
+    "createdAt": "2026-09-19T05:34:19.235Z",
+    "updatedAt": "2026-09-19T05:34:19.235Z"
   }
 ]

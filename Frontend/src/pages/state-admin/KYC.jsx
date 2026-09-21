@@ -104,11 +104,13 @@ export function StateKYC() {
         <div className="text-xs">
           <div className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate max-w-[220px]" title={row.address}>
             <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <span className="truncate">{row.address || 'Salem Bazaar'}</span>
+            <span className="truncate">{row.address || '-'}</span>
           </div>
-          <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pl-4.5 mt-0.5 whitespace-nowrap">
-            PIN: {row.pincode || '636001'}
-          </div>
+          {row.pincode && (
+            <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pl-4.5 mt-0.5 whitespace-nowrap">
+              PIN: {row.pincode}
+            </div>
+          )}
         </div>
       )
     },

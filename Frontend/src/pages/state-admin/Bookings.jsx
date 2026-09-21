@@ -46,11 +46,11 @@ export function StateBookings() {
     const normalBookings = total - membershipBookings;
 
     // Peak booking location
-    let peakLocation = total > 0 ? 'Salem North' : '-';
+    let peakLocation = '-';
     let peakCount = 0;
     if (total > 0) {
       const locationCounts = bookings.reduce((acc, b) => {
-        const loc = b.division || b.district || 'Salem North';
+        const loc = b.division || b.district || 'Unassigned';
         acc[loc] = (acc[loc] || 0) + 1;
         return acc;
       }, {});

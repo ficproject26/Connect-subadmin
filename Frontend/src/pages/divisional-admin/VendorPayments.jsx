@@ -73,7 +73,7 @@ export function DivisionalVendorPayments() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Division Vendor Payment Claims</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Store settlements and payout requests originating in {user?.division || 'Salem North'} Division.
+          Store settlements and payout requests originating in {user?.division || 'assigned'} Division.
         </p>
       </div>
 

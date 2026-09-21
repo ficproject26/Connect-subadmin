@@ -7,15 +7,17 @@ const ROLE_LIMITS = {
   state_manager: 8,      // 8 managers per State
   district_manager: 2,   // 2 managers per District
   division_manager: 2,   // 2 managers per Division
-  pincode_manager: 2     // 2 managers per PIN Code
+  pincode_manager: 10    // 10 managers per PIN Code
 };
 
 const ROLE_LEVELS = {
   'State Admin': 1,
   'District Admin': 2,
   'Divisional Admin': 3,
+  'Division Admin': 3,
   'Pincode Admin': 4,
   'Super Admin': 0,
+  'Manager': 1,
   state_manager: 1,
   district_manager: 2,
   division_manager: 3,
@@ -117,11 +119,11 @@ const buildUserProfile = async (user) => {
   };
 };
 
-// Universal Login: accepts email or mobile / identifier
+// Universal Login: accepts email or mobile / identifier / loginId
 const login = async (req, res) => {
   try {
-    const { email, identifier, password } = req.body;
-    const loginId = (identifier || email || '').trim();
+    const { email, identifier, loginId: rawLoginId, username, password } = req.body;
+    const loginId = (identifier || email || rawLoginId || username || '').trim();
 
     if (!loginId || !password) {
       return res.status(400).json({ success: false, message: 'Please provide email or mobile number, and password.' });
@@ -130,8 +132,11 @@ const login = async (req, res) => {
     const allUsers = Array.from(db.users);
     const user = allUsers.find(u => 
       (u.email && u.email.toLowerCase() === loginId.toLowerCase()) ||
+      (u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase()) ||
       (u.mobile && u.mobile === loginId) ||
-      (u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === loginId.replace(/[^0-9]/g, '').slice(-10))
+      (u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === loginId.replace(/[^0-9]/g, '').slice(-10)) ||
+      (u.id && String(u.id).toLowerCase() === loginId.toLowerCase()) ||
+      (u._id && String(u._id).toLowerCase() === loginId.toLowerCase())
     );
 
     if (!user) {
@@ -151,6 +156,40 @@ const login = async (req, res) => {
         message: `Your registration application was rejected by the administrator. Reason: ${user.rejectionReason || 'Documents or eligibility criteria not met.'}`
       });
     }
+
+    if (user.status === 'pending_admin_approval' || user.status === 'under_review' || user.status === 'pending') {
+      const targetAdmin = user.targetAdminRole || 'Respective Administrator';
+      return res.status(403).json({
+        success: false,
+        status: 'pending_admin_approval',
+        message: `Your registration is pending approval by your designated ${targetAdmin}. Login is disabled until admin approval.`
+      });
+    }
+
+    if (user.status === 'pending_kyc' || user.status === 'kyc_pending') {
+      // Auto-activate since KYC is skipped in current flow
+      if (user.adminApprovalStatus === 'approved') {
+        user.status = 'active';
+        user.kycStatus = 'Verified';
+        await db.users.update(user);
+      } else {
+        return res.status(403).json({
+          success: false,
+          status: 'pending_admin_approval',
+          message: `Your registration is pending approval by ${user.targetAdminRole || 'the administrator'}. Login is disabled until admin approval.`
+        });
+      }
+    }
+
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        status: user.status || 'inactive',
+        message: `Your account is currently ${user.status.replace(/_/g, ' ')}. Login is disabled.`
+      });
+    }
+
+    // KYC verification step is skipped for now - Admin approval directly activates manager accounts
 
     const token = generateToken(user);
     const userProfile = await buildUserProfile(user);
@@ -197,15 +236,40 @@ const getDemoAdmins = (req, res) => {
     pincode: a.pincode,
     avatar: a.avatar || a.avatarUrl
   }));
+
+  // Also include a demo manager for comprehensive 4-role RBAC testing
+  const managerUser = Array.from(db.users).find(u => 
+    u.status === 'active' && (
+      u.role === 'Manager' || 
+      u.role === 'state_manager' || 
+      u.role === 'district_manager'
+    )
+  );
+  if (managerUser && !demoList.some(d => d.email === managerUser.email)) {
+    demoList.push({
+      id: managerUser.id || managerUser._id,
+      name: managerUser.name,
+      email: managerUser.email,
+      role: 'Manager',
+      state: managerUser.state,
+      district: managerUser.district,
+      division: managerUser.division,
+      pincode: managerUser.pincode,
+      avatar: managerUser.avatar || managerUser.avatarUrl
+    });
+  }
+
   return res.json({ success: true, admins: demoList });
 };
 
 const register = async (req, res) => {
   try {
-    const {
+    let {
       name,
+      fullName,
       email,
       mobile,
+      phone,
       password,
       role,
       dob,
@@ -218,8 +282,35 @@ const register = async (req, res) => {
       districtId,
       divisionId,
       pincodeId,
+      state,
+      district,
+      division,
+      pincode,
       avatarUrl
     } = req.body;
+
+    name = (name || fullName || '').trim();
+    mobile = (mobile || phone || '').trim();
+
+    if (!stateId && (state || zone)) {
+      const stName = (state || zone || '').toLowerCase();
+      const sObj = Array.from(db.states).find(s => s.name?.toLowerCase() === stName);
+      if (sObj) stateId = sObj._id || sObj.id;
+    }
+    if (!districtId && district) {
+      const distName = district.toLowerCase();
+      const dObj = Array.from(db.districts).find(d => d.name?.toLowerCase() === distName);
+      if (dObj) districtId = dObj._id || dObj.id;
+    }
+    if (!divisionId && division) {
+      const divName = division.toLowerCase();
+      const divObj = Array.from(db.divisions).find(d => d.name?.toLowerCase() === divName);
+      if (divObj) divisionId = divObj._id || divObj.id;
+    }
+    if (!pincodeId && pincode) {
+      const pObj = Array.from(db.pincodes).find(p => String(p.code) === String(pincode));
+      if (pObj) pincodeId = pObj._id || pObj.id;
+    }
 
     if (!name || !email || !mobile || !password || !role) {
       return res.status(400).json({ success: false, message: 'Please provide all required fields: Full Name, Email, Mobile, Password, and Role.' });
@@ -229,16 +320,16 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid manager role selected.' });
     }
 
-    if (role === 'state_manager' && !stateId) {
+    if (role === 'state_manager' && !stateId && !state) {
       return res.status(400).json({ success: false, message: 'State selection is required for State Manager.' });
     }
-    if (role === 'district_manager' && (!stateId || !districtId)) {
+    if (role === 'district_manager' && (!stateId && !state || !districtId && !district)) {
       return res.status(400).json({ success: false, message: 'State and District selections are required for District Manager.' });
     }
-    if (role === 'division_manager' && (!stateId || !districtId || !divisionId)) {
+    if (role === 'division_manager' && (!stateId && !state || !districtId && !district || !divisionId && !division)) {
       return res.status(400).json({ success: false, message: 'State, District, and Division selections are required for Division Manager.' });
     }
-    if (role === 'pincode_manager' && (!stateId || !districtId || !divisionId || !pincodeId)) {
+    if (role === 'pincode_manager' && (!stateId && !state || !districtId && !district || !divisionId && !division || !pincodeId && !pincode)) {
       return res.status(400).json({ success: false, message: 'State, District, Division, and PIN Code selections are required for PIN Code Manager.' });
     }
 
@@ -276,6 +367,50 @@ const register = async (req, res) => {
     const divisionName = selectedDivision?.name || req.body.division || null;
     const pincodeCode = selectedPincode?.code || req.body.pincode || null;
 
+    // Resolve the related administrator for this manager's role and jurisdiction
+    let targetAdminRole = null;
+    let targetJurisdiction = null;
+    let relatedAdmin = null;
+
+    const allAdmins = Array.from(db.users).filter(u => (u.role || '').toLowerCase().includes('admin'));
+
+    if (role === 'state_manager') {
+      targetAdminRole = 'State Admin';
+      targetJurisdiction = `State: ${stateName || stateId}`;
+      relatedAdmin = allAdmins.find(a => 
+        (a.role === 'State Admin' || (a.role || '').toLowerCase().includes('state')) &&
+        ((a.stateId && stateId && String(a.stateId).toLowerCase() === String(stateId).toLowerCase()) ||
+         (a.state && stateName && a.state.trim().toLowerCase() === stateName.trim().toLowerCase()))
+      );
+    } else if (role === 'district_manager') {
+      targetAdminRole = 'District Admin';
+      targetJurisdiction = `District: ${districtName || districtId}, ${stateName || stateId}`;
+      relatedAdmin = allAdmins.find(a => 
+        (a.role === 'District Admin' || (a.role || '').toLowerCase().includes('district')) &&
+        ((a.districtId && districtId && String(a.districtId).toLowerCase() === String(districtId).toLowerCase()) ||
+         (a.district && districtName && a.district.trim().toLowerCase() === districtName.trim().toLowerCase()) ||
+         ((a.district === 'Salem' || a.districtId === 'dist_salem') && (districtId === 'dist_salem' || districtName === 'Salem')))
+      );
+    } else if (role === 'division_manager') {
+      targetAdminRole = 'Divisional Admin';
+      targetJurisdiction = `Division: ${divisionName || divisionId}, ${districtName || districtId}`;
+      relatedAdmin = allAdmins.find(a => 
+        (a.role === 'Divisional Admin' || a.role === 'Division Admin' || (a.role || '').toLowerCase().includes('division')) &&
+        ((a.divisionId && divisionId && String(a.divisionId).toLowerCase() === String(divisionId).toLowerCase()) ||
+         (a.division && divisionName && a.division.trim().toLowerCase() === divisionName.trim().toLowerCase()) ||
+         ((a.division === 'Salem North' || a.divisionId === 'div_dist_salem_urban') && (divisionId === 'div_dist_salem_urban' || divisionName === 'Salem North')))
+      );
+    } else if (role === 'pincode_manager') {
+      targetAdminRole = 'Pincode Admin';
+      targetJurisdiction = `PIN: ${pincodeCode || pincodeId}`;
+      relatedAdmin = allAdmins.find(a => 
+        (a.role === 'Pincode Admin' || (a.role || '').toLowerCase().includes('pincode')) &&
+        ((a.pincodeId && pincodeId && String(a.pincodeId).toLowerCase() === String(pincodeId).toLowerCase()) ||
+         (a.pincode && pincodeCode && String(a.pincode).trim() === String(pincodeCode).trim()) ||
+         (a.pincode && pincodeId && pincodeId === `pin_${String(a.pincode).trim()}`))
+      );
+    }
+
     const newUser = await db.users.insertOne({
       name: name.trim(),
       email: email.trim().toLowerCase(),
@@ -284,8 +419,14 @@ const register = async (req, res) => {
       passwordHash,
       role,
       level,
-      status: 'under_review',
+      status: 'pending_admin_approval',
       adminApprovalStatus: 'pending',
+      registrationType: 'direct',
+      targetAdminRole,
+      targetAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
+      targetAdminName: relatedAdmin ? relatedAdmin.name : null,
+      targetJurisdiction,
+      assignedAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
       dob: dob || null,
       gender: gender || null,
       address: address ? address.trim() : null,
@@ -308,11 +449,14 @@ const register = async (req, res) => {
     });
 
     await db.auditLogs.insertOne({
-      action: 'MANAGER_REGISTERED_UNDER_REVIEW',
+      action: 'MANAGER_DIRECT_REGISTERED_PENDING_ADMIN',
       userId: newUser._id,
       userName: newUser.name,
       userRole: newUser.role,
-      details: `New ${role.replace('_', ' ')} registration submitted for approval with KYC documents. Status: under_review.`,
+      targetAdminRole,
+      targetAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
+      targetAdminName: relatedAdmin ? relatedAdmin.name : null,
+      details: `New ${role.replace('_', ' ')} direct registration submitted. Routed to ${targetAdminRole} (${relatedAdmin ? relatedAdmin.name : 'Pending admin assignment'}) for jurisdiction: ${targetJurisdiction}. Status: pending_admin_approval.`,
       ip: req.ip || '127.0.0.1'
     });
 
@@ -320,8 +464,8 @@ const register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      status: 'under_review',
-      message: 'Manager registration submitted successfully. Your account is currently under review for administrator approval.',
+      status: 'pending_admin_approval',
+      message: `Manager registration submitted successfully. Your request has been routed to your designated ${targetAdminRole} (${targetJurisdiction}) for review and approval. Once approved, your account will be activated for login.`,
       user: userProfile
     });
   } catch (err) {
@@ -368,11 +512,46 @@ const simulateApproval = async (req, res) => {
     }
 
     await db.users.findByIdAndUpdate(user._id, { 
-      status: 'kyc_pending',
+      status: 'active',
       adminApprovalStatus: 'approved',
-      adminApprovedAt: new Date().toISOString()
+      adminApprovedAt: new Date().toISOString(),
+      kycStatus: 'Verified'
     });
     const updatedUser = await db.users.findById(user._id);
+
+    // Sync to KYC queue for compliance team
+    if (db.kycRecords) {
+      let existingKyc = db.kycRecords.find(k => String(k.managerId) === String(user._id) || k.id === `KYC-MGR-${user._id}`);
+      if (!existingKyc) {
+        db.kycRecords.unshift({
+          id: `KYC-MGR-${user._id}`,
+          type: 'Manager',
+          managerId: String(user._id),
+          name: user.name,
+          vendorName: user.name,
+          category: 'Operations Management',
+          role: user.role,
+          phone: user.mobile || user.phone,
+          email: user.email,
+          state: user.state,
+          district: user.district,
+          division: user.division,
+          pincode: user.pincode,
+          stateId: user.stateId,
+          districtId: user.districtId,
+          divisionId: user.divisionId,
+          pincodeId: user.pincodeId,
+          status: 'Pending',
+          kycStatus: 'Pending Verification',
+          submittedDate: new Date().toISOString().split('T')[0],
+          documents: user.documents || {},
+          notes: `Direct registration approved by ${user.targetAdminRole || 'Regional Admin'}. Forwarded to KYC Team.`
+        });
+      } else {
+        existingKyc.status = 'Pending';
+        existingKyc.kycStatus = 'Pending Verification';
+      }
+    }
 
     await db.auditLogs.insertOne({
       action: 'ADMIN_APPROVAL_SIMULATED',
@@ -386,8 +565,8 @@ const simulateApproval = async (req, res) => {
     const profile = await buildUserProfile(updatedUser);
     res.json({
       success: true,
-      status: 'kyc_pending',
-      message: 'Admin approval granted! Application is now in KYC Pending status.',
+      status: 'active',
+      message: 'Admin approval granted! Manager account is now Active and login is enabled.',
       user: profile
     });
   } catch (err) {
@@ -412,10 +591,21 @@ const simulateKyc = async (req, res) => {
 
     await db.users.findByIdAndUpdate(user._id, {
       status: 'active',
-      kycStatus: 'verified',
+      kycStatus: 'Verified',
       kycVerifiedAt: new Date().toISOString()
     });
     const updatedUser = await db.users.findById(user._id);
+
+    // Sync KYC record to Verified
+    if (db.kycRecords) {
+      let existingKyc = db.kycRecords.find(k => String(k.managerId) === String(user._id) || k.id === `KYC-MGR-${user._id}`);
+      if (existingKyc) {
+        existingKyc.status = 'Approved';
+        existingKyc.kycStatus = 'Verified';
+        existingKyc.verifiedBy = 'KYC Compliance Officer';
+        existingKyc.verifiedDate = new Date().toISOString().split('T')[0];
+      }
+    }
 
     await db.auditLogs.insertOne({
       action: 'KYC_VERIFICATION_SIMULATED',
@@ -442,12 +632,17 @@ const simulateKyc = async (req, res) => {
 const getRegistrationLocations = async (req, res) => {
   try {
     const states = await db.states.find();
-    const districts = await db.districts.find();
-    const divisions = await db.divisions.find();
-    const pincodes = await db.pincodes.find();
+    const allDistricts = await db.districts.find();
+    const allDivisions = await db.divisions.find();
+    const allPincodes = await db.pincodes.find();
 
     const users = await db.users.find();
     const activeOrPending = users.filter(u => u.status === 'active' || u.status === 'under_review' || u.status === 'kyc_pending');
+
+    // Show all districts for registration
+    const districts = allDistricts;
+    const divisions = allDivisions;
+    const pincodes = allPincodes;
 
     const enrichedStates = states.map(s => {
       const count = activeOrPending.filter(u => u.role === 'state_manager' && u.stateId === s._id).length;

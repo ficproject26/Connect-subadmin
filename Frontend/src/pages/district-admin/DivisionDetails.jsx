@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { dataService } from '../../services/dataService';
+import { getPincodesForDivision } from '../../utils/indiaPostalData';
 import {
   Layers,
   MapPin,
@@ -15,7 +17,8 @@ import {
   Package,
   CalendarCheck,
   Briefcase,
-  CreditCard
+  CreditCard,
+  Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/Modal';
@@ -25,8 +28,59 @@ export function DistrictDivisionDetails() {
   const navigate = useNavigate();
 
   const [selectedDivision, setSelectedDivision] = useState(null);
+  const [divisionCards, setDivisionCards] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const divisionCards = [];
+  const district = user?.district || 'Salem';
+
+  useEffect(() => {
+    const loadDivisions = async () => {
+      setLoading(true);
+      try {
+        const res = await dataService.getDivisions();
+        if (res.success && res.divisions) {
+          const list = res.divisions
+            .filter(d => !district || (d.districtName || user?.district)?.toLowerCase() === district.toLowerCase())
+            .map(div => {
+              const state = div.stateName || user?.state || 'Tamil Nadu';
+              const dName = div.districtName || district;
+              const registeredPins = Array.isArray(div.pincodes) && div.pincodes.length > 0 ? div.pincodes : [];
+              const pinCount = div.pincodesCount !== undefined ? div.pincodesCount : registeredPins.length;
+              return {
+                id: div.id || `DIV-${div.name?.slice(0, 3).toUpperCase() || '001'}`,
+                name: div.name,
+                district: dName,
+                state: state,
+                status: div.status || 'Active',
+                admin: div.adminName || 'Unassigned',
+                adminEmail: div.adminEmail || '-',
+                adminPhone: div.adminPhone || '-',
+                pincodes: registeredPins,
+                pincodesCount: pinCount,
+                totalManagers: div.totalManagers || 0,
+                totalAgents: div.totalAgents || 0,
+                deliveryPartner: div.deliveryPartner || 0,
+                technician: div.technician || 0,
+                executive: div.executive || 0,
+                pendingKYC: div.pendingKYC || 0,
+                totalVendors: div.totalVendors || 0,
+                totalOrders: div.totalOrders || 0,
+                totalBookings: div.totalBookings || 0,
+                totalJobApplied: div.totalJobApplied || 0,
+                totalMembershipCards: div.totalMembershipCards || 0,
+                totalCustomers: div.totalCustomers || 0,
+              };
+            });
+          setDivisionCards(list);
+        }
+      } catch (err) {
+        console.error('Failed to load district division details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDivisions();
+  }, [user, district]);
 
   const getWorkforceMetrics = (div) => [
     { label: 'Total Managers', value: div.totalManagers, icon: UserCog, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/50' },
@@ -54,7 +108,12 @@ export function DistrictDivisionDetails() {
         </p>
       </div>
 
-      {divisionCards.length === 0 ? (
+      {loading ? (
+        <div className="p-16 flex flex-col items-center justify-center gap-3 bg-white dark:bg-[#131f37] border border-slate-200/90 dark:border-[#1f3358] rounded-2xl">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          <p className="text-xs text-slate-500">Loading operational division details...</p>
+        </div>
+      ) : divisionCards.length === 0 ? (
         <div className="p-12 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-[#131f37] border border-slate-200/90 dark:border-[#1f3358] rounded-2xl">
           <Layers className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
           <p className="font-medium text-base text-slate-800 dark:text-slate-200">No divisions found</p>
@@ -87,7 +146,7 @@ export function DistrictDivisionDetails() {
               <div className="grid grid-cols-3 gap-3 py-2">
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50 text-center">
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Pincodes</div>
-                  <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">{div.pincodes.length}</div>
+                  <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">{div.pincodesCount}</div>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50 text-center">
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Vendors</div>

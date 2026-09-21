@@ -18,7 +18,7 @@ const INITIAL_DIVISIONAL_TASKS = [];
 export function DivisionalTasks() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const division = user?.division || 'Salem North';
+  const division = user?.division || '';
 
   const [tasks] = useState(INITIAL_DIVISIONAL_TASKS);
   const [loading, setLoading] = useState(false);

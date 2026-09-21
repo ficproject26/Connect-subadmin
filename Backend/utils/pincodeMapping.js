@@ -83,12 +83,28 @@ const PINCODE_MAP = {
   },
 
   // Salem District - Attur Division
+  '636101': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636101',
+    areaName: 'Attur Bazaar',
+    ...defaultTeam
+  },
   '636102': {
     state: 'Tamil Nadu',
     district: 'Salem',
     division: 'Attur',
     pincode: '636102',
-    areaName: 'Attur Town',
+    areaName: 'Attur Town H.O',
+    ...defaultTeam
+  },
+  '636107': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636107',
+    areaName: 'Keeripatti / Aragalur',
     ...defaultTeam
   },
   '636108': {
@@ -96,7 +112,87 @@ const PINCODE_MAP = {
     district: 'Salem',
     division: 'Attur',
     pincode: '636108',
-    areaName: 'Thalaivasal',
+    areaName: 'Narasingapuram / Malliakarai',
+    ...defaultTeam
+  },
+  '636109': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636109',
+    areaName: 'Peddanayakkanpalayam',
+    ...defaultTeam
+  },
+  '636111': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636111',
+    areaName: 'Gangavalli',
+    ...defaultTeam
+  },
+  '636112': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636112',
+    areaName: 'Thalaivasal / Deviyakurichi',
+    ...defaultTeam
+  },
+  '636113': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636113',
+    areaName: 'Thedavur',
+    ...defaultTeam
+  },
+  '636114': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636114',
+    areaName: 'Sentharapatti',
+    ...defaultTeam
+  },
+  '636115': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636115',
+    areaName: 'Veeraganur',
+    ...defaultTeam
+  },
+  '636117': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636117',
+    areaName: 'A. Komarapalayam',
+    ...defaultTeam
+  },
+  '636119': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636119',
+    areaName: 'Kallanatham / Attur West',
+    ...defaultTeam
+  },
+  '636141': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636141',
+    areaName: 'Mulluvadi',
+    ...defaultTeam
+  },
+  '636142': {
+    state: 'Tamil Nadu',
+    district: 'Salem',
+    division: 'Attur',
+    pincode: '636142',
+    areaName: 'Moolakurichi',
     ...defaultTeam
   },
 

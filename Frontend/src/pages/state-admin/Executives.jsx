@@ -125,13 +125,19 @@ export function StateExecutives() {
         <div className="text-xs">
           <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span className="whitespace-nowrap">{row.district || 'Salem'}</span>
-            <span className="text-slate-400">•</span>
-            <span className="text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">{row.division || 'Salem North'}</span>
+            <span className="whitespace-nowrap">{row.district || '-'}</span>
+            {row.division && (
+              <>
+                <span className="text-slate-400">•</span>
+                <span className="text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">{row.division}</span>
+              </>
+            )}
           </div>
-          <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] mt-0.5 pl-4.5 font-bold whitespace-nowrap">
-            PIN: {row.pincode || '636001'}
-          </div>
+          {row.pincode && (
+            <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] mt-0.5 pl-4.5 font-bold whitespace-nowrap">
+              PIN: {row.pincode}
+            </div>
+          )}
         </div>
       )
     },

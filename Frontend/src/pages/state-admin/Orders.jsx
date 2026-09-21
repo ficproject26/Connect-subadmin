@@ -39,11 +39,11 @@ export function StateOrders() {
     const normalOrders = total - membershipOrders;
 
     // Calculate Highest Ordering District
-    let peakDistrict = total > 0 ? 'Salem' : '-';
+    let peakDistrict = '-';
     let peakCount = 0;
     if (total > 0) {
       const districtCounts = orders.reduce((acc, o) => {
-        const dist = o.district || o.deliveryDistrict || 'Salem';
+        const dist = o.district || o.deliveryDistrict || 'Unassigned';
         acc[dist] = (acc[dist] || 0) + 1;
         return acc;
       }, {});

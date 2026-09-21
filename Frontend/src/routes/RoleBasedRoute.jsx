@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getRoleDashboardPath } from '../utils/permissions';
+import { getRoleDashboardPath, isRoleAllowed } from '../utils/permissions';
 
 export function RoleBasedRoute({ allowedRoles = [] }) {
   const { user, loading } = useAuth();
@@ -10,9 +10,10 @@ export function RoleBasedRoute({ allowedRoles = [] }) {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    // Redirect to their authorized role dashboard
-    return <Navigate to={getRoleDashboardPath(user.role)} replace />;
+  if (allowedRoles.length > 0 && !isRoleAllowed(user.role, allowedRoles)) {
+    // Strictly prevent cross-role dashboard/module access and redirect to assigned role dashboard
+    const targetDashboard = getRoleDashboardPath(user.role);
+    return <Navigate to={targetDashboard} replace />;
   }
 
   return <Outlet />;

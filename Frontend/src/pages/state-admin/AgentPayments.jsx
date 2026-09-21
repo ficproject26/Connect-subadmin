@@ -57,11 +57,13 @@ export function StateAgentPayments() {
       render: (row) => (
         <div>
           <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-            {row.district || 'Salem'} • {row.division || 'Salem North'}
+            {row.district || '-'}{row.division ? ` • ${row.division}` : ''}
           </div>
-          <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
-            <MapPin className="w-3 h-3" /> PIN: {row.pincode || '636001'}
-          </div>
+          {row.pincode && (
+            <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+              <MapPin className="w-3 h-3" /> PIN: {row.pincode}
+            </div>
+          )}
         </div>
       )
     },

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../../components/Modal';
+import { StatusBadge } from '../../components/Badge';
+import { dataService } from '../../services/dataService';
+import { getDivisionsForDistrict } from '../../utils/indiaPostalData';
 import { 
   Building2, 
   ArrowRight, 
@@ -16,7 +19,8 @@ import {
   Wrench, 
   Award, 
   CreditCard,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -28,8 +32,57 @@ export function StateDistrictDetails() {
   const districtFilter = searchParams.get('district');
 
   const [selectedDistrict, setSelectedDistrict] = useState(null);
+  const [districtsData, setDistrictsData] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const districtsData = [];
+  useEffect(() => {
+    const loadDistricts = async () => {
+      setLoading(true);
+      try {
+        const res = await dataService.getDistricts();
+        if (res.success && res.districts) {
+          const list = res.districts.map(dst => {
+            const rawDivs = dst.divisions && Array.isArray(dst.divisions) && dst.divisions.length > 0
+              ? dst.divisions
+              : getDivisionsForDistrict(user?.state || dst.state || 'Tamil Nadu', dst.name);
+            const divisions = Array.isArray(rawDivs) ? rawDivs : [];
+            
+            return {
+              id: dst.id || `DST-${dst.code || dst.name?.slice(0, 3).toUpperCase() || '001'}`,
+              name: dst.name,
+              code: dst.code || dst.name?.slice(0, 3).toUpperCase(),
+              state: dst.state || user?.state || 'Tamil Nadu',
+              status: dst.status || 'Active',
+              admin: dst.adminName || dst.assignedAdmin || 'Unassigned',
+              adminEmail: dst.adminEmail || '-',
+              adminPhone: dst.adminPhone || '-',
+              divisions: divisions,
+              pincodesCount: dst.pincodesCount || (divisions.length > 0 ? divisions.length * 4 : 0),
+              totalManagers: dst.totalManagers !== undefined ? dst.totalManagers : (dst.managers ? dst.managers.length : 0),
+              managers: dst.managers || [],
+              totalAgents: dst.totalAgents || 0,
+              deliveryPartner: dst.deliveryPartner || 0,
+              technician: dst.technician || 0,
+              executive: dst.executive || 0,
+              pendingKYC: dst.pendingKYC || 0,
+              totalVendors: dst.totalVendors || 0,
+              totalOrders: dst.totalOrders || 0,
+              totalBookings: dst.totalBookings || 0,
+              totalJobApplied: dst.totalJobApplied || 0,
+              totalMembershipCards: dst.totalMembershipCards || 0,
+              totalCustomers: dst.totalCustomers || 0,
+            };
+          });
+          setDistrictsData(list);
+        }
+      } catch (err) {
+        console.error('Failed to load district operational details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDistricts();
+  }, [user]);
 
   const getWorkforceMetrics = (dst) => [
     { label: 'Total Managers', value: dst.totalManagers, icon: UserCog, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/50' },
@@ -49,16 +102,16 @@ export function StateDistrictDetails() {
   ];
 
   const filteredDistricts = districtFilter
-    ? districtsData.filter(d => d.name.toLowerCase() === districtFilter.toLowerCase() || d.id.toLowerCase() === districtFilter.toLowerCase())
+    ? districtsData.filter(d => d.name?.toLowerCase() === districtFilter.toLowerCase() || d.id?.toLowerCase() === districtFilter.toLowerCase())
     : districtsData;
-  const displayDistricts = filteredDistricts.length > 0 ? filteredDistricts : districtsData;
+  const displayDistricts = filteredDistricts;
 
   useEffect(() => {
-    if (districtFilter) {
-      const match = districtsData.find(d => d.name.toLowerCase() === districtFilter.toLowerCase() || d.id.toLowerCase() === districtFilter.toLowerCase());
+    if (districtFilter && districtsData.length > 0) {
+      const match = districtsData.find(d => d.name?.toLowerCase() === districtFilter.toLowerCase() || d.id?.toLowerCase() === districtFilter.toLowerCase());
       if (match) setSelectedDistrict(match);
     }
-  }, [districtFilter]);
+  }, [districtFilter, districtsData]);
 
   return (
     <div className="space-y-6">
@@ -88,7 +141,12 @@ export function StateDistrictDetails() {
         )}
       </div>
 
-      {displayDistricts.length === 0 ? (
+      {loading ? (
+        <div className="p-16 flex flex-col items-center justify-center gap-3 bg-white dark:bg-[#131f37] border border-slate-200/90 dark:border-[#1f3358] rounded-2xl">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          <p className="text-xs text-slate-500">Loading registered district operations...</p>
+        </div>
+      ) : displayDistricts.length === 0 ? (
         <div className="p-12 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-[#131f37] border border-slate-200/90 dark:border-[#1f3358] rounded-2xl">
           <Building2 className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
           <p className="font-medium text-base text-slate-800 dark:text-slate-200">No districts found</p>
@@ -267,6 +325,64 @@ export function StateDistrictDetails() {
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* Registered Managers in District */}
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900/40 shadow-2xs">
+              <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <UserCog className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                    Registered Managers ({selectedDistrict.managers?.length || selectedDistrict.totalManagers || 0})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/state-admin/managers/district')}
+                  className="text-[11px] font-semibold text-blue-600 dark:text-cyan-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Open Full Directory</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {selectedDistrict.managers && selectedDistrict.managers.length > 0 ? (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                  {selectedDistrict.managers.map((mgr) => (
+                    <div
+                      key={mgr.id}
+                      className="p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center font-bold text-xs shrink-0">
+                          {mgr.name ? mgr.name.charAt(0).toUpperCase() : 'M'}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>{mgr.name}</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                              {mgr.roleTitle || 'Manager'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5 font-mono">
+                            <span>{mgr.email}</span>
+                            {mgr.mobile && <span>&bull; {mgr.mobile}</span>}
+                            {mgr.division && mgr.division !== '-' && <span>&bull; Div: {mgr.division}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <StatusBadge status={mgr.status || 'Active'} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-5 text-center text-xs text-slate-400">
+                  No managers registered in {selectedDistrict.name} District yet.
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}

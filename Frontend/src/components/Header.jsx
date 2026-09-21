@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useLocation } from 'react-router-dom';
+import { normalizeRole } from '../utils/permissions';
 import {
   Menu,
   MapPin,
@@ -15,26 +17,70 @@ import {
 export function Header({ setIsSidebarOpen }) {
   const { user } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
+  const location = useLocation();
   const [dateFilter, setDateFilter] = useState('This Month');
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   if (!user) return null;
 
+  const role = normalizeRole(user?.role);
+
+  const isSuperAdmin =
+    role === 'Super Admin' ||
+    user.role === 'Super Admin' ||
+    location.pathname.startsWith('/super-admin');
+
+  const isDistrictAdmin =
+    !isSuperAdmin && (
+      role === 'District Admin' ||
+      user.role === 'District Admin' ||
+      (typeof user.role === 'string' && user.role.toLowerCase().includes('district') && !user.role.toLowerCase().includes('manager')) ||
+      location.pathname.startsWith('/district-admin')
+    );
+
   const getDashboardTitle = () => {
-    switch (user.role) {
+    if (isSuperAdmin) return 'MAIN ADMIN DASHBOARD';
+    if (isDistrictAdmin) return 'DISTRICT ADMIN DASHBOARD';
+    switch (role) {
+      case 'Super Admin': return 'MAIN ADMIN DASHBOARD';
       case 'State Admin': return 'STATE ADMIN DASHBOARD';
-      case 'District Admin': return 'DISTRICT ADMIN DASHBOARD';
-      case 'Divisional Admin': return 'DIVISIONAL ADMIN DASHBOARD';
+      case 'Divisional Admin':
+      case 'Division Admin': return 'DIVISION ADMIN DASHBOARD';
       case 'Pincode Admin': return 'PINCODE ADMIN DASHBOARD';
+      case 'Manager':
+      case 'state_manager':
+      case 'district_manager':
+      case 'division_manager':
+      case 'pincode_manager': return 'MANAGER DASHBOARD';
       default: return 'ADMIN DASHBOARD';
     }
   };
 
   const getLocationSubtitle = () => {
-    if (user.pincode) return `PIN: ${user.pincode} (${user.district})`;
-    if (user.division) return `${user.division} Division, ${user.district}`;
-    if (user.district) return `${user.district} District, ${user.state}`;
+    if (isSuperAdmin) {
+      return 'National Headquarters (All India)';
+    }
+    // District Admin header must never display PIN code, only the dynamic assigned district name
+    if (isDistrictAdmin) {
+      const dist = user.district || (user.scope && user.scope.districtName) || 'Assigned';
+      return dist.toLowerCase().endsWith('district') ? dist : `${dist} District`;
+    }
+    if (role === 'State Admin' || user.role === 'State Admin' || location.pathname.startsWith('/state-admin')) {
+      return user.state || 'Tamil Nadu';
+    }
+    if (role === 'Divisional Admin' || user.role === 'Division Admin' || location.pathname.startsWith('/divisional-admin')) {
+      const div = user.division || 'Division';
+      const divLabel = div.toLowerCase().endsWith('division') ? div : `${div} Division`;
+      return user.district ? `${divLabel}, ${user.district}` : divLabel;
+    }
+    if (role === 'Pincode Admin' || user.role === 'Pincode Admin' || location.pathname.startsWith('/pincode-admin')) {
+      return `PIN: ${user.pincode || 'Pincode'} (${user.areaName || user.district || 'Local Zone'})`;
+    }
+    if (user.district) {
+      const dist = user.district;
+      return dist.toLowerCase().endsWith('district') ? dist : `${dist} District`;
+    }
     return user.state || 'Tamil Nadu';
   };
 

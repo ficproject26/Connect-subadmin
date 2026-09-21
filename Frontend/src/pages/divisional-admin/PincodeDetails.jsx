@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { dataService } from '../../services/dataService';
 import {
   MapPin,
   Users,
@@ -16,7 +17,8 @@ import {
   Briefcase,
   CreditCard,
   Building2,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/Modal';
@@ -26,11 +28,56 @@ export function DivisionalPincodeDetails() {
   const navigate = useNavigate();
 
   const [selectedPincode, setSelectedPincode] = useState(null);
+  const [pincodes, setPincodes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const divisionName = user?.division || 'Salem North';
-  const districtName = user?.district || 'Salem';
+  const divisionName = user?.division || '';
+  const districtName = user?.district || '';
 
-  const pincodes = [];
+  useEffect(() => {
+    const loadPincodes = async () => {
+      setLoading(true);
+      try {
+        const res = await dataService.getPincodes();
+        if (res.success && res.pincodes) {
+          const list = res.pincodes
+            .filter(p => (!divisionName || (p.division || p.divisionName)?.toLowerCase() === divisionName.toLowerCase()) && p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-')
+            .map(p => ({
+              id: p.id || `PIN-${p.pincode}`,
+              pincode: p.pincode,
+              area: p.areaName || `${p.division || divisionName || 'Zone'} Hub`,
+              division: p.division || p.divisionName || divisionName,
+              district: p.district || p.districtName || districtName,
+              state: p.state || user?.state || 'Tamil Nadu',
+              status: p.status || 'Active',
+              admin: p.adminName || 'Unassigned',
+              adminEmail: p.adminEmail || '-',
+              adminPhone: p.adminPhone || '-',
+              totalCustomers: p.customerCount || 0,
+              customers: p.customerCount || 0,
+              vendors: p.totalVendors || 0,
+              orders: p.totalOrders || 0,
+              totalManagers: p.totalManagers || 0,
+              totalAgents: p.totalAgents || 0,
+              deliveryPartner: p.deliveryPartner || 0,
+              technician: p.technician || 0,
+              executive: p.executive || 0,
+              pendingKYC: p.pendingKYC || 0,
+              totalOrders: p.totalOrders || 0,
+              totalBookings: p.totalBookings || 0,
+              totalJobApplied: p.totalJobApplied || 0,
+              totalMembershipCards: p.totalMembershipCards || 0,
+            }));
+          setPincodes(list);
+        }
+      } catch (err) {
+        console.error('Failed to load divisional pincode details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPincodes();
+  }, [user, divisionName, districtName]);
 
   const getWorkforceMetrics = (pin) => [
     { label: 'Total Managers', value: pin.totalManagers, icon: UserCog, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/50' },
@@ -68,7 +115,12 @@ export function DivisionalPincodeDetails() {
       </div>
 
       {/* Grid identical to District Details */}
-      {pincodes.length === 0 ? (
+      {loading ? (
+        <div className="p-16 flex flex-col items-center justify-center gap-3 bg-white dark:bg-[#131f37] border border-slate-200/90 dark:border-[#1f3358] rounded-2xl">
+          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          <p className="text-xs text-slate-500">Loading micro-zone pincode directory...</p>
+        </div>
+      ) : pincodes.length === 0 ? (
         <div className="p-12 text-center text-slate-500 dark:text-slate-400 bg-white dark:bg-[#131f37] border border-slate-200/90 dark:border-[#1f3358] rounded-2xl">
           <MapPin className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
           <p className="font-medium text-base text-slate-800 dark:text-slate-200">No pincodes found</p>

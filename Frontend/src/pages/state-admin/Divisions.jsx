@@ -359,31 +359,6 @@ export function StateDivisions() {
                 </div>
               </div>
 
-              {/* Qualifications & Experience Card */}
-              <div className={`p-4 rounded-xl border space-y-3 md:col-span-2 ${
-                isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/60 pb-2">
-                  <GraduationCap className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Qualification & Professional Credentials</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Academic Qualification:</span>
-                    <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.qualification}</div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-slate-400">Relevant Experience:</span>
-                    <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{selectedAdmin.experience}</div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-slate-500 dark:text-slate-400">Functional Domain:</span>
-                    <div className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{selectedAdmin.specialization}</div>
-                  </div>
-                </div>
-              </div>
-
               {/* Official Administrative Address */}
               <div className={`p-4 rounded-xl border space-y-2 md:col-span-2 ${
                 isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50/70 border-slate-200'

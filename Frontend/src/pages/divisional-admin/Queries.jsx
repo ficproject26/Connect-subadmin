@@ -19,7 +19,7 @@ const INITIAL_DIVISIONAL_QUERIES = [];
 export function DivisionalQueries() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const division = user?.division || 'Salem North';
+  const division = user?.division || '';
 
   const [queries] = useState(INITIAL_DIVISIONAL_QUERIES);
   const [loading, setLoading] = useState(false);

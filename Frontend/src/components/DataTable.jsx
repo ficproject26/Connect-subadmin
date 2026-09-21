@@ -31,8 +31,13 @@ export function DataTable({
 
   // Client-side search filtering
   const filteredData = useMemo(() => {
-    if (!search.trim()) return data;
-    const q = search.toLowerCase();
+    if (!search || !search.trim()) return data;
+    const q = search.trim().toLowerCase();
+    const ph = (searchPlaceholder || '').trim().toLowerCase();
+    // If search text matches the placeholder or starts with generic "search pincode/search records", do not filter out rows
+    if (q === ph || q === 'search records...' || (ph && ph.startsWith(q) && q.startsWith('search'))) {
+      return data;
+    }
     return data.filter(item => {
       return Object.values(item).some(val => {
         if (typeof val === 'string' || typeof val === 'number') {
@@ -46,7 +51,7 @@ export function DataTable({
         return false;
       });
     });
-  }, [data, search]);
+  }, [data, search, searchPlaceholder]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
   const paginatedData = useMemo(() => {
@@ -137,7 +142,7 @@ export function DataTable({
                 <select
                   value={activeFilter}
                   onChange={(e) => onFilterChange(e.target.value)}
-                  className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 max-w-[170px] truncate`}
+                  className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 max-w-[220px] truncate font-medium`}
                 >
                   {filterOptions.map(opt => (
                     <option key={opt.value} value={opt.value} className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>

@@ -2,16 +2,26 @@ const ALLOWED_MANAGER_ROLES = [
   'state_manager',
   'district_manager',
   'division_manager',
-  'pincode_manager'
+  'pincode_manager',
+  'Manager'
 ];
 
 const ALLOWED_ADMIN_ROLES = [
   'State Admin',
   'District Admin',
   'Divisional Admin',
+  'Division Admin',
   'Pincode Admin',
   'Super Admin'
 ];
+
+const normalizeRoleName = (role) => {
+  if (!role) return '';
+  const r = role.toLowerCase().replace(/_/g, ' ').trim();
+  if (r === 'division admin' || r === 'divisional admin') return 'divisional admin';
+  if (r.includes('manager') && !r.includes('admin')) return 'manager';
+  return r;
+};
 
 const checkRole = (allowedRoles = [...ALLOWED_MANAGER_ROLES, ...ALLOWED_ADMIN_ROLES]) => {
   return (req, res, next) => {
@@ -19,11 +29,13 @@ const checkRole = (allowedRoles = [...ALLOWED_MANAGER_ROLES, ...ALLOWED_ADMIN_RO
       return res.status(401).json({ success: false, message: 'Unauthorized: User role not established.' });
     }
 
-    // Normalize roles for comparison
-    const normalizedUserRole = req.user.role.toLowerCase().replace(/_/g, ' ');
+    const userNormalized = normalizeRoleName(req.user.role);
+    const rawUserRole = req.user.role.toLowerCase().replace(/_/g, ' ').trim();
+
     const isAllowed = allowedRoles.some(role => {
-      const normalizedAllowed = role.toLowerCase().replace(/_/g, ' ');
-      return normalizedAllowed === normalizedUserRole || req.user.role === role;
+      const allowedNormalized = normalizeRoleName(role);
+      const rawAllowed = role.toLowerCase().replace(/_/g, ' ').trim();
+      return allowedNormalized === userNormalized || rawAllowed === rawUserRole || req.user.role === role;
     });
 
     if (!isAllowed) {
@@ -51,6 +63,8 @@ const blockManagersFromAdminEndpoints = (req, res, next) => {
 module.exports = {
   ALLOWED_MANAGER_ROLES,
   ALLOWED_ADMIN_ROLES,
+  normalizeRoleName,
   checkRole,
+  requireRole: checkRole,
   blockManagersFromAdminEndpoints
 };

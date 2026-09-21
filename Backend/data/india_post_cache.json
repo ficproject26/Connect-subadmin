@@ -1,0 +1,626 @@
+{
+  "pincodes": {
+    "110001": {
+      "pincode": "110001",
+      "state": "Delhi",
+      "district": "New Delhi",
+      "division": "New Delhi Central",
+      "circle": "Delhi",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "New Delhi GPO",
+          "branchType": "Head Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Delhi",
+          "region": "",
+          "block": ""
+        },
+        {
+          "name": "Connaught Place S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Delhi",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "400001": {
+      "pincode": "400001",
+      "state": "Maharashtra",
+      "district": "Mumbai",
+      "division": "Mumbai GPO Division",
+      "circle": "Maharashtra",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Mumbai GPO",
+          "branchType": "Head Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Maharashtra",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "400021": {
+      "pincode": "400021",
+      "state": "Maharashtra",
+      "district": "Mumbai",
+      "division": "Mumbai South",
+      "circle": "Maharashtra",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Nariman Point S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Maharashtra",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "400050": {
+      "pincode": "400050",
+      "state": "Maharashtra",
+      "district": "Mumbai",
+      "division": "Mumbai West",
+      "circle": "Maharashtra",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Bandra West S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Maharashtra",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "560001": {
+      "pincode": "560001",
+      "state": "Karnataka",
+      "district": "Bangalore",
+      "division": "Bangalore GPO Division",
+      "circle": "Karnataka",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Bangalore GPO",
+          "branchType": "Head Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Karnataka",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "560034": {
+      "pincode": "560034",
+      "state": "Karnataka",
+      "district": "Bangalore",
+      "division": "Bangalore South",
+      "circle": "Karnataka",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Koramangala S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Karnataka",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "560038": {
+      "pincode": "560038",
+      "state": "Karnataka",
+      "district": "Bangalore",
+      "division": "Bangalore East",
+      "circle": "Karnataka",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Indiranagar S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Karnataka",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "560102": {
+      "pincode": "560102",
+      "state": "Karnataka",
+      "district": "Bangalore",
+      "division": "Bangalore South",
+      "circle": "Karnataka",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "HSR Layout S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Karnataka",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "600001": {
+      "pincode": "600001",
+      "state": "Tamil Nadu",
+      "district": "Chennai",
+      "division": "Chennai GPO Division",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Chennai GPO",
+          "branchType": "Head Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "600017": {
+      "pincode": "600017",
+      "state": "Tamil Nadu",
+      "district": "Chennai",
+      "division": "Chennai South",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "T Nagar S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "600020": {
+      "pincode": "600020",
+      "state": "Tamil Nadu",
+      "district": "Chennai",
+      "division": "Chennai South",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Adyar S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "600028": {
+      "pincode": "600028",
+      "state": "Tamil Nadu",
+      "district": "Chennai",
+      "division": "Chennai City South",
+      "circle": "Tamilnadu",
+      "region": "Chennai Region",
+      "block": "Chennai City Corporation",
+      "postOffices": [
+        {
+          "name": "Raja Annamalaipuram",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Chennai Region",
+          "block": "Chennai City Corporation"
+        },
+        {
+          "name": "Ramakrishna Nagar (Chennai)",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Non-Delivery",
+          "circle": "Tamilnadu",
+          "region": "Chennai Region",
+          "block": "Chennai City Corporation"
+        }
+      ]
+    },
+    "600040": {
+      "pincode": "600040",
+      "state": "Tamil Nadu",
+      "district": "Chennai",
+      "division": "Chennai Central",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Anna Nagar S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636001": {
+      "pincode": "636001",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem East",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Salem H.O",
+          "branchType": "Head Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        },
+        {
+          "name": "Devendrapuram",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Non-Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636002": {
+      "pincode": "636002",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem West",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Shevapet S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        },
+        {
+          "name": "Market S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Non-Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636003": {
+      "pincode": "636003",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem East",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Ammapettai Salem",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636004": {
+      "pincode": "636004",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem East",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Alagapuram S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        },
+        {
+          "name": "Marakkadai",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Non-Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636006": {
+      "pincode": "636006",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem East",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Gugai S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636016": {
+      "pincode": "636016",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem West",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Fairlands S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636102": {
+      "pincode": "636102",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Attur Division",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Attur S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "636112": {
+      "pincode": "636112",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem East",
+      "circle": "Tamilnadu",
+      "region": "Coimbatore",
+      "block": "Atur",
+      "postOffices": [
+        {
+          "name": "Deviyakurichi",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        },
+        {
+          "name": "Kamakkapalayam",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        },
+        {
+          "name": "Manivilundan Colony",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Attur"
+        },
+        {
+          "name": "Navakurichi",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Attur"
+        },
+        {
+          "name": "Pattuthurai",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        },
+        {
+          "name": "Puthur",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        },
+        {
+          "name": "Sheepfarm",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Attur"
+        },
+        {
+          "name": "Siruvachur",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        },
+        {
+          "name": "Talaivasal",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        },
+        {
+          "name": "Unathur",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        },
+        {
+          "name": "Varagur",
+          "branchType": "Branch Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "Coimbatore",
+          "block": "Atur"
+        }
+      ]
+    },
+    "636401": {
+      "pincode": "636401",
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Mettur Division",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Mettur Dam H.O",
+          "branchType": "Head Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "641001": {
+      "pincode": "641001",
+      "state": "Tamil Nadu",
+      "district": "Coimbatore",
+      "division": "Coimbatore Division",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Coimbatore H.O",
+          "branchType": "Head Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        },
+        {
+          "name": "Town Hall",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Non-Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "641002": {
+      "pincode": "641002",
+      "state": "Tamil Nadu",
+      "district": "Coimbatore",
+      "division": "Coimbatore Division",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "RS Puram S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "641004": {
+      "pincode": "641004",
+      "state": "Tamil Nadu",
+      "district": "Coimbatore",
+      "division": "Coimbatore Division",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Peelamedu S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    },
+    "641012": {
+      "pincode": "641012",
+      "state": "Tamil Nadu",
+      "district": "Coimbatore",
+      "division": "Coimbatore Division",
+      "circle": "Tamilnadu",
+      "region": "",
+      "block": "",
+      "postOffices": [
+        {
+          "name": "Gandhipuram S.O",
+          "branchType": "Sub Post Office",
+          "deliveryStatus": "Delivery",
+          "circle": "Tamilnadu",
+          "region": "",
+          "block": ""
+        }
+      ]
+    }
+  }
+}

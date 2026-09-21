@@ -40,7 +40,7 @@ export function DivisionalSettings() {
               <input
                 type="text"
                 disabled
-                defaultValue={user?.division || 'Salem North'}
+                defaultValue={user?.division || ''}
                 className="w-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-500 font-semibold cursor-not-allowed"
               />
             </div>
@@ -57,7 +57,7 @@ export function DivisionalSettings() {
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" defaultChecked className="w-4 h-4 text-blue-600 rounded" />
               <span className="text-slate-700 dark:text-slate-300 font-medium">
-                Alert on delivery partner onboarding in {user?.division || 'Salem North'}
+                Alert on delivery partner onboarding in {user?.division || 'Assigned Division'}
               </span>
             </label>
             <label className="flex items-center gap-3 cursor-pointer">

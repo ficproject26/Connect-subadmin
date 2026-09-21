@@ -93,10 +93,13 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
 
   // Only Pincode Admin has permission for Stage 1 Verification actions
   const isPincodeAdmin = user?.role === 'Pincode Admin';
-  const isKYCTeam = user?.role === 'KYC Team' || user?.role === 'Super Admin';
+  const isKYCTeam = user?.role === 'KYC Team' || user?.role === 'Super Admin' || user?.role === 'State Admin';
+  const isManager = vendor.type === 'Manager' || vendor.managerId || (vendor.id && String(vendor.id).startsWith('KYC-MGR-'));
 
-  const canPincodeVerify = isPincodeAdmin && (kycStatus === 'Pending Pincode Admin Approval' || pincodeApproval.status === 'Pending');
-  const canKYCVerify = isKYCTeam && (kycStatus === 'KYC Pending' || kycStatus === 'Pincode Admin Approved' || (pincodeApproval.status === 'Approved' && kycApproval.status === 'Pending'));
+  const canPincodeVerify = !isManager && isPincodeAdmin && (kycStatus === 'Pending Pincode Admin Approval' || pincodeApproval.status === 'Pending');
+  const canKYCVerify = isManager
+    ? (kycStatus.toLowerCase() === 'pending' || kycStatus.toLowerCase() === 'pending verification')
+    : (isKYCTeam && (kycStatus === 'KYC Pending' || kycStatus === 'Pincode Admin Approved' || (pincodeApproval.status === 'Approved' && kycApproval.status === 'Pending')));
 
   const handlePincodeAccept = async () => {
     setActionLoading(true);
@@ -120,9 +123,14 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
     setActionLoading(true);
     setActionError('');
     try {
-      const res = await dataService.kycVerifyVendor(vendor.id, { action: 'Approve' });
+      let res;
+      if (isManager) {
+        res = await dataService.processKYC(vendor.id, { status: 'Verified' });
+      } else {
+        res = await dataService.kycVerifyVendor(vendor.id, { action: 'Approve' });
+      }
       if (res.success) {
-        if (onVendorUpdated) onVendorUpdated(res.vendor);
+        if (onVendorUpdated) onVendorUpdated(res.vendor || res.record);
         onClose();
       } else {
         setActionError(res.message || 'Failed to approve KYC');
@@ -153,7 +161,12 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
 
     try {
       let res;
-      if (rejectStage === 'pincode') {
+      if (isManager) {
+        res = await dataService.processKYC(vendor.id, {
+          status: 'Rejected',
+          reason: rejectionReason.trim()
+        });
+      } else if (rejectStage === 'pincode') {
         res = await dataService.pincodeVerifyVendor(vendor.id, {
           action: 'Reject',
           rejectionReason: rejectionReason.trim()
@@ -166,7 +179,7 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
       }
 
       if (res.success) {
-        if (onVendorUpdated) onVendorUpdated(res.vendor);
+        if (onVendorUpdated) onVendorUpdated(res.vendor || res.record);
         setRejectModalOpen(false);
         onClose();
       } else {

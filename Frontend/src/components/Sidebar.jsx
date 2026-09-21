@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { normalizeRole } from '../utils/permissions';
 import {
   LayoutDashboard,
   MapPin,
@@ -42,11 +43,62 @@ export function Sidebar({ isOpen, setIsOpen }) {
 
   if (!user) return null;
 
-  const role = user.role;
-
+  const role = normalizeRole(user?.role);
   let navSections = [];
 
-  if (role === 'State Admin') {
+  if (role === 'Super Admin' || role === 'Main Admin') {
+    navSections = [
+      {
+        title: '',
+        items: [
+          { name: 'Dashboard', path: '/super-admin/dashboard', icon: LayoutDashboard },
+        ]
+      },
+      {
+        title: 'States',
+        items: [
+          { name: 'State List', path: '/super-admin/states', icon: Building2 },
+          { name: 'State Details', path: '/super-admin/state-details', icon: Building2 },
+        ]
+      },
+      {
+        title: 'Districts',
+        items: [
+          { name: 'District List', path: '/super-admin/districts', icon: Building2 },
+          { name: 'District Details', path: '/super-admin/district-details', icon: Building2 },
+        ]
+      },
+      {
+        title: 'Divisions',
+        items: [
+          { name: 'Division List', path: '/super-admin/divisions', icon: Layers },
+          { name: 'Division Details', path: '/super-admin/division-details', icon: Building2 },
+        ]
+      },
+      {
+        title: 'Pincodes',
+        items: [
+          { name: 'Pincode List', path: '/super-admin/pincodes', icon: MapPin },
+          { name: 'Pincode Details', path: '/super-admin/pincode-details', icon: Building2 },
+        ]
+      },
+      {
+        title: 'Managers',
+        items: [
+          { name: 'State Managers', path: '/super-admin/managers/state', icon: UserCog },
+          { name: 'District Managers', path: '/super-admin/managers/district', icon: Building2 },
+          { name: 'Divisional Managers', path: '/super-admin/managers/divisional', icon: Layers },
+          { name: 'Pincode Managers', path: '/super-admin/managers/pincode', icon: MapPin },
+        ]
+      },
+      {
+        title: 'Account',
+        items: [
+          { name: 'Settings', path: '/super-admin/settings', icon: Settings },
+        ]
+      }
+    ];
+  } else if (role === 'State Admin') {
     navSections = [
       {
         title: '',
@@ -225,7 +277,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
         ]
       }
     ];
-  } else if (role === 'Divisional Admin') {
+  } else if (role === 'Divisional Admin' || role === 'Division Admin') {
     navSections = [
       {
         title: '',
@@ -313,7 +365,6 @@ export function Sidebar({ isOpen, setIsOpen }) {
         title: 'Managers',
         items: [
           { name: 'Pincode Managers', path: '/pincode-admin/managers', icon: UserCog },
-          { name: 'Pincode Zone Ops', path: '/pincode-admin/pincode-manager', icon: Sliders },
         ]
       },
       {
@@ -369,6 +420,28 @@ export function Sidebar({ isOpen, setIsOpen }) {
         ]
       }
     ];
+  } else if (role === 'Manager' || (role && role.toLowerCase().includes('manager'))) {
+    navSections = [
+      {
+        title: '',
+        items: [
+          { name: 'Dashboard', path: '/manager/dashboard', icon: LayoutDashboard },
+        ]
+      },
+      {
+        title: 'Operations',
+        items: [
+          { name: 'Field Overview', path: '/manager/overview', icon: Layers },
+        ]
+      },
+      {
+        title: 'Account',
+        items: [
+          { name: 'Profile', path: '/manager/profile', icon: User },
+          { name: 'Settings', path: '/manager/settings', icon: Settings },
+        ]
+      }
+    ];
   }
 
   return (
@@ -397,7 +470,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
                 FORGE INDIA
               </h1>
               <span className="text-[10px] text-[#FED766] font-bold tracking-wider uppercase mt-1 block">
-                {role === 'State Admin' ? 'STATE ADMIN' : role === 'District Admin' ? 'DISTRICT ADMIN' : role?.toUpperCase()}
+                {role === 'Super Admin' || role === 'Main Admin' ? 'MAIN ADMIN' : role === 'State Admin' ? 'STATE ADMIN' : role === 'District Admin' ? 'DISTRICT ADMIN' : role?.toUpperCase()}
               </span>
             </div>
           </div>

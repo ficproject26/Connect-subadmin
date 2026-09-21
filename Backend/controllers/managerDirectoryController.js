@@ -1,4 +1,5 @@
 const { db } = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 // Format human-readable role labels
 const formatRoleTitle = (role) => {
@@ -15,49 +16,138 @@ const formatRoleTitle = (role) => {
   }
 };
 
-// Check if an Administrator has jurisdiction to manage / approve a Field Manager
+// Check if an admin and a manager share the same state
+const matchesState = (admin, manager) => {
+  if (!admin || !manager) return false;
+  if (admin.state && manager.state && admin.state.trim().toLowerCase() === manager.state.trim().toLowerCase()) return true;
+  if (admin.stateId && manager.stateId && String(admin.stateId).toLowerCase() === String(manager.stateId).toLowerCase()) return true;
+  if ((admin.state === 'Tamil Nadu' || admin.stateId === 'state_tn' || admin.stateId === 'ST-TAM') && 
+      (manager.stateId === 'state_tn' || manager.stateId === 'ST-TAM' || manager.state === 'Tamil Nadu')) return true;
+  return false;
+};
+
+// Check if an admin and a manager share the same district
+const matchesDistrict = (admin, manager) => {
+  if (!admin || !manager) return false;
+  if (!matchesState(admin, manager)) return false;
+
+  if (admin.district && manager.district && admin.district.trim().toLowerCase() === manager.district.trim().toLowerCase()) return true;
+  if (admin.districtId && manager.districtId && String(admin.districtId).toLowerCase() === String(manager.districtId).toLowerCase()) return true;
+  if ((admin.district?.toLowerCase() === 'salem' || admin.districtId === 'dist_salem' || admin.districtId === 'DST-SALEM') && 
+      (manager.districtId === 'dist_salem' || manager.districtId === 'DST-SALEM' || manager.district?.toLowerCase() === 'salem')) return true;
+  return false;
+};
+
+// Check if an admin and a manager share the same division
+const matchesDivision = (admin, manager) => {
+  if (!admin || !manager) return false;
+  if (!matchesDistrict(admin, manager)) return false;
+
+  if (admin.division && manager.division && admin.division.trim().toLowerCase() === manager.division.trim().toLowerCase()) return true;
+  if (admin.divisionId && manager.divisionId && String(admin.divisionId).toLowerCase() === String(manager.divisionId).toLowerCase()) return true;
+  return false;
+};
+
+// Check if an admin and a manager share the same pincode
+const matchesPincode = (admin, manager) => {
+  if (!admin || !manager) return false;
+  if (admin.pincodeId && manager.pincodeId && String(admin.pincodeId).toLowerCase() === String(manager.pincodeId).toLowerCase()) return true;
+  if (admin.pincode && manager.pincode && String(admin.pincode).trim() === String(manager.pincode).trim()) return true;
+  if (admin.pincode && manager.pincodeId && manager.pincodeId === `pin_${String(admin.pincode).trim()}`) return true;
+  return false;
+};
+
+// Helper to determine the designated Admin Role for a Manager Role
+const getRelatedAdminRole = (managerRole) => {
+  switch (managerRole) {
+    case 'state_manager': return 'State Admin';
+    case 'district_manager': return 'District Admin';
+    case 'division_manager': return 'Divisional Admin';
+    case 'pincode_manager': return 'Pincode Admin';
+    default: return null;
+  }
+};
+
+// Returns true if admin is the exact related administrator for this manager's role and jurisdiction
+const isRelatedAdminForManager = (admin, manager) => {
+  if (!admin || !manager) return false;
+  const adminRole = (admin.role || '').trim();
+  const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
+
+  if (adminRoleLower === 'super admin' || adminRoleLower === 'admin') return true;
+
+  if (manager.role === 'state_manager') {
+    return adminRoleLower.includes('state') && matchesState(admin, manager);
+  }
+  if (manager.role === 'district_manager') {
+    return adminRoleLower.includes('district') && matchesDistrict(admin, manager);
+  }
+  if (manager.role === 'division_manager') {
+    return (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && matchesDivision(admin, manager);
+  }
+  if (manager.role === 'pincode_manager') {
+    return adminRoleLower.includes('pincode') && matchesPincode(admin, manager);
+  }
+  return false;
+};
+
+// Check if an Administrator has jurisdiction to view / manage a Field Manager
 const canAdminManage = (admin, manager) => {
-  const adminRole = (admin.role || '').toLowerCase().replace(/_/g, ' ');
+  const adminRole = (admin.role || '').trim();
+  const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
+
   // Super Admin can manage anyone
-  if (adminRole === 'super admin' || adminRole === 'admin') return true;
+  if (adminRoleLower === 'super admin' || adminRoleLower === 'admin') return true;
 
   const managerRoles = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'];
   if (!managerRoles.includes(manager.role)) return false;
 
-  // State Admin: apex administrator overseeing all state managers and regional networks
-  if (adminRole.includes('state')) {
-    if (manager.role === 'state_manager') return true;
-    if (admin.stateId && manager.stateId && admin.stateId === manager.stateId) return true;
-    if (admin.state && manager.state && admin.state.toLowerCase() === manager.state.toLowerCase()) return true;
-    if (adminRole === 'state admin') return true;
+  const isPending = manager.status === 'under_review' || manager.status === 'pending' || manager.adminApprovalStatus === 'pending';
+
+  // For pending registration requests:
+  // Must go directly to the related administrator for this jurisdiction level
+  if (isPending) {
+    if (isRelatedAdminForManager(admin, manager)) return true;
+
+    // Check if an exact admin exists in the system for this manager's jurisdiction
+    const hasAssignedExactAdmin = Array.from(db.users).some(u => 
+      (u.role || '').toLowerCase().includes('admin') && isRelatedAdminForManager(u, manager)
+    );
+
+    // If an exact admin exists, only that admin receives the request
+    if (hasAssignedExactAdmin) return false;
+
+    // Fallback: If no admin has been created yet at this exact tier, allow parent admin within the same state/district
+    if (adminRoleLower.includes('state')) {
+      return matchesState(admin, manager);
+    }
+    if (adminRoleLower.includes('district')) {
+      return (manager.role === 'division_manager' || manager.role === 'pincode_manager') && matchesDistrict(admin, manager);
+    }
+    if (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) {
+      return manager.role === 'pincode_manager' && matchesDivision(admin, manager);
+    }
     return false;
   }
 
-  // District Admin: manages district_manager, division_manager, pincode_manager in their district
-  if (adminRole.includes('district')) {
-    if (manager.role === 'state_manager') return false; // District Admin cannot oversee State Manager
-    if (admin.districtId && manager.districtId && admin.districtId === manager.districtId) return true;
-    if (admin.district && manager.district && admin.district.toLowerCase() === manager.district.toLowerCase()) return true;
-    if ((admin.district === 'Salem' || admin.districtId === 'dist_salem') && (manager.districtId === 'dist_salem' || manager.district === 'Salem')) return true;
-    return false;
+  // For active / approved managers: hierarchical territorial oversight
+  if (adminRoleLower.includes('state')) {
+    return matchesState(admin, manager);
   }
 
-  // Divisional Admin: manages division_manager, pincode_manager in their division
-  if (adminRole.includes('division') || adminRole.includes('divisional')) {
+  if (adminRoleLower.includes('district')) {
+    if (manager.role === 'state_manager') return false;
+    return matchesDistrict(admin, manager);
+  }
+
+  if (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) {
     if (manager.role === 'state_manager' || manager.role === 'district_manager') return false;
-    if (admin.divisionId && manager.divisionId && admin.divisionId === manager.divisionId) return true;
-    if (admin.division && manager.division && admin.division.toLowerCase() === manager.division.toLowerCase()) return true;
-    if ((admin.division === 'Salem North' || admin.divisionId === 'div_dist_salem_urban') && (manager.divisionId === 'div_dist_salem_urban' || manager.division === 'Salem North')) return true;
-    return false;
+    return matchesDivision(admin, manager);
   }
 
-  // Pincode Admin: manages pincode_manager in their assigned pincode
-  if (adminRole.includes('pincode')) {
+  if (adminRoleLower.includes('pincode')) {
     if (manager.role !== 'pincode_manager') return false;
-    if (admin.pincodeId && manager.pincodeId && admin.pincodeId === manager.pincodeId) return true;
-    if (admin.pincode && manager.pincode && String(admin.pincode) === String(manager.pincode)) return true;
-    if (admin.pincode && (manager.pincodeId === `pin_${admin.pincode}` || manager.pincode === String(admin.pincode))) return true;
-    return false;
+    return matchesPincode(admin, manager);
   }
 
   return false;
@@ -80,6 +170,15 @@ const populateManager = async (m, relation, user) => {
   const resolvedDivision = division?.name || m.division || null;
   const resolvedPincode = pincode?.code || m.pincode || null;
 
+  const targetAdminRole = getRelatedAdminRole(m.role);
+  let resolvedTargetAdminName = m.targetAdminName || null;
+  if (!resolvedTargetAdminName && targetAdminRole) {
+    const matchedAdmin = Array.from(db.users).find(u => isRelatedAdminForManager(u, m));
+    if (matchedAdmin) resolvedTargetAdminName = matchedAdmin.name;
+  }
+
+  const canApprove = isRelatedAdminForManager(user, m);
+
   return {
     id: m._id || m.id,
     _id: m._id || m.id,
@@ -92,6 +191,10 @@ const populateManager = async (m, relation, user) => {
     level: m.level,
     status,
     adminApprovalStatus,
+    targetAdminRole,
+    targetAdminName: resolvedTargetAdminName || 'Pending Admin Assignment',
+    targetJurisdiction: m.targetJurisdiction || (resolvedPincode ? `PIN: ${resolvedPincode}` : resolvedDivision ? `${resolvedDivision} Division` : resolvedDistrict ? `${resolvedDistrict} District` : `${resolvedState || 'State'} Jurisdiction`),
+    canApprove,
     kycStatus: m.kycStatus || (status === 'active' ? 'Verified' : 'pending_verification'),
     rejectionReason: m.rejectionReason || null,
     adminApprovedBy: m.adminApprovedBy || null,
@@ -221,7 +324,7 @@ const getLowerLevelManagers = async (req, res) => {
       rawSubordinates = rawSubordinates.filter(m => {
         const s = (m.status || 'active').toLowerCase();
         if (statusLower === 'pending' || statusLower === 'under_review') {
-          return s === 'under_review' || s === 'pending';
+          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval';
         }
         return s === statusLower;
       });
@@ -249,7 +352,7 @@ const getLowerLevelManagers = async (req, res) => {
     const subordinates = await Promise.all(rawSubordinates.map(m => populateManager(m, 'subordinate', user)));
     const all = roleLower.includes('admin') ? subordinates : [...peers, ...subordinates];
 
-    const pendingCount = subordinates.filter(m => m.status === 'under_review' || m.status === 'pending').length;
+    const pendingCount = subordinates.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval').length;
     const activeCount = subordinates.filter(m => m.status === 'active').length;
 
     res.json({
@@ -312,16 +415,18 @@ const approveManager = async (req, res) => {
 
     // Verify admin jurisdiction
     if (!canAdminManage(req.user, manager)) {
+      const targetRole = getRelatedAdminRole(manager.role);
+      const targetPlace = manager.pincode ? `Pincode ${manager.pincode}` : manager.division ? `${manager.division} Division` : manager.district ? `${manager.district} District` : `${manager.state || 'State'} Jurisdiction`;
       return res.status(403).json({
         success: false,
-        message: `You do not have administrative authority to approve ${manager.name} (${formatRoleTitle(manager.role)}) under your jurisdiction.`
+        message: `You do not have administrative authority to approve ${manager.name} (${formatRoleTitle(manager.role)}). Registration requests for this jurisdiction must be approved by the designated ${targetRole} for ${targetPlace}.`
       });
     }
 
-    // Update status to active and approve KYC
+    // Update status to active, adminApprovalStatus to approved, and kycStatus to Verified (skip KYC for now)
     manager.status = 'active';
-    manager.kycStatus = 'Verified';
     manager.adminApprovalStatus = 'approved';
+    manager.kycStatus = 'Verified';
     manager.adminApprovedBy = req.user.name || req.user.email;
     manager.adminApprovedById = req.user.id || req.user._id;
     manager.adminApprovedByRole = req.user.role;
@@ -333,14 +438,14 @@ const approveManager = async (req, res) => {
 
     // Audit log entry
     await db.auditLogs.insertOne({
-      action: 'MANAGER_REGISTRATION_APPROVED',
+      action: 'MANAGER_REGISTRATION_APPROVED_BY_ADMIN',
       adminId: req.user.id || req.user._id,
       adminName: req.user.name,
       adminRole: req.user.role,
       targetUserId: manager._id || manager.id,
       targetUserName: manager.name,
       targetUserRole: manager.role,
-      details: `${manager.role.replace('_', ' ')} "${manager.name}" was approved by ${req.user.role} "${req.user.name}". Account activated.`,
+      details: `${manager.role.replace('_', ' ')} "${manager.name}" was approved by ${req.user.role} "${req.user.name}". Account is now active.`,
       ip: req.ip || '127.0.0.1',
       timestamp: new Date().toISOString()
     });
@@ -349,7 +454,7 @@ const approveManager = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Registration for ${manager.name} (${formatRoleTitle(manager.role)}) approved successfully. Account is now active.`,
+      message: `Registration for ${manager.name} (${formatRoleTitle(manager.role)}) has been accepted and approved by ${req.user.role}. Account is now Active and login is enabled.`,
       manager: populated
     });
   } catch (err) {
@@ -372,9 +477,11 @@ const rejectManager = async (req, res) => {
 
     // Verify admin jurisdiction
     if (!canAdminManage(req.user, manager)) {
+      const targetRole = getRelatedAdminRole(manager.role);
+      const targetPlace = manager.pincode ? `Pincode ${manager.pincode}` : manager.division ? `${manager.division} Division` : manager.district ? `${manager.district} District` : `${manager.state || 'State'} Jurisdiction`;
       return res.status(403).json({
         success: false,
-        message: `You do not have administrative authority to reject ${manager.name} (${formatRoleTitle(manager.role)}) under your jurisdiction.`
+        message: `You do not have administrative authority to reject ${manager.name} (${formatRoleTitle(manager.role)}). Registration requests for this jurisdiction must be handled by the designated ${targetRole} for ${targetPlace}.`
       });
     }
 
@@ -419,9 +526,227 @@ const rejectManager = async (req, res) => {
   }
 };
 
+const addManager = async (req, res) => {
+  try {
+    const {
+      name,
+      fullName,
+      email,
+      mobile,
+      phone,
+      password,
+      role, // 'state_manager' | 'district_manager' | 'division_manager' | 'pincode_manager'
+      dob,
+      gender,
+      address,
+      doorStreet,
+      area,
+      city,
+      district: homeDistrict,
+      state: homeState,
+      pincode: homePincode,
+      aadharNumber,
+      panNumber,
+      accountHolderName,
+      bankName,
+      accountNumber,
+      ifscCode,
+      branchName,
+      assignedState,
+      assignedDistrict,
+      assignedDivision,
+      assignedPincode,
+      status, // 'active' | 'under_review'
+      loginId
+    } = req.body;
+
+    const mgrName = (name || fullName || '').trim();
+    const mgrEmail = (email || '').trim().toLowerCase();
+    const mgrMobile = (mobile || phone || '').trim();
+    const adminRoleLower = (req.user.role || '').toLowerCase().replace(/_/g, ' ');
+    const isSuperAdmin = adminRoleLower === 'super admin' || adminRoleLower.includes('super');
+    const isStateAdmin = adminRoleLower.includes('state') && !adminRoleLower.includes('manager');
+    const isDistrictAdmin = adminRoleLower.includes('district') && !adminRoleLower.includes('manager');
+    const isDivisionalAdmin = (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && !adminRoleLower.includes('manager');
+    const isPincodeAdmin = adminRoleLower.includes('pincode') && !adminRoleLower.includes('manager');
+
+    // Strict Rule:
+    // State Admin only adds State Manager
+    // District Admin only adds District Manager
+    // Division Admin only adds Division Manager
+    // Pincode Admin only adds Pincode Manager
+    let mgrRole = role;
+    if (isStateAdmin) {
+      if (role && role !== 'state_manager') {
+        return res.status(403).json({ success: false, message: 'State Admin can only add State Managers.' });
+      }
+      mgrRole = 'state_manager';
+    } else if (isDistrictAdmin) {
+      if (role && role !== 'district_manager') {
+        return res.status(403).json({ success: false, message: 'District Admin can only add District Managers.' });
+      }
+      mgrRole = 'district_manager';
+    } else if (isDivisionalAdmin) {
+      if (role && role !== 'division_manager') {
+        return res.status(403).json({ success: false, message: 'Division Admin can only add Division Managers.' });
+      }
+      mgrRole = 'division_manager';
+    } else if (isPincodeAdmin) {
+      if (role && role !== 'pincode_manager') {
+        return res.status(403).json({ success: false, message: 'Pincode Admin can only add Pincode Managers.' });
+      }
+      mgrRole = 'pincode_manager';
+    } else if (!isSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Unauthorized: Only administrators can add managers.' });
+    }
+
+    if (!mgrRole) mgrRole = 'state_manager';
+
+    if (!mgrName) return res.status(400).json({ success: false, message: 'Manager name is required.' });
+    if (!mgrEmail) return res.status(400).json({ success: false, message: 'Email address is required.' });
+    if (!mgrMobile) return res.status(400).json({ success: false, message: 'Mobile number is required.' });
+
+    // Check duplicate in users
+    const allUsers = Array.from(db.users);
+    const existing = allUsers.find(u => 
+      (u.email && u.email.toLowerCase() === mgrEmail) ||
+      (u.mobile && u.mobile === mgrMobile) ||
+      (loginId && u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase())
+    );
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'A user with this email or mobile number already exists.' });
+    }
+
+    // Auto-align location to administrator jurisdiction
+    let state = assignedState || homeState || req.user.state || 'Tamil Nadu';
+    let district = assignedDistrict || homeDistrict || req.user.district || null;
+    let division = assignedDivision || req.user.division || null;
+    let pincode = assignedPincode || homePincode || null;
+
+    if (isStateAdmin) {
+      state = req.user.state || 'Tamil Nadu';
+    } else if (isDistrictAdmin) {
+      state = req.user.state || 'Tamil Nadu';
+      district = req.user.district || district;
+    } else if (isDivisionalAdmin) {
+      state = req.user.state || 'Tamil Nadu';
+      district = req.user.district || district;
+      division = req.user.division || division;
+    } else if (isPincodeAdmin) {
+      state = req.user.state || 'Tamil Nadu';
+      district = req.user.district || district;
+      division = req.user.division || division;
+      pincode = req.user.pincode || pincode;
+    }
+
+    // Resolve IDs
+    const stateObj = (await db.states.findOne({ name: state })) || { _id: 'state_tn', name: state || 'Tamil Nadu' };
+    const districtObj = district ? ((await db.districts.findOne({ name: district })) || { _id: `dist_${district.toLowerCase()}`, name: district }) : null;
+    const divisionObj = division ? ((await db.divisions.findOne({ name: division })) || { _id: `div_${division.toLowerCase().replace(/\s+/g, '_')}`, name: division }) : null;
+    const pincodeObj = pincode ? ((await db.pincodes.findOne({ code: pincode })) || { _id: `pin_${pincode}`, code: pincode }) : null;
+
+    const mgrPassword = password || req.body.password || 'Password@123';
+    const passwordHash = await bcrypt.hash(mgrPassword, 10);
+    const now = new Date().toISOString();
+    const level = mgrRole === 'state_manager' ? 1 
+                : mgrRole === 'district_manager' ? 2 
+                : mgrRole === 'division_manager' ? 3 
+                : 4;
+
+    const newId = `usr_mgr_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+
+    const targetJurisdiction = pincode ? `PIN: ${pincode}` 
+      : division ? `${division} Division` 
+      : district ? `${district} District` 
+      : `${state} Jurisdiction`;
+
+    const newManager = {
+      _id: newId,
+      id: newId,
+      name: mgrName,
+      email: mgrEmail,
+      mobile: mgrMobile,
+      phone: mgrMobile,
+      loginId: loginId || mgrEmail,
+      passwordHash,
+      role: mgrRole,
+      level,
+      status: 'active',
+      registrationType: 'admin',
+      adminApprovalStatus: 'approved',
+      adminApprovedBy: req.user.name || req.user.email,
+      adminApprovedById: req.user.id || req.user._id,
+      adminApprovedByRole: req.user.role,
+      adminApprovedAt: now,
+      kycStatus: 'Verified',
+      state,
+      stateId: stateObj?._id || 'state_tn',
+      district: district || null,
+      districtId: districtObj?._id || null,
+      division: division || null,
+      divisionId: divisionObj?._id || null,
+      pincode: pincode || null,
+      pincodeId: pincodeObj?._id || null,
+      targetJurisdiction,
+      targetAdminRole: req.user.role,
+      targetAdminId: req.user.id || req.user._id,
+      targetAdminName: req.user.name,
+      dob: dob || null,
+      gender: gender || null,
+      address: address || doorStreet || `${area || ''} ${city || ''}`.trim() || null,
+      aadharNumber: aadharNumber || null,
+      panNumber: panNumber || null,
+      bankDetails: {
+        accountHolderName: accountHolderName || mgrName,
+        bankName: bankName || null,
+        accountNumber: accountNumber || null,
+        ifscCode: ifscCode || null,
+        branchName: branchName || null
+      },
+      documents: {
+        aadharNumber: aadharNumber || null,
+        panNumber: panNumber || null
+      },
+      createdByAdmin: req.user.name || req.user.email,
+      createdById: req.user.id || req.user._id,
+      createdByRole: req.user.role,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await db.users.insertOne(newManager);
+
+    // Audit log
+    await db.auditLogs.insertOne({
+      action: 'MANAGER_CREATED',
+      adminId: req.user.id || req.user._id,
+      adminName: req.user.name,
+      adminRole: req.user.role,
+      targetUserId: newManager._id,
+      targetUserName: newManager.name,
+      targetUserRole: newManager.role,
+      details: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered and activated by ${req.user.role} "${req.user.name}".`,
+      ip: req.ip || '127.0.0.1',
+      timestamp: now
+    });
+
+    const populated = await populateManager(newManager, 'subordinate', req.user);
+
+    return res.json({
+      success: true,
+      message: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered successfully. Account is active and login is enabled.`,
+      manager: populated
+    });
+  } catch (err) {
+    console.error('Add manager error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to add manager', error: err.message });
+  }
+};
+
 module.exports = {
   getLowerLevelManagers,
   getManagerById,
   approveManager,
-  rejectManager
+  rejectManager,
+  addManager
 };

@@ -72,7 +72,7 @@ export function DivisionalSupportTeam() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Division Support Team Queue</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Support desk tickets originating from {user?.division || 'Salem North'} Division pincode hubs.
+          Support desk tickets originating from {user?.division || 'assigned'} Division pincode hubs.
         </p>
       </div>
 

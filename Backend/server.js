@@ -17,7 +17,7 @@ const qualityRoutes = require('./routes/qualityRoutes');
 const pincodeRoutes = require('./routes/pincodeRoutes');
 const executiveRoutes = require('./routes/executiveRoutes');
 
-// Newly integrated Manager Portal routes
+// Newly integrated Manager Portal routes (Option A Revenue Divisions)
 const locationRoutes = require('./routes/locationRoutes');
 const managerDirectoryRoutes = require('./routes/managerDirectoryRoutes');
 const auditRoutes = require('./routes/auditRoutes');
@@ -53,7 +53,7 @@ app.use('/api/quality', qualityRoutes);
 app.use('/api/pincodes', pincodeRoutes);
 app.use('/api/operations', executiveRoutes);
 
-// Unified Health Check (Public)
+// Unified Health Check (Public) - Cleaned Mock Stores
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
@@ -95,4 +95,5 @@ if (require.main === module) {
   });
 }
 
+// Unified API Server - Jurisdiction Routed
 module.exports = app;

@@ -27,20 +27,20 @@ export function DivisionalProfile() {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Assigned Division: <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.division || 'Salem North'}</span>, {user?.district || 'Salem'}
+              Assigned Division: <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.division || '-'}</span>{user?.district ? `, ${user.district}` : ''}
             </p>
             <div className="pt-3 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-slate-600 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Mail className="w-3.5 h-3.5 text-blue-600" />
-                {user?.email || 'divisional_admin@admin.com'}
+                {user?.email || '-'}
               </span>
               <span className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                {user?.division || 'Salem North'} Office
+                {user?.division ? `${user.division} Office` : 'Divisional Office'}
               </span>
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                Active Since Jan 2026
+                {user?.createdAt ? `Active Since ${new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : 'Active Account'}
               </span>
             </div>
           </div>
@@ -55,13 +55,13 @@ export function DivisionalProfile() {
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
             <div className="font-semibold text-slate-900 dark:text-white">Division Authority</div>
             <p className="text-slate-500 text-[11px] mt-0.5">
-              Authorized to govern all pincodes, customers, vendors, and jobs within {user?.division || 'Salem North'}.
+              Authorized to govern all pincodes, customers, vendors, and jobs within assigned division ({user?.division || 'Jurisdiction'}).
             </p>
           </div>
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
             <div className="font-semibold text-slate-900 dark:text-white">Isolation Rule</div>
             <p className="text-slate-500 text-[11px] mt-0.5">
-              Strictly prohibited from accessing data belonging to other divisions (e.g. Salem South or Coimbatore North).
+              Strictly prohibited from accessing data belonging to other administrative divisions.
             </p>
           </div>
         </div>

@@ -84,7 +84,7 @@ export function DistrictAdminDashboard() {
             </div>
           </div>
           <div className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'} mt-2`}>{stats.totalDivisions}</div>
-          <div className="text-[10px] text-blue-600 font-semibold mt-0.5">Salem North & South</div>
+          <div className="text-[10px] text-blue-600 font-semibold mt-0.5">{user?.district || 'District'} Divisions</div>
         </div>
 
         {/* 2. Total Pincodes */}
@@ -103,7 +103,7 @@ export function DistrictAdminDashboard() {
             </div>
           </div>
           <div className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'} mt-2`}>{stats.totalPincodes}</div>
-          <div className="text-[10px] text-indigo-600 font-semibold mt-0.5">636001 - 636004</div>
+          <div className="text-[10px] text-indigo-600 font-semibold mt-0.5">Zonal Coverage</div>
         </div>
 
         {/* 3. Total Customers */}
@@ -122,7 +122,7 @@ export function DistrictAdminDashboard() {
             </div>
           </div>
           <div className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'} mt-2`}>{stats.totalCustomers}</div>
-          <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">In Salem District</div>
+          <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">In {user?.district || 'Assigned'} District</div>
         </div>
 
         {/* 4. Total Vendors */}
