@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useLocation } from 'react-router-dom';
 import { normalizeRole } from '../utils/permissions';
+import NotificationDropdown from './NotificationDropdown';
 import {
   Menu,
   MapPin,
@@ -17,33 +19,39 @@ import {
 export function Header({ setIsSidebarOpen }) {
   const { user } = useAuth();
   const { theme, toggleTheme, isDark } = useTheme();
+  const { unreadCount } = useNotifications();
   const location = useLocation();
   const [dateFilter, setDateFilter] = useState('This Month');
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notifRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setShowNotifications(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   if (!user) return null;
 
   const role = normalizeRole(user?.role);
 
-  const isSuperAdmin =
-    role === 'Super Admin' ||
-    user.role === 'Super Admin' ||
-    location.pathname.startsWith('/super-admin');
-
   const isDistrictAdmin =
-    !isSuperAdmin && (
-      role === 'District Admin' ||
-      user.role === 'District Admin' ||
-      (typeof user.role === 'string' && user.role.toLowerCase().includes('district') && !user.role.toLowerCase().includes('manager')) ||
-      location.pathname.startsWith('/district-admin')
-    );
+    role === 'District Admin' ||
+    user.role === 'District Admin' ||
+    (typeof user.role === 'string' && user.role.toLowerCase().includes('district') && !user.role.toLowerCase().includes('manager')) ||
+    location.pathname.startsWith('/district-admin');
 
   const getDashboardTitle = () => {
-    if (isSuperAdmin) return 'MAIN ADMIN DASHBOARD';
     if (isDistrictAdmin) return 'DISTRICT ADMIN DASHBOARD';
     switch (role) {
-      case 'Super Admin': return 'MAIN ADMIN DASHBOARD';
+      case 'Super Admin':
+      case 'Main Admin':
       case 'State Admin': return 'STATE ADMIN DASHBOARD';
       case 'Divisional Admin':
       case 'Division Admin': return 'DIVISION ADMIN DASHBOARD';
@@ -58,9 +66,6 @@ export function Header({ setIsSidebarOpen }) {
   };
 
   const getLocationSubtitle = () => {
-    if (isSuperAdmin) {
-      return 'National Headquarters (All India)';
-    }
     // District Admin header must never display PIN code, only the dynamic assigned district name
     if (isDistrictAdmin) {
       const dist = user.district || (user.scope && user.scope.districtName) || 'Assigned';
@@ -191,17 +196,30 @@ export function Header({ setIsSidebarOpen }) {
         </button>
 
         {/* Notification Bell */}
-        <button
-          type="button"
-          title="Notifications"
-          className={`relative p-2 rounded-xl border ${
-            isDark
-              ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-blue-400'
-              : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-blue-600'
-          } shadow-sm transition cursor-pointer`}
-        >
-          <Bell className="w-4 h-4" />
-        </button>
+        <div className="relative" ref={notifRef}>
+          <button
+            type="button"
+            title="Notifications"
+            onClick={() => setShowNotifications(prev => !prev)}
+            className={`relative p-2 rounded-xl border ${
+              isDark
+                ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-amber-400'
+                : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-amber-600'
+            } shadow-sm transition cursor-pointer`}
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white shadow-md animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          <NotificationDropdown
+            isOpen={showNotifications}
+            onClose={() => setShowNotifications(false)}
+          />
+        </div>
 
         {/* User Profile */}
         <div className={`flex items-center gap-2 pl-2 border-l ${

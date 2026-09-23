@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../context/NotificationContext';
 import { normalizeRole } from '../utils/permissions';
 import {
   LayoutDashboard,
@@ -33,12 +34,14 @@ import {
   ClipboardList,
   CircleHelp,
   Receipt,
-  ClipboardCheck
+  ClipboardCheck,
+  Bell
 } from 'lucide-react';
 
 export function Sidebar({ isOpen, setIsOpen }) {
   const { user, logout } = useAuth();
   const { isDark } = useTheme();
+  const { unreadCount } = useNotifications();
   const location = useLocation();
 
   if (!user) return null;
@@ -46,59 +49,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
   const role = normalizeRole(user?.role);
   let navSections = [];
 
-  if (role === 'Super Admin' || role === 'Main Admin') {
-    navSections = [
-      {
-        title: '',
-        items: [
-          { name: 'Dashboard', path: '/super-admin/dashboard', icon: LayoutDashboard },
-        ]
-      },
-      {
-        title: 'States',
-        items: [
-          { name: 'State List', path: '/super-admin/states', icon: Building2 },
-          { name: 'State Details', path: '/super-admin/state-details', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Districts',
-        items: [
-          { name: 'District List', path: '/super-admin/districts', icon: Building2 },
-          { name: 'District Details', path: '/super-admin/district-details', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Divisions',
-        items: [
-          { name: 'Division List', path: '/super-admin/divisions', icon: Layers },
-          { name: 'Division Details', path: '/super-admin/division-details', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Pincodes',
-        items: [
-          { name: 'Pincode List', path: '/super-admin/pincodes', icon: MapPin },
-          { name: 'Pincode Details', path: '/super-admin/pincode-details', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Managers',
-        items: [
-          { name: 'State Managers', path: '/super-admin/managers/state', icon: UserCog },
-          { name: 'District Managers', path: '/super-admin/managers/district', icon: Building2 },
-          { name: 'Divisional Managers', path: '/super-admin/managers/divisional', icon: Layers },
-          { name: 'Pincode Managers', path: '/super-admin/managers/pincode', icon: MapPin },
-        ]
-      },
-      {
-        title: 'Account',
-        items: [
-          { name: 'Settings', path: '/super-admin/settings', icon: Settings },
-        ]
-      }
-    ];
-  } else if (role === 'State Admin') {
+  if (role === 'State Admin' || role === 'Super Admin' || role === 'Main Admin') {
     navSections = [
       {
         title: '',
@@ -107,24 +58,11 @@ export function Sidebar({ isOpen, setIsOpen }) {
         ]
       },
       {
-        title: 'Districts',
+        title: 'Sub Admins',
         items: [
-          { name: 'District List', path: '/state-admin/districts', icon: Building2 },
-          { name: 'District Details', path: '/state-admin/district-details', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Divisions',
-        items: [
-          { name: 'Division List', path: '/state-admin/divisions', icon: Layers },
-          { name: 'Division Details', path: '/state-admin/division-details', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Pincodes',
-        items: [
-          { name: 'Pincode List', path: '/state-admin/pincodes', icon: MapPin },
-          { name: 'Pincode Details', path: '/state-admin/pincode-details', icon: Building2 },
+          { name: 'District Admins', path: '/state-admin/districts', icon: Building2 },
+          { name: 'Division Admins', path: '/state-admin/divisions', icon: Layers },
+          { name: 'Pincode Admins', path: '/state-admin/pincodes', icon: MapPin },
         ]
       },
       {
@@ -182,6 +120,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
           { name: 'Business Reports', path: '/state-admin/reports', icon: BarChart3 },
           { name: 'Tasks', path: '/state-admin/tasks', icon: ClipboardList },
           { name: 'Queries', path: '/state-admin/queries', icon: CircleHelp },
+          { name: 'Notifications', path: '/state-admin/notifications', icon: Bell, badge: unreadCount },
         ]
       },
       {
@@ -201,17 +140,10 @@ export function Sidebar({ isOpen, setIsOpen }) {
         ]
       },
       {
-        title: 'Divisions',
+        title: 'Sub Admins',
         items: [
-          { name: 'Division List', path: '/district-admin/divisions', icon: Layers },
-          { name: 'Division Details', path: '/district-admin/division-details', icon: Building2 },
-        ]
-      },
-      {
-        title: 'Pincodes',
-        items: [
-          { name: 'Pincode List', path: '/district-admin/pincodes', icon: MapPin },
-          { name: 'Pincode Details', path: '/district-admin/pincode-details', icon: Building2 },
+          { name: 'Division Admins', path: '/district-admin/divisions', icon: Layers },
+          { name: 'Pincode Admins', path: '/district-admin/pincodes', icon: MapPin },
         ]
       },
       {
@@ -267,6 +199,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
           { name: 'Business Reports', path: '/district-admin/reports', icon: BarChart3 },
           { name: 'Tasks', path: '/district-admin/tasks', icon: ClipboardList },
           { name: 'Queries', path: '/district-admin/queries', icon: CircleHelp },
+          { name: 'Notifications', path: '/district-admin/notifications', icon: Bell, badge: unreadCount },
         ]
       },
       {
@@ -286,10 +219,9 @@ export function Sidebar({ isOpen, setIsOpen }) {
         ]
       },
       {
-        title: 'Pincodes',
+        title: 'Sub Admins',
         items: [
-          { name: 'Pincode List', path: '/divisional-admin/pincodes', icon: MapPin },
-          { name: 'Pincode Details', path: '/divisional-admin/pincode-details', icon: Building2 },
+          { name: 'Pincode Admins', path: '/divisional-admin/pincodes', icon: MapPin },
         ]
       },
       {
@@ -343,6 +275,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
           { name: 'Business Reports', path: '/divisional-admin/reports', icon: BarChart3 },
           { name: 'Tasks', path: '/divisional-admin/tasks', icon: ClipboardList },
           { name: 'Queries', path: '/divisional-admin/queries', icon: CircleHelp },
+          { name: 'Notifications', path: '/divisional-admin/notifications', icon: Bell, badge: unreadCount },
         ]
       },
       {
@@ -410,6 +343,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
           { name: 'Payments', path: '/pincode-admin/payments', icon: IndianRupee },
           { name: 'Tasks', path: '/pincode-admin/tasks', icon: ClipboardList },
           { name: 'Queries', path: '/pincode-admin/queries', icon: CircleHelp },
+          { name: 'Notifications', path: '/pincode-admin/notifications', icon: Bell, badge: unreadCount },
         ]
       },
       {
@@ -470,7 +404,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
                 FORGE INDIA
               </h1>
               <span className="text-[10px] text-[#FED766] font-bold tracking-wider uppercase mt-1 block">
-                {role === 'Super Admin' || role === 'Main Admin' ? 'MAIN ADMIN' : role === 'State Admin' ? 'STATE ADMIN' : role === 'District Admin' ? 'DISTRICT ADMIN' : role?.toUpperCase()}
+                {role === 'Super Admin' || role === 'Main Admin' || role === 'State Admin' ? 'STATE ADMIN' : role === 'District Admin' ? 'DISTRICT ADMIN' : role?.toUpperCase()}
               </span>
             </div>
           </div>
@@ -511,6 +445,17 @@ export function Sidebar({ isOpen, setIsOpen }) {
                       />
                       <span className="truncate">{item.name}</span>
                     </div>
+                    {item.badge > 0 && (
+                      <span
+                        className={`px-1.5 py-0.5 text-[9px] font-extrabold rounded-full ${
+                          isActive
+                            ? 'bg-[#001D51] text-[#FED766]'
+                            : 'bg-rose-500 text-white shadow-sm'
+                        }`}
+                      >
+                        {item.badge > 9 ? '9+' : item.badge}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}

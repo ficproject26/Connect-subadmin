@@ -12,38 +12,57 @@ export function AuthProvider({ children }) {
   const [demoAdmins, setDemoAdmins] = useState([]);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function initAuth() {
       try {
         if (token) {
           const res = await authService.getMe();
-          if (res.success && res.user) {
+          if (isMounted && res.success && res.user) {
             setUser(res.user);
             localStorage.setItem('ams_user', JSON.stringify(res.user));
           }
         }
       } catch (err) {
-        console.warn('Session expired or invalid, logging out.');
-        authService.logout();
-        setUser(null);
-        setToken(null);
+        // Only log out if it is an actual authentication failure (401), not a network/startup glitch
+        if (err?.status === 401 || err?.message?.toLowerCase().includes('unauthorized') || err?.message?.toLowerCase().includes('invalid token')) {
+          console.warn('Session expired or invalid, logging out.');
+          authService.logout();
+          if (isMounted) {
+            setUser(null);
+            setToken(null);
+          }
+        } else {
+          console.warn('Backend server unreachable during initAuth, preserving session:', err?.message || err);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
-    async function loadDemoAdmins() {
+    async function loadDemoAdmins(retries = 2) {
       try {
         const res = await authService.getDemoAdmins();
-        if (res.success) {
+        if (isMounted && res.success && Array.isArray(res.admins)) {
           setDemoAdmins(res.admins);
         }
       } catch (e) {
-        console.error('Could not load demo admins', e);
+        if (isMounted && retries > 0) {
+          setTimeout(() => loadDemoAdmins(retries - 1), 1200);
+        } else {
+          console.error('Could not load demo admins', e);
+        }
       }
     }
 
     initAuth();
     loadDemoAdmins();
+
+    return () => {
+      isMounted = false;
+    };
   }, [token]);
 
   const login = async (email, password) => {

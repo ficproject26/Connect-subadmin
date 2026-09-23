@@ -22,6 +22,9 @@ const locationRoutes = require('./routes/locationRoutes');
 const managerDirectoryRoutes = require('./routes/managerDirectoryRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const shopVisitRoutes = require('./routes/shopVisitRoutes');
+const qcTaskRoutes = require('./routes/qcTaskRoutes'); // QC & Task Routes
+const notificationRoutes = require('./routes/notificationRoutes'); // Real-time Notifications
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -70,6 +73,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/managers', managerDirectoryRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/shop-visits', shopVisitRoutes);
+app.use('/api/qc-tasks', qcTaskRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api', locationRoutes); // /api/states, /api/districts, /api/divisions, /api/pincodes
 
 // Global 404
@@ -95,5 +101,5 @@ if (require.main === module) {
   });
 }
 
-// Unified API Server - Jurisdiction Routed
+// Unified API Server - Clean Production Ready Data Store
 module.exports = app;

@@ -1,4 +1,4 @@
-const multer = require('multer');
+﻿const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
@@ -19,7 +19,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+  const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.webm', '.wav', '.mp3', '.m4a', '.ogg', '.aac'];
   const ext = path.extname(file.originalname).toLowerCase();
   if (allowed.includes(ext)) {
     cb(null, true);

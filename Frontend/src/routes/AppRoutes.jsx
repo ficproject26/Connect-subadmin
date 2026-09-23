@@ -9,22 +9,14 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 // Auth Pages
 import { Login } from '../pages/auth/Login';
 
-// Super Admin / Main Admin Pages
-import { SuperAdminDashboard } from '../pages/super-admin/Dashboard';
-import { SuperAdminStates } from '../pages/super-admin/States';
+
 
 // State Admin Pages
 import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
 import { StatesOverview } from '../pages/state-admin/StatesOverview';
 import { StateDistricts } from '../pages/state-admin/Districts';
-import { StateDistrictAdmins } from '../pages/state-admin/DistrictAdmins';
-import { StateDistrictDetails } from '../pages/state-admin/DistrictDetails';
 import { StateDivisions } from '../pages/state-admin/Divisions';
-import { StateDivisionAdmins } from '../pages/state-admin/DivisionAdmins';
-import { StateDivisionDetails } from '../pages/state-admin/DivisionDetails';
 import { StatePincodes } from '../pages/state-admin/Pincodes';
-import { StatePincodeAdmins } from '../pages/state-admin/PincodeAdmins';
-import { StatePincodeDetails } from '../pages/state-admin/PincodeDetails';
 import { StateCustomers } from '../pages/state-admin/Customers';
 import { StateMembershipCards } from '../pages/state-admin/MembershipCards';
 import { StateVendors } from '../pages/state-admin/Vendors';
@@ -53,11 +45,7 @@ import { StateQueries } from '../pages/state-admin/Queries';
 import { DistrictAdminDashboard } from '../pages/district-admin/Dashboard';
 import { DistrictOverview } from '../pages/district-admin/Overview';
 import { DistrictDivisions } from '../pages/district-admin/Divisions';
-import { DistrictDivisionAdmins } from '../pages/district-admin/DivisionAdmins';
-import { DistrictDivisionDetails } from '../pages/district-admin/DivisionDetails';
 import { DistrictPincodes } from '../pages/district-admin/Pincodes';
-import { DistrictPincodeAdmins } from '../pages/district-admin/PincodeAdmins';
-import { DistrictPincodeDetails } from '../pages/district-admin/PincodeDetails';
 import { DistrictCustomers } from '../pages/district-admin/Customers';
 import { DistrictMembershipCards } from '../pages/district-admin/MembershipCards';
 import { DistrictVendors } from '../pages/district-admin/Vendors';
@@ -85,8 +73,6 @@ import { DistrictSettings } from '../pages/district-admin/Settings';
 import { DivisionalAdminDashboard } from '../pages/divisional-admin/Dashboard';
 import { DivisionalOverview } from '../pages/divisional-admin/Overview';
 import { DivisionalPincodes } from '../pages/divisional-admin/Pincodes';
-import { DivisionalPincodeAdmins } from '../pages/divisional-admin/PincodeAdmins';
-import { DivisionalPincodeDetails } from '../pages/divisional-admin/PincodeDetails';
 import { DivisionalCustomers } from '../pages/divisional-admin/Customers';
 import { DivisionalMembershipCards } from '../pages/divisional-admin/MembershipCards';
 import { DivisionalVendors } from '../pages/divisional-admin/Vendors';
@@ -140,6 +126,9 @@ import { PincodeSettings } from '../pages/pincode-admin/Settings';
 // Manager Pages
 import { ManagerDashboard } from '../pages/manager/Dashboard';
 
+// Common Notifications Page
+import NotificationsPage from '../pages/common/Notifications';
+
 function RootRedirect() {
   const { user, isAuthenticated } = useAuth();
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
@@ -156,41 +145,22 @@ export function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
 
-          {/* Super Admin / Main Admin Routes */}
-          <Route element={<RoleBasedRoute allowedRoles={['Super Admin', 'Main Admin']} />}>
-            <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
-            <Route path="/super-admin/states" element={<SuperAdminStates />} />
-            <Route path="/super-admin/state-details" element={<SuperAdminStates />} />
-            <Route path="/super-admin/districts" element={<StateDistricts />} />
-            <Route path="/super-admin/district-admins" element={<StateDistrictAdmins />} />
-            <Route path="/super-admin/district-details" element={<StateDistrictDetails />} />
-            <Route path="/super-admin/divisions" element={<StateDivisions />} />
-            <Route path="/super-admin/division-admins" element={<StateDivisionAdmins />} />
-            <Route path="/super-admin/division-details" element={<StateDivisionDetails />} />
-            <Route path="/super-admin/pincodes" element={<StatePincodes />} />
-            <Route path="/super-admin/pincode-admins" element={<StatePincodeAdmins />} />
-            <Route path="/super-admin/pincode-details" element={<StatePincodeDetails />} />
-            <Route path="/super-admin/managers" element={<StateManagers level="state" />} />
-            <Route path="/super-admin/managers/state" element={<StateManagers level="state" />} />
-            <Route path="/super-admin/managers/district" element={<StateManagers level="district" />} />
-            <Route path="/super-admin/managers/divisional" element={<StateManagers level="divisional" />} />
-            <Route path="/super-admin/managers/pincode" element={<StateManagers level="pincode" />} />
-            <Route path="/super-admin/settings" element={<StateSettings />} />
-          </Route>
+          {/* Super Admin routes redirect to State Admin dashboard */}
+          <Route path="/super-admin/*" element={<Navigate to="/state-admin/dashboard" replace />} />
 
           {/* State Admin Routes */}
           <Route element={<RoleBasedRoute allowedRoles={['State Admin']} />}>
             <Route path="/state-admin/dashboard" element={<StateAdminDashboard />} />
             <Route path="/state-admin/states-overview" element={<StatesOverview />} />
             <Route path="/state-admin/districts" element={<StateDistricts />} />
-            <Route path="/state-admin/district-admins" element={<StateDistrictAdmins />} />
-            <Route path="/state-admin/district-details" element={<StateDistrictDetails />} />
+            <Route path="/state-admin/district-admins" element={<Navigate to="/state-admin/districts" replace />} />
+            <Route path="/state-admin/district-details" element={<Navigate to="/state-admin/districts" replace />} />
             <Route path="/state-admin/divisions" element={<StateDivisions />} />
-            <Route path="/state-admin/division-admins" element={<StateDivisionAdmins />} />
-            <Route path="/state-admin/division-details" element={<StateDivisionDetails />} />
+            <Route path="/state-admin/division-admins" element={<Navigate to="/state-admin/divisions" replace />} />
+            <Route path="/state-admin/division-details" element={<Navigate to="/state-admin/divisions" replace />} />
             <Route path="/state-admin/pincodes" element={<StatePincodes />} />
-            <Route path="/state-admin/pincode-admins" element={<StatePincodeAdmins />} />
-            <Route path="/state-admin/pincode-details" element={<StatePincodeDetails />} />
+            <Route path="/state-admin/pincode-admins" element={<Navigate to="/state-admin/pincodes" replace />} />
+            <Route path="/state-admin/pincode-details" element={<Navigate to="/state-admin/pincodes" replace />} />
             <Route path="/state-admin/customers" element={<StateCustomers />} />
             <Route path="/state-admin/membership-cards" element={<StateMembershipCards />} />
             <Route path="/state-admin/vendors" element={<StateVendors />} />
@@ -220,6 +190,7 @@ export function AppRoutes() {
             <Route path="/state-admin/reports" element={<StateReports />} />
             <Route path="/state-admin/tasks" element={<StateTasks />} />
             <Route path="/state-admin/queries" element={<StateQueries />} />
+            <Route path="/state-admin/notifications" element={<NotificationsPage />} />
             <Route path="/state-admin/profile" element={<StateProfile />} />
             <Route path="/state-admin/settings" element={<StateSettings />} />
           </Route>
@@ -229,11 +200,11 @@ export function AppRoutes() {
             <Route path="/district-admin/dashboard" element={<DistrictAdminDashboard />} />
             <Route path="/district-admin/overview" element={<Navigate to="/district-admin/dashboard" replace />} />
             <Route path="/district-admin/divisions" element={<DistrictDivisions />} />
-            <Route path="/district-admin/division-admins" element={<DistrictDivisionAdmins />} />
-            <Route path="/district-admin/division-details" element={<DistrictDivisionDetails />} />
+            <Route path="/district-admin/division-admins" element={<Navigate to="/district-admin/divisions" replace />} />
+            <Route path="/district-admin/division-details" element={<Navigate to="/district-admin/divisions" replace />} />
             <Route path="/district-admin/pincodes" element={<DistrictPincodes />} />
-            <Route path="/district-admin/pincode-admins" element={<DistrictPincodeAdmins />} />
-            <Route path="/district-admin/pincode-details" element={<DistrictPincodeDetails />} />
+            <Route path="/district-admin/pincode-admins" element={<Navigate to="/district-admin/pincodes" replace />} />
+            <Route path="/district-admin/pincode-details" element={<Navigate to="/district-admin/pincodes" replace />} />
             <Route path="/district-admin/customers" element={<DistrictCustomers />} />
             <Route path="/district-admin/membership-cards" element={<DistrictMembershipCards />} />
             <Route path="/district-admin/vendors" element={<DistrictVendors />} />
@@ -261,6 +232,7 @@ export function AppRoutes() {
             <Route path="/district-admin/payments" element={<DistrictPayments />} />
             <Route path="/district-admin/tasks" element={<DistrictTasks />} />
             <Route path="/district-admin/queries" element={<DistrictQueries />} />
+            <Route path="/district-admin/notifications" element={<NotificationsPage />} />
             <Route path="/district-admin/profile" element={<DistrictProfile />} />
             <Route path="/district-admin/settings" element={<DistrictSettings />} />
           </Route>
@@ -270,8 +242,8 @@ export function AppRoutes() {
             <Route path="/divisional-admin/dashboard" element={<DivisionalAdminDashboard />} />
             <Route path="/divisional-admin/overview" element={<DivisionalOverview />} />
             <Route path="/divisional-admin/pincodes" element={<DivisionalPincodes />} />
-            <Route path="/divisional-admin/pincode-admins" element={<DivisionalPincodeAdmins />} />
-            <Route path="/divisional-admin/pincode-details" element={<DivisionalPincodeDetails />} />
+            <Route path="/divisional-admin/pincode-admins" element={<Navigate to="/divisional-admin/pincodes" replace />} />
+            <Route path="/divisional-admin/pincode-details" element={<Navigate to="/divisional-admin/pincodes" replace />} />
             <Route path="/divisional-admin/managers" element={<StateManagers level="divisional" />} />
             <Route path="/divisional-admin/managers/divisional" element={<StateManagers level="divisional" />} />
             <Route path="/divisional-admin/managers/pincode" element={<StateManagers level="pincode" />} />
@@ -297,6 +269,7 @@ export function AppRoutes() {
             <Route path="/divisional-admin/reports" element={<DivisionalReports />} />
             <Route path="/divisional-admin/tasks" element={<DivisionalTasks />} />
             <Route path="/divisional-admin/queries" element={<DivisionalQueries />} />
+            <Route path="/divisional-admin/notifications" element={<NotificationsPage />} />
             <Route path="/divisional-admin/profile" element={<DivisionalProfile />} />
             <Route path="/divisional-admin/settings" element={<DivisionalSettings />} />
           </Route>
@@ -333,6 +306,7 @@ export function AppRoutes() {
             <Route path="/pincode-admin/payments" element={<PincodePayments />} />
             <Route path="/pincode-admin/tasks" element={<PincodeTasks />} />
             <Route path="/pincode-admin/queries" element={<PincodeQueries />} />
+            <Route path="/pincode-admin/notifications" element={<NotificationsPage />} />
             <Route path="/pincode-admin/profile" element={<PincodeProfile />} />
             <Route path="/pincode-admin/settings" element={<PincodeSettings />} />
           </Route>

@@ -18,4 +18,13 @@ router.get('/leaderboard', reportController.getLeaderboardData);
 // Scoped vendor reports data
 router.get('/vendors', reportController.getVendorReportData);
 
+// Hierarchical Field Manager Period Reports
+router.post('/submit', reportController.submitManagerReport);
+router.get('/submitted', reportController.getSubmittedReports);
+router.get('/submitted/:id', reportController.getSubmittedReportById);
+
+// Report Approval Workflow (Pincode Admin / higher admins)
+router.patch('/submitted/:id/approve', reportController.approveManagerReport);
+router.patch('/submitted/:id/reject', reportController.rejectManagerReport);
+
 module.exports = router;

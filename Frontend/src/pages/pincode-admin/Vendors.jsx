@@ -64,16 +64,41 @@ export function PincodeVendors() {
     loadData();
   }, [assignedPincode]);
 
+  // Helper to determine if a vendor is awaiting Pincode Admin approval (Stage 1)
+  const isAwaitingPincodeApproval = (v) => {
+    if (!v) return false;
+    // If explicitly decided by pincode admin
+    if (v.pincodeAdminApproval?.status === 'Approved' || v.pincodeAdminApproval?.status === 'Rejected') {
+      return false;
+    }
+    const appStatus = (v.approvalStatus || '').toLowerCase();
+    if (appStatus.includes('pincode admin approved') || appStatus.includes('pincode admin rejected')) {
+      return false;
+    }
+    const kyc = (v.kycStatus || '').toLowerCase();
+    if (kyc.includes('kyc pending') || kyc.includes('approved') || kyc === 'verified' || kyc.includes('rejected')) {
+      return false;
+    }
+    const stat = (v.status || '').toLowerCase();
+    if (stat.includes('rejected')) {
+      return false;
+    }
+
+    if (v.pincodeAdminApproval?.status === 'Pending') return true;
+    if (appStatus.includes('pending')) return true;
+    if (kyc.includes('pending') || kyc.includes('verification') || stat.includes('under review')) return true;
+
+    return false;
+  };
+
   // KPI stats
   const kpiStats = useMemo(() => {
     const total = vendors.length;
-    const pendingMyApproval = vendors.filter(
-      v => (v.kycStatus || '').toLowerCase().includes('pending pincode') ||
-           v.kycStatus === 'Pending'
-    ).length;
+    const pendingMyApproval = vendors.filter(isAwaitingPincodeApproval).length;
     const verified = vendors.filter(
       v => (v.kycStatus || '').toLowerCase().includes('approved') ||
-           (v.kycStatus || '').toLowerCase() === 'verified'
+           (v.kycStatus || '').toLowerCase() === 'verified' ||
+           (v.status || '').toLowerCase() === 'active'
     ).length;
     const pendingPayout = vendors.reduce((sum, v) => sum + (Number(v.pendingPayout) || 0), 0);
 
@@ -90,13 +115,13 @@ export function PincodeVendors() {
       if (kycFilter) {
         const k = (v.kycStatus || '').toLowerCase();
         if (kycFilter === 'pending_me') {
-          if (!k.includes('pending pincode') && k !== 'pending') return false;
+          if (!isAwaitingPincodeApproval(v)) return false;
         } else if (kycFilter === 'approved') {
-          if (!k.includes('approved') && k !== 'verified') return false;
+          if (!k.includes('approved') && k !== 'verified' && (v.status || '').toLowerCase() !== 'active') return false;
         } else if (kycFilter === 'kyc_pending') {
           if (!k.includes('kyc pending') && !k.includes('pincode admin approved')) return false;
         } else if (kycFilter === 'rejected') {
-          if (!k.includes('rejected')) return false;
+          if (!k.includes('rejected') && (v.status || '').toLowerCase() !== 'rejected') return false;
         }
       }
 

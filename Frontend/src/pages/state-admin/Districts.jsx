@@ -24,9 +24,21 @@ import {
   ChevronRight,
   CheckCircle2,
   Upload,
-  EyeOff
+  EyeOff,
+  Layers,
+  Store,
+  UserCog,
+  Users,
+  ShieldAlert,
+  Package,
+  CalendarCheck,
+  Briefcase,
+  Truck,
+  Wrench,
+  Award,
+  CreditCard
 } from 'lucide-react';
-import { getDistrictsForState, ALL_INDIAN_STATES } from '../../utils/indiaPostalData';
+import { getDistrictsForState, ALL_INDIAN_STATES, getDivisionsForDistrict } from '../../utils/indiaPostalData';
 
 // ---------- helpers ----------
 const STEPS = [
@@ -72,6 +84,9 @@ export function StateDistricts() {
   const [districts, setDistricts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [selectedDistrict, setSelectedDistrict] = useState(null);
+  const [allDivisions, setAllDivisions] = useState([]);
+  const [allPincodes, setAllPincodes] = useState([]);
   const navigate = useNavigate();
 
   // Add wizard state
@@ -116,8 +131,8 @@ export function StateDistricts() {
     district:         fmt(row.name),
     districtCode:     fmt(row.id) || fmt(row.code),
     state:            fmt(row.state) || 'Tamil Nadu',
-    divisionsCount:   row.divisions?.length || 0,
-    pincodesCount:    row.divisions?.reduce((s,d) => s + (d.pincodes?.length||0), 0) || 0,
+    divisionsCount:   row.divisionsCount !== undefined ? row.divisionsCount : (row.divisions?.length || 0),
+    pincodesCount:    row.pincodesCount !== undefined ? row.pincodesCount : (row.divisions?.reduce((s,d) => s + (d.pincodes?.length||0), 0) || 0),
     status:           fmt(row.status) || 'Active',
     joinedDate:       fmtDate(row.adminCreatedAt),
     // documents
@@ -136,8 +151,20 @@ export function StateDistricts() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await dataService.getDistricts();
-      if (res.success) setDistricts(res.districts);
+      const [distRes, divRes, pinRes] = await Promise.all([
+        dataService.getDistricts(),
+        dataService.getDivisions().catch(() => ({ success: false })),
+        dataService.getPincodes().catch(() => ({ success: false }))
+      ]);
+      if (distRes.success && distRes.districts) {
+        setDistricts(distRes.districts);
+      }
+      if (divRes.success && divRes.divisions) {
+        setAllDivisions(divRes.divisions);
+      }
+      if (pinRes.success && pinRes.pincodes) {
+        setAllPincodes(pinRes.pincodes);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -222,12 +249,65 @@ export function StateDistricts() {
 
   const closeAdd = () => { setShowAddModal(false); setAddSuccess(''); setAddError(''); };
 
+  // ---- validation helpers ----
+  const getMaxDobDate = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const is18Plus = (dobString) => {
+    if (!dobString) return true;
+    const dobDate = new Date(dobString);
+    if (isNaN(dobDate.getTime())) return false;
+    const maxDate = new Date();
+    maxDate.setFullYear(maxDate.getFullYear() - 18);
+    maxDate.setHours(23, 59, 59, 999);
+    return dobDate <= maxDate;
+  };
+
+  const handleMobileChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.startsWith('91') && val.length === 12) {
+      val = val.slice(2);
+    }
+    if (val.length > 0 && !/^[6-9]/.test(val)) {
+      return; // Only allow digits starting with 6, 7, 8, 9
+    }
+    if (val.length > 10) {
+      val = val.slice(0, 10);
+    }
+    setF({ mobile: val });
+  };
+
   // ---- step validation ----
+  const validateStep = (step) => {
+    if (step === 1) {
+      if (!form.fullName.trim()) return 'Please enter the Full Name.';
+      if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Please enter a valid Email Address.';
+      if (!form.mobile.trim()) return 'Please enter the Mobile Number.';
+      if (!/^[6-9]\d{9}$/.test(form.mobile.trim())) return 'Mobile number must be 10 digits and start with 6, 7, 8, or 9.';
+      if (form.dob && !is18Plus(form.dob)) return 'Date of Birth must be 18+ years ago (Admin must be at least 18 years old).';
+      return null;
+    }
+    if (step === 5) {
+      if (!form.assignedDistrict.trim()) return 'Please select or enter the Assigned District.';
+      return null;
+    }
+    if (step === 6) {
+      if (!form.loginId.trim()) return 'Please enter a Login ID.';
+      if (form.password.length < 6) return 'Password must be at least 6 characters.';
+      if (form.password !== form.confirmPassword) return 'Password and Confirm Password do not match.';
+      return null;
+    }
+    return null;
+  };
+
   const canNextStep = () => {
-    if (currentStep === 1) return form.fullName.trim() && form.email.trim() && form.mobile.trim();
-    if (currentStep === 5) return form.assignedDistrict.trim();
-    if (currentStep === 6) return form.loginId.trim() && form.password.length >= 6 && form.password === form.confirmPassword;
-    return true;
+    return !validateStep(currentStep);
   };
 
   // ---- table columns ----
@@ -275,18 +355,50 @@ export function StateDistricts() {
     {
       header: 'Division / Pincodes',
       accessor: (row) => {
-        const divCount = row.divisionsCount !== undefined ? row.divisionsCount : (row.divisions?.length || 0);
-        const pinCount = row.pincodesCount !== undefined ? row.pincodesCount : (row.divisions?.reduce((sum, d) => sum + (d.pincodes?.length || 0), 0) || 0);
-        return `${divCount} / ${pinCount}`;
+        const registeredDivisions = (allDivisions && allDivisions.length > 0)
+          ? allDivisions.filter(d => {
+              const dDist = (d.districtName || d.district || '').toLowerCase();
+              const isMatch = dDist === row.name?.toLowerCase() || dDist === (row.id || '').toLowerCase();
+              const hasAdmin = d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-';
+              return isMatch && hasAdmin;
+            }).length
+          : (row.divisionsCount !== undefined ? row.divisionsCount : 0);
+
+        const registeredPincodes = (allPincodes && allPincodes.length > 0)
+          ? allPincodes.filter(p => {
+              const pDist = (p.district || p.districtName || '').toLowerCase();
+              const isMatch = pDist === row.name?.toLowerCase() || pDist === (row.id || '').toLowerCase();
+              const hasAdmin = p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-';
+              return isMatch && hasAdmin;
+            }).length
+          : (row.pincodesCount !== undefined ? row.pincodesCount : 0);
+
+        return `${registeredDivisions} / ${registeredPincodes}`;
       },
       render: (row) => {
-        const divCount = row.divisionsCount !== undefined ? row.divisionsCount : (row.divisions?.length || 0);
-        const pinCount = row.pincodesCount !== undefined ? row.pincodesCount : (row.divisions?.reduce((sum, d) => sum + (d.pincodes?.length || 0), 0) || 0);
+        const registeredDivisions = (allDivisions && allDivisions.length > 0)
+          ? allDivisions.filter(d => {
+              const dDist = (d.districtName || d.district || '').toLowerCase();
+              const isMatch = dDist === row.name?.toLowerCase() || dDist === (row.id || '').toLowerCase();
+              const hasAdmin = d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-';
+              return isMatch && hasAdmin;
+            }).length
+          : (row.divisionsCount !== undefined ? row.divisionsCount : 0);
+
+        const registeredPincodes = (allPincodes && allPincodes.length > 0)
+          ? allPincodes.filter(p => {
+              const pDist = (p.district || p.districtName || '').toLowerCase();
+              const isMatch = pDist === row.name?.toLowerCase() || pDist === (row.id || '').toLowerCase();
+              const hasAdmin = p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-';
+              return isMatch && hasAdmin;
+            }).length
+          : (row.pincodesCount !== undefined ? row.pincodesCount : 0);
+
         return (
           <div className="flex items-center gap-2 text-xs py-1">
-            <span className={`inline-flex items-center justify-center min-w-[28px] px-2.5 py-1 rounded-lg border font-bold text-xs ${isDark ? 'bg-blue-950/60 border-blue-800/60 text-cyan-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{divCount}</span>
+            <span className={`inline-flex items-center justify-center min-w-[28px] px-2.5 py-1 rounded-lg border font-bold text-xs ${isDark ? 'bg-blue-950/60 border-blue-800/60 text-cyan-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>{registeredDivisions}</span>
             <span className="text-slate-400 dark:text-slate-500 font-bold">/</span>
-            <span className={`inline-flex items-center justify-center min-w-[28px] px-2.5 py-1 rounded-lg border font-bold text-xs ${isDark ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>{pinCount}</span>
+            <span className={`inline-flex items-center justify-center min-w-[28px] px-2.5 py-1 rounded-lg border font-bold text-xs ${isDark ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>{registeredPincodes}</span>
           </div>
         );
       }
@@ -305,17 +417,27 @@ export function StateDistricts() {
       }
     },
     {
-      header: 'Hierarchy Action',
+      header: 'Actions',
       accessor: 'actions',
       render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); navigate(`/state-admin/divisions?district=${encodeURIComponent(row.name)}`); }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition shadow-xs cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700' : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'}`}
-        >
-          <span>View Divisions</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/state-admin/divisions?district=${encodeURIComponent(row.name)}`);
+            }}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
+              isDark
+                ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
+                : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+            }`}
+            title="View divisions in this district"
+          >
+            <span>Divisions</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )
     }
   ];
@@ -337,12 +459,43 @@ export function StateDistricts() {
                   value={form.email} onChange={e => setF({ email: e.target.value })} />
               </FieldInput>
               <FieldInput label="Mobile Number" required>
-                <input type="tel" className={inputCls} placeholder="e.g. 9876543211"
-                  value={form.mobile} onChange={e => setF({ mobile: e.target.value })} />
+                <input
+                  type="tel"
+                  className={inputCls}
+                  placeholder="10-digit number (starts with 6,7,8,9)"
+                  maxLength={10}
+                  value={form.mobile}
+                  onChange={handleMobileChange}
+                />
+                <div className="flex items-center justify-between mt-1 text-[10px]">
+                  <span className="text-slate-400">10 digits starting with 6, 7, 8, 9</span>
+                  {form.mobile && form.mobile.length > 0 && form.mobile.length < 10 && (
+                    <span className="text-amber-500 font-medium">
+                      {10 - form.mobile.length} more digit{10 - form.mobile.length > 1 ? 's' : ''} needed
+                    </span>
+                  )}
+                  {form.mobile && form.mobile.length === 10 && (
+                    <span className="text-emerald-500 font-semibold">Valid 10-digit number</span>
+                  )}
+                </div>
               </FieldInput>
               <FieldInput label="Date of Birth">
-                <input type="date" className={inputCls}
-                  value={form.dob} onChange={e => setF({ dob: e.target.value })} />
+                <input
+                  type="date"
+                  className={inputCls}
+                  max={getMaxDobDate()}
+                  value={form.dob}
+                  onChange={e => setF({ dob: e.target.value })}
+                />
+                <div className="flex items-center justify-between mt-1 text-[10px]">
+                  <span className="text-slate-400">Must be at least 18 years old (18+)</span>
+                  {form.dob && !is18Plus(form.dob) && (
+                    <span className="text-rose-500 font-semibold">Under 18 not allowed</span>
+                  )}
+                  {form.dob && is18Plus(form.dob) && (
+                    <span className="text-emerald-500 font-semibold">Age verified (18+)</span>
+                  )}
+                </div>
               </FieldInput>
             </div>
             {/* Profile Photo */}
@@ -574,21 +727,6 @@ export function StateDistricts() {
                   })}
                 </select>
               </FieldInput>
-              <div className="sm:col-span-2">
-                <FieldInput label="Status">
-                  <div className="flex gap-3 mt-1">
-                    {['Active', 'Inactive'].map(s => (
-                      <label key={s} className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="status" value={s}
-                          checked={form.status === s}
-                          onChange={() => setF({ status: s })}
-                          className="w-4 h-4 accent-blue-600" />
-                        <span className={`text-sm font-semibold ${s === 'Active' ? 'text-emerald-600' : 'text-rose-500'}`}>{s}</span>
-                      </label>
-                    ))}
-                  </div>
-                </FieldInput>
-              </div>
             </div>
           </div>
         );
@@ -686,11 +824,19 @@ export function StateDistricts() {
         onRefresh={loadData}
         searchPlaceholder="Search district name or ID..."
         exportFileName="state_districts.csv"
-        onRowClick={(row) => setSelectedAdmin(getAdminDetails(row))}
+        onRowClick={(row) => {
+          setSelectedAdmin(getAdminDetails(row));
+          setSelectedDistrict(row);
+        }}
       />
 
-      {/* ===== District Admin Profile Modal ===== */}
-      <Modal isOpen={!!selectedAdmin} onClose={() => setSelectedAdmin(null)} title="District Administrator Profile" maxWidth="max-w-2xl">
+      {/* ===== District Admin Profile & Operational Details Modal ===== */}
+      <Modal
+        isOpen={!!selectedAdmin}
+        onClose={() => { setSelectedAdmin(null); setSelectedDistrict(null); }}
+        title={selectedDistrict ? `${selectedDistrict.name} District - Admin Profile & Operational Details` : "District Administrator Profile & Details"}
+        maxWidth="max-w-4xl"
+      >
         {selectedAdmin && (() => {
           const a = selectedAdmin;
           const isActive = (a.status || 'Active') === 'Active';
@@ -700,108 +846,320 @@ export function StateDistricts() {
           const row2 = (label, v) => (
             <div><span className="text-slate-500">{label}:</span><div className={`font-medium text-xs ${isDark ? 'text-slate-200' : 'text-slate-900'}`}>{val(v)}</div></div>
           );
+
+          // Get matched district from state if available
+          const dst = selectedDistrict || districts.find(d => d.name?.toLowerCase() === a.district?.toLowerCase() || d.id === a.districtCode);
+
+          // Compute registered divisions under this district
+          const districtDivisions = dst ? (
+            (allDivisions && allDivisions.length > 0)
+              ? allDivisions.filter(d => {
+                  const dDist = (d.districtName || d.district)?.toLowerCase();
+                  const isMatch = dDist === dst.name?.toLowerCase() || dDist === (dst.id || '').toLowerCase();
+                  const hasAdmin = d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-';
+                  return isMatch && hasAdmin;
+                })
+              : []
+          ) : [];
+
+          // Compute registered pincodes under this district
+          const districtPincodes = dst ? (
+            (allPincodes && allPincodes.length > 0)
+              ? allPincodes.filter(p => {
+                  const pDist = (p.district || p.districtName)?.toLowerCase();
+                  const isMatch = pDist === dst.name?.toLowerCase() || pDist === (dst.id || '').toLowerCase();
+                  const hasAdmin = p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-';
+                  return isMatch && hasAdmin;
+                })
+              : []
+          ) : [];
+
+          const workforceMetrics = dst ? [
+            { label: 'Total Managers', value: dst.totalManagers !== undefined ? dst.totalManagers : (dst.managers?.length || 0), icon: UserCog, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/50' },
+            { label: 'Total Agents', value: dst.totalAgents || 0, icon: Users, color: 'text-violet-600 bg-violet-50 dark:bg-violet-950/60 dark:text-violet-400 border-violet-100 dark:border-violet-900/50' },
+            { label: 'Delivery Partner', value: dst.deliveryPartner || 0, icon: Truck, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/60 dark:text-orange-400 border-orange-100 dark:border-orange-900/50' },
+            { label: 'Technician', value: dst.technician || 0, icon: Wrench, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/60 dark:text-purple-400 border-purple-100 dark:border-purple-900/50' },
+            { label: 'Executive', value: dst.executive || 0, icon: Award, color: 'text-teal-600 bg-teal-50 dark:bg-teal-950/60 dark:text-teal-400 border-teal-100 dark:border-teal-900/50' },
+            { label: 'Pending KYC', value: dst.pendingKYC || 0, icon: ShieldAlert, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 border-amber-100 dark:border-amber-900/50' }
+          ] : [];
+
+          const commerceMetrics = dst ? [
+            { label: 'Total Vendors', value: dst.totalVendors || 0, icon: Store, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-400 border-blue-100 dark:border-blue-900/50' },
+            { label: 'Total Orders', value: dst.totalOrders || 0, icon: Package, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50' },
+            { label: 'Total Bookings', value: dst.totalBookings || 0, icon: CalendarCheck, color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/60 dark:text-cyan-400 border-cyan-100 dark:border-cyan-900/50' },
+            { label: 'Total Job Applied', value: dst.totalJobApplied || 0, icon: Briefcase, color: 'text-sky-600 bg-sky-50 dark:bg-sky-950/60 dark:text-sky-400 border-sky-100 dark:border-sky-900/50' },
+            { label: 'Total Membership Cards', value: (dst.totalMembershipCards || 0)?.toLocaleString(), icon: CreditCard, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-400 border-rose-100 dark:border-rose-900/50' }
+          ] : [];
+
           return (
-            <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+            <div className="space-y-6 max-h-[82vh] overflow-y-auto pr-1">
 
-              {/* Header */}
-              <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
-                <div className="flex items-center gap-3.5">
-                  {a.avatarUrl
-                    ? <img src={a.avatarUrl} alt={a.name} className="w-12 h-12 rounded-xl object-cover border-2 border-blue-300" />
-                    : <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${isDark ? 'bg-indigo-950 border border-indigo-700/60 text-cyan-300' : 'bg-blue-600 text-white shadow-sm'}`}>{(a.name || 'U')[0].toUpperCase()}</div>
-                  }
-                  <div>
-                    <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{a.name}</h4>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span>District Administrator</span>
-                      {a.loginId && <><span>•</span><span className="font-mono text-blue-500">ID: {a.loginId}</span></>}
+              {/* SECTION 1: DISTRICT ADMINISTRATOR PROFILE */}
+              <div className="space-y-4">
+                <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
+                  <div className="flex items-center gap-3.5">
+                    {a.avatarUrl
+                      ? <img src={a.avatarUrl} alt={a.name} className="w-12 h-12 rounded-xl object-cover border-2 border-blue-300" />
+                      : <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${isDark ? 'bg-indigo-950 border border-indigo-700/60 text-cyan-300' : 'bg-blue-600 text-white shadow-sm'}`}>{(a.name || 'U')[0].toUpperCase()}</div>
+                    }
+                    <div>
+                      <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{a.name}</h4>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span>District Administrator</span>
+                        {a.loginId && <><span>•</span><span className="font-mono text-blue-500">ID: {a.loginId}</span></>}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                    isActive
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900/50'
+                      : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-900/50'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                    {a.status || 'Active'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Personal Details */}
+                  <div className={cardCls}>
+                    <div className={hdrCls}><User className="w-3.5 h-3.5 text-violet-500" /> Personal Details</div>
+                    <div className="space-y-2 text-xs">
+                      {row2('Full Name', a.name)}
+                      {row2('Date of Birth', a.dob)}
+                      {row2('Date of Appointment', a.joinedDate)}
+                    </div>
+                  </div>
+
+                  {/* Contact */}
+                  <div className={cardCls}>
+                    <div className={hdrCls}><Phone className="w-3.5 h-3.5 text-blue-500" /> Contact Information</div>
+                    <div className="space-y-2 text-xs">
+                      {row2('Email Address', a.email)}
+                      {row2('Mobile Number', a.phone)}
+                    </div>
+                  </div>
+
+                  {/* Address */}
+                  <div className={`${cardCls} md:col-span-2`}>
+                    <div className={hdrCls}><MapPin className="w-3.5 h-3.5 text-amber-500" /> Address Details</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                      {row2('Street / Door No', a.address)}
+                      {row2('City', a.city)}
+                      {row2('District', a.district)}
+                      {row2('State', a.state)}
+                      {row2('Pincode', a.pincode)}
+                    </div>
+                  </div>
+
+                  {/* Bank Details */}
+                  <div className={`${cardCls} md:col-span-2`}>
+                    <div className={hdrCls}><Landmark className="w-3.5 h-3.5 text-indigo-500" /> Bank Details</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                      {row2('Account Holder', a.accountHolder)}
+                      {row2('Bank Name', a.bankName)}
+                      {row2('Account Number', a.accountNumber)}
+                      {row2('IFSC Code', a.ifsc)}
+                      {row2('Branch Name', a.branch)}
+                    </div>
+                  </div>
+
+                  {/* Assignment */}
+                  <div className={cardCls}>
+                    <div className={hdrCls}><ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> Admin Assignment</div>
+                    <div className="space-y-2 text-xs">
+                      {row2('Assigned State', a.state)}
+                      <div><span className="text-slate-500">Assigned District:</span>
+                        <div className={`font-bold text-xs ${isDark ? 'text-cyan-300' : 'text-blue-600'}`}>{val(a.district)}</div>
+                      </div>
+                      {row2('Supervisory Scope', `${a.divisionsCount} Divisions • ${a.pincodesCount} Pincodes`)}
+                    </div>
+                  </div>
+
+                  {/* Login */}
+                  <div className={cardCls}>
+                    <div className={hdrCls}><KeyRound className="w-3.5 h-3.5 text-rose-500" /> Login Details</div>
+                    <div className="space-y-2 text-xs">
+                      {row2('Login ID', a.loginId)}
+                      <div><span className="text-slate-500">Password:</span>
+                        <div className="text-slate-400 italic text-[10px]">Hidden for security</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                  isActive
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900/50'
-                    : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-900/50'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                  {a.status || 'Active'}
-                </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-
-                {/* Personal Details */}
-                <div className={cardCls}>
-                  <div className={hdrCls}><User className="w-3.5 h-3.5 text-violet-500" /> Personal Details</div>
-                  <div className="space-y-2 text-xs">
-                    {row2('Full Name', a.name)}
-                    {row2('Date of Birth', a.dob)}
-                    {row2('Date of Appointment', a.joinedDate)}
-                  </div>
-                </div>
-
-                {/* Contact */}
-                <div className={cardCls}>
-                  <div className={hdrCls}><Phone className="w-3.5 h-3.5 text-blue-500" /> Contact Information</div>
-                  <div className="space-y-2 text-xs">
-                    {row2('Email Address', a.email)}
-                    {row2('Mobile Number', a.phone)}
-                  </div>
-                </div>
-
-                {/* Address */}
-                <div className={`${cardCls} md:col-span-2`}>
-                  <div className={hdrCls}><MapPin className="w-3.5 h-3.5 text-amber-500" /> Address Details</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                    {row2('Street / Door No', a.address)}
-                    {row2('City', a.city)}
-                    {row2('District', a.district)}
-                    {row2('State', a.state)}
-                    {row2('Pincode', a.pincode)}
-                  </div>
-                </div>
-
-                {/* Bank Details */}
-                <div className={`${cardCls} md:col-span-2`}>
-                  <div className={hdrCls}><Landmark className="w-3.5 h-3.5 text-indigo-500" /> Bank Details</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                    {row2('Account Holder', a.accountHolder)}
-                    {row2('Bank Name', a.bankName)}
-                    {row2('Account Number', a.accountNumber)}
-                    {row2('IFSC Code', a.ifsc)}
-                    {row2('Branch Name', a.branch)}
-                  </div>
-                </div>
-
-                {/* Assignment */}
-                <div className={cardCls}>
-                  <div className={hdrCls}><ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> Admin Assignment</div>
-                  <div className="space-y-2 text-xs">
-                    {row2('Assigned State', a.state)}
-                    <div><span className="text-slate-500">Assigned District:</span>
-                      <div className={`font-bold text-xs ${isDark ? 'text-cyan-300' : 'text-blue-600'}`}>{val(a.district)}</div>
+              {/* SECTION 2: DISTRICT DETAILS (DIRECTLY BELOW ADMIN PROFILE) */}
+              {dst && (
+                <div className="pt-5 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                  {/* Section Title Bar */}
+                  <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${
+                    isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-gradient-to-r from-blue-50/90 to-indigo-50/60 border-blue-200/80'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          {dst.name} District Operations & Structural Breakdown
+                        </h4>
+                        <div className="text-xs text-slate-500 font-mono mt-0.5">
+                          District ID: <span className="font-semibold text-slate-800 dark:text-slate-200">{dst.id || dst.code}</span> • Jurisdiction: {dst.state || authUser?.state || 'Tamil Nadu'}
+                        </div>
+                      </div>
                     </div>
-                    {row2('Supervisory Scope', `${a.divisionsCount} Divisions • ${a.pincodesCount} Pincodes`)}
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900/50 shrink-0">
+                      {dst.status || 'Active'}
+                    </span>
                   </div>
-                </div>
 
-                {/* Login */}
-                <div className={cardCls}>
-                  <div className={hdrCls}><KeyRound className="w-3.5 h-3.5 text-rose-500" /> Login Details</div>
-                  <div className="space-y-2 text-xs">
-                    {row2('Login ID', a.loginId)}
-                    <div><span className="text-slate-500">Password:</span>
-                      <div className="text-slate-400 italic text-[10px]">Hidden for security</div>
+                  {/* Quick KPI Stats Summary */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Divisions</div>
+                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">{districtDivisions.length}</div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Pincodes</div>
+                      <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                        {districtPincodes.length > 0 ? districtPincodes.length : (dst.pincodesCount || districtDivisions.length * 4)}
+                      </div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Vendors</div>
+                      <div className="text-lg font-bold text-cyan-600 dark:text-cyan-400 mt-1">{dst.totalVendors || 0}</div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Customers</div>
+                      <div className="text-lg font-bold text-violet-600 dark:text-violet-400 mt-1">{(dst.totalCustomers || 0).toLocaleString()}</div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Orders</div>
+                      <div className="text-lg font-bold text-rose-600 dark:text-rose-400 mt-1">{(dst.totalOrders || 0).toLocaleString()}</div>
                     </div>
                   </div>
+
+                  {/* Dual-Panel Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Panel 1: Workforce */}
+                    <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'}`}>
+                      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Workforce & Field Force
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">{workforceMetrics.length} Parameters</span>
+                      </div>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                        {workforceMetrics.map((m, idx) => {
+                          const Icon = m.icon;
+                          return (
+                            <div key={idx} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                              <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
+                                <div className={`p-1.5 rounded-lg border ${m.color}`}><Icon className="w-3.5 h-3.5" /></div>
+                                <span className="font-medium">{m.label}</span>
+                              </div>
+                              <span className="font-bold text-xs font-mono px-2 py-0.5 rounded-md border text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                {m.value}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Panel 2: Commerce */}
+                    <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'}`}>
+                      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Business, Orders & Commerce
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">{commerceMetrics.length} Parameters</span>
+                      </div>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                        {commerceMetrics.map((m, idx) => {
+                          const Icon = m.icon;
+                          return (
+                            <div key={idx} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                              <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
+                                <div className={`p-1.5 rounded-lg border ${m.color}`}><Icon className="w-3.5 h-3.5" /></div>
+                                <span className="font-medium">{m.label}</span>
+                              </div>
+                              <span className="font-bold text-xs font-mono px-2 py-0.5 rounded-md border text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                {m.value}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Registered Managers */}
+                  <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'}`}>
+                    <div className={`px-4 py-2.5 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <UserCog className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Registered Managers in {dst.name} ({dst.managers?.length || dst.totalManagers || 0})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/state-admin/managers/district')}
+                        className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Open Managers Directory</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {dst.managers && dst.managers.length > 0 ? (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                        {dst.managers.map((mgr) => (
+                          <div key={mgr.id} className="p-3 sm:px-4 flex items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center font-bold text-xs shrink-0">
+                                {mgr.name ? mgr.name.charAt(0).toUpperCase() : 'M'}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                  <span>{mgr.name}</span>
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                    {mgr.roleTitle || 'Manager'}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  {mgr.email} {mgr.mobile && `• ${mgr.mobile}`} {mgr.division && mgr.division !== '-' && `• Div: ${mgr.division}`}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400">
+                              {mgr.status || 'Active'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        No managers registered under {dst.name} District yet.
+                      </div>
+                    )}
+                  </div>
                 </div>
+              )}
 
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <button type="button" onClick={() => setSelectedAdmin(null)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'}`}>
-                  Close Profile
+              {/* Modal Footer */}
+              <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedAdmin(null); setSelectedDistrict(null); }}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-semibold border transition cursor-pointer shadow-xs ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Close Details
                 </button>
               </div>
             </div>
@@ -860,7 +1218,7 @@ export function StateDistricts() {
                 {currentStep === 2 && 'Provide the residential or official address.'}
                 {currentStep === 3 && 'Upload government identity documents (Aadhaar & PAN).'}
                 {currentStep === 4 && 'Provide bank account details for salary disbursement.'}
-                {currentStep === 5 && 'Set the admin assignment, district scope, and status.'}
+                {currentStep === 5 && 'Set the admin assignment and district scope.'}
                 {currentStep === 6 && 'Set up login credentials for the District Admin account.'}
               </p>
             </div>
@@ -890,7 +1248,15 @@ export function StateDistricts() {
 
               {currentStep < STEPS.length ? (
                 <button type="button"
-                  onClick={() => { setAddError(''); if (canNextStep()) setCurrentStep(s => s + 1); else setAddError('Please fill all required fields before proceeding.'); }}
+                  onClick={() => {
+                    const err = validateStep(currentStep);
+                    if (!err) {
+                      setAddError('');
+                      setCurrentStep(s => s + 1);
+                    } else {
+                      setAddError(err);
+                    }
+                  }}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow transition cursor-pointer">
                   Next <ChevronRight className="w-4 h-4" />
                 </button>

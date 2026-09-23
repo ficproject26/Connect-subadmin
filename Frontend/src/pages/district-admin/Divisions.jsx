@@ -24,7 +24,18 @@ import {
   CheckCircle2,
   Upload,
   Eye,
-  EyeOff
+  EyeOff,
+  Store,
+  UserCog,
+  Users,
+  ShieldAlert,
+  Package,
+  CalendarCheck,
+  Briefcase,
+  Truck,
+  Wrench,
+  Award,
+  CreditCard
 } from 'lucide-react';
 import { getDivisionsForDistrict } from '../../utils/indiaPostalData';
 
@@ -72,6 +83,8 @@ export function DistrictDivisions() {
   const [divisions, setDivisions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [selectedDivision, setSelectedDivision] = useState(null);
+  const [allPincodes, setAllPincodes] = useState([]);
 
   // Add Division Admin Wizard State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -134,7 +147,10 @@ export function DistrictDivisions() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await dataService.getDivisions();
+      const [res, pinRes] = await Promise.all([
+        dataService.getDivisions(),
+        dataService.getPincodes().catch(() => ({ success: false }))
+      ]);
       if (res.success) {
         const districtName = (user?.district || '').toLowerCase();
         let list = res.divisions || [];
@@ -143,7 +159,12 @@ export function DistrictDivisions() {
             d => (d.districtName || '').toLowerCase() === districtName
           );
         }
+        // Only show divisions with registered admins
+        list = list.filter(d => d.adminName && d.adminName.toLowerCase() !== 'unassigned' && d.adminName.trim() !== '-' && d.adminName.trim() !== '');
         setDivisions(list);
+      }
+      if (pinRes.success && pinRes.pincodes) {
+        setAllPincodes(pinRes.pincodes);
       }
     } catch (e) {
       console.error(e);
@@ -195,27 +216,69 @@ export function DistrictDivisions() {
     setAddSuccess('');
   };
 
-  const canNextStep = () => {
-    switch (currentStep) {
-      case 1:
-        return !!form.fullName.trim() && !!form.email.trim() && !!form.mobile.trim();
-      case 2:
-        return true;
-      case 3:
-        return true;
-      case 4:
-        return true;
-      case 5:
-        return !!form.divisionName.trim();
-      case 6:
-        return (
-          !!form.loginId.trim() &&
-          form.password.length >= 6 &&
-          form.password === form.confirmPassword
-        );
-      default:
-        return true;
+  const getMaxDobDate = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const is18Plus = (dobString) => {
+    if (!dobString) return true;
+    const dobDate = new Date(dobString);
+    if (isNaN(dobDate.getTime())) return false;
+    const maxDate = new Date();
+    maxDate.setFullYear(maxDate.getFullYear() - 18);
+    maxDate.setHours(23, 59, 59, 999);
+    return dobDate <= maxDate;
+  };
+
+  const handleMobileChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.startsWith('91') && val.length === 12) {
+      val = val.slice(2);
     }
+    if (val.length > 0 && !/^[6-9]/.test(val)) {
+      return;
+    }
+    if (val.length > 10) {
+      val = val.slice(0, 10);
+    }
+    setF({ mobile: val });
+  };
+
+  const validateStep = (step) => {
+    switch (step) {
+      case 1:
+        if (!form.fullName.trim()) return 'Please enter the Full Name.';
+        if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Please enter a valid Email Address.';
+        if (!form.mobile.trim()) return 'Please enter the Mobile Number.';
+        if (!/^[6-9]\d{9}$/.test(form.mobile.trim())) return 'Mobile number must be 10 digits and start with 6, 7, 8, or 9.';
+        if (form.dob && !is18Plus(form.dob)) return 'Date of Birth must be 18+ years ago (Admin must be at least 18 years old).';
+        return null;
+      case 2:
+        return null;
+      case 3:
+        return null;
+      case 4:
+        return null;
+      case 5:
+        if (!form.divisionName.trim()) return 'Please enter the Division Name.';
+        return null;
+      case 6:
+        if (!form.loginId.trim()) return 'Please enter a Login ID.';
+        if (form.password.length < 6) return 'Password must be at least 6 characters.';
+        if (form.password !== form.confirmPassword) return 'Password and Confirm Password do not match.';
+        return null;
+      default:
+        return null;
+    }
+  };
+
+  const canNextStep = () => {
+    return !validateStep(currentStep);
   };
 
   const handleSubmit = async () => {
@@ -291,12 +354,43 @@ export function DistrictDivisions() {
                   value={form.email} onChange={e => setF({ email: e.target.value })} />
               </FieldInput>
               <FieldInput label="Mobile Number" required>
-                <input type="tel" className={inputCls} placeholder="e.g. 9876543212"
-                  value={form.mobile} onChange={e => setF({ mobile: e.target.value })} />
+                <input
+                  type="tel"
+                  className={inputCls}
+                  placeholder="10-digit number (starts with 6,7,8,9)"
+                  maxLength={10}
+                  value={form.mobile}
+                  onChange={handleMobileChange}
+                />
+                <div className="flex items-center justify-between mt-1 text-[10px]">
+                  <span className="text-slate-400">10 digits starting with 6, 7, 8, 9</span>
+                  {form.mobile && form.mobile.length > 0 && form.mobile.length < 10 && (
+                    <span className="text-amber-500 font-medium">
+                      {10 - form.mobile.length} more digit{10 - form.mobile.length > 1 ? 's' : ''} needed
+                    </span>
+                  )}
+                  {form.mobile && form.mobile.length === 10 && (
+                    <span className="text-emerald-500 font-semibold">Valid 10-digit number</span>
+                  )}
+                </div>
               </FieldInput>
               <FieldInput label="Date of Birth">
-                <input type="date" className={inputCls}
-                  value={form.dob} onChange={e => setF({ dob: e.target.value })} />
+                <input
+                  type="date"
+                  className={inputCls}
+                  max={getMaxDobDate()}
+                  value={form.dob}
+                  onChange={e => setF({ dob: e.target.value })}
+                />
+                <div className="flex items-center justify-between mt-1 text-[10px]">
+                  <span className="text-slate-400">Must be at least 18 years old (18+)</span>
+                  {form.dob && !is18Plus(form.dob) && (
+                    <span className="text-rose-500 font-semibold">Under 18 not allowed</span>
+                  )}
+                  {form.dob && is18Plus(form.dob) && (
+                    <span className="text-emerald-500 font-semibold">Age verified (18+)</span>
+                  )}
+                </div>
               </FieldInput>
             </div>
             <FieldInput label="Profile Photo">
@@ -671,24 +765,43 @@ export function DistrictDivisions() {
       }
     },
     {
-      header: 'HIERARCHY ACTION',
+      header: 'ACTIONS',
       accessor: 'actions',
       render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/district-admin/pincodes?division=${encodeURIComponent(row.name)}`);
-          }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition shadow-xs cursor-pointer ${
-            isDark
-              ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
-              : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
-          }`}
-        >
-          <span>View Pincodes</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedAdmin(getAdminDetails(row));
+              setSelectedDivision(row);
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition shadow-xs cursor-pointer ${
+              isDark
+                ? 'bg-blue-900/60 border-blue-700/60 text-blue-300 hover:bg-blue-800/60'
+                : 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>View Details</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/district-admin/pincodes?division=${encodeURIComponent(row.name)}`);
+            }}
+            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
+              isDark
+                ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
+                : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+            }`}
+            title="View pincodes in this division"
+          >
+            <span>Pincodes</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )
     }
   ];
@@ -701,7 +814,7 @@ export function DistrictDivisions() {
             District Divisions Management
           </h2>
           <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            Overview of all authorized divisions under this District. Click a row to view Admin details, or "View Pincodes" to drill down.
+            Overview of all authorized divisions under this District. Click a row or "View Details" to inspect details.
           </p>
         </div>
 
@@ -718,98 +831,297 @@ export function DistrictDivisions() {
 
       <DataTable
         title="Divisions Directory"
-        subtitle="Hierarchical administration under assigned district. Click any row to inspect Admin details."
+        subtitle="Hierarchical administration under assigned district. Click any row or 'View Details' to inspect details."
         columns={columns}
         data={divisions}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search division name or ID..."
         exportFileName="district_divisions.csv"
-        onRowClick={(row) => setSelectedAdmin(getAdminDetails(row))}
+        onRowClick={(row) => {
+          setSelectedAdmin(getAdminDetails(row));
+          setSelectedDivision(row);
+        }}
       />
 
-      {/* Division Administrator Profile Modal */}
+      {/* Division Administrator Profile & Division Details Modal */}
       <Modal
         isOpen={!!selectedAdmin}
-        onClose={() => setSelectedAdmin(null)}
-        title="Division Administrator Profile"
-        maxWidth="max-w-2xl"
+        onClose={() => { setSelectedAdmin(null); setSelectedDivision(null); }}
+        title={selectedDivision ? `${selectedDivision.name} Division - Admin Profile & Operational Details` : "Division Administrator Profile & Details"}
+        maxWidth="max-w-4xl"
       >
-        {selectedAdmin && (
-          <div className="space-y-5">
-            {/* Top Profile Header */}
-            <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${
-              isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200/80'
-            }`}>
-              <div className="flex items-center gap-3.5">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${
-                  isDark ? 'bg-indigo-950 border border-indigo-700/60 text-cyan-300' : 'bg-blue-600 text-white shadow-sm'
+        {selectedAdmin && (() => {
+          const div = selectedDivision || divisions.find(d => d.name?.toLowerCase() === selectedAdmin.division?.toLowerCase() || d.id === selectedAdmin.code);
+          const divisionPincodes = div ? (
+            (allPincodes && allPincodes.length > 0)
+              ? allPincodes.filter(p => (p.division || p.divisionName)?.toLowerCase().replace(/\s+division/g, '') === (div.name || '').toLowerCase().replace(/\s+division/g, ''))
+              : (div.pincodes || []).map(pin => ({ pincode: pin, areaName: `${div.name} Hub`, adminName: 'Assigned', status: 'Active' }))
+          ) : [];
+
+          const workforceMetrics = div ? [
+            { label: 'Total Managers', value: div.totalManagers || 0, icon: UserCog, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/50' },
+            { label: 'Total Agents', value: div.totalAgents || 0, icon: Users, color: 'text-violet-600 bg-violet-50 dark:bg-violet-950/60 dark:text-violet-400 border-violet-100 dark:border-violet-900/50' },
+            { label: 'Delivery Partner', value: div.deliveryPartner || 0, icon: Truck, color: 'text-orange-600 bg-orange-50 dark:bg-orange-950/60 dark:text-orange-400 border-orange-100 dark:border-orange-900/50' },
+            { label: 'Technician', value: div.technician || 0, icon: Wrench, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/60 dark:text-purple-400 border-purple-100 dark:border-purple-900/50' },
+            { label: 'Executive', value: div.executive || 0, icon: Award, color: 'text-teal-600 bg-teal-50 dark:bg-teal-950/60 dark:text-teal-400 border-teal-100 dark:border-teal-900/50' },
+            { label: 'Pending KYC', value: div.pendingKYC || 0, icon: ShieldAlert, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 border-amber-100 dark:border-amber-900/50' }
+          ] : [];
+
+          const commerceMetrics = div ? [
+            { label: 'Total Vendors', value: div.totalVendors || 0, icon: Store, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-400 border-blue-100 dark:border-blue-900/50' },
+            { label: 'Total Orders', value: div.totalOrders || 0, icon: Package, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50' },
+            { label: 'Total Bookings', value: div.totalBookings || 0, icon: CalendarCheck, color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-950/60 dark:text-cyan-400 border-cyan-100 dark:border-cyan-900/50' },
+            { label: 'Total Job Applied', value: div.totalJobApplied || 0, icon: Briefcase, color: 'text-sky-600 bg-sky-50 dark:bg-sky-950/60 dark:text-sky-400 border-sky-100 dark:border-sky-900/50' },
+            { label: 'Total Membership Cards', value: (div.totalMembershipCards || 0)?.toLocaleString(), icon: CreditCard, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-400 border-rose-100 dark:border-rose-900/50' }
+          ] : [];
+
+          return (
+            <div className="space-y-6 max-h-[82vh] overflow-y-auto pr-1">
+              {/* SECTION 1: DIVISION ADMINISTRATOR PROFILE */}
+              <div className="space-y-4">
+                <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${
+                  isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200/80'
                 }`}>
-                  {(selectedAdmin.name || 'U')[0]}
+                  <div className="flex items-center gap-3.5">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold ${
+                      isDark ? 'bg-indigo-950 border border-indigo-700/60 text-cyan-300' : 'bg-blue-600 text-white shadow-sm'
+                    }`}>
+                      {(selectedAdmin.name || 'U')[0]}
+                    </div>
+                    <div>
+                      <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        {selectedAdmin.name}
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span>Division Administrator</span>
+                        <span>•</span>
+                        <span className="font-mono text-blue-500">{selectedAdmin.id}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                    selectedAdmin.status === 'Active'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400'
+                      : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${selectedAdmin.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                    {selectedAdmin.status}
+                  </span>
                 </div>
-                <div>
-                  <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {selectedAdmin.name}
-                  </h4>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span>Division Administrator</span>
-                    <span>•</span>
-                    <span className="font-mono text-blue-500">{selectedAdmin.id}</span>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className={`p-4 rounded-xl border space-y-2 ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
+                    <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-2 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-blue-500" />
+                      Personal Information
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                      <span className="text-slate-500">Email:</span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.email}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                      <span className="text-slate-500">Phone:</span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.phone}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-slate-500">Login ID:</span>
+                      <span className="font-mono text-slate-800 dark:text-slate-200">{selectedAdmin.loginId || '-'}</span>
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border space-y-2 ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
+                    <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-2 flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+                      Territory Assignment
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                      <span className="text-slate-500">Division:</span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.division}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
+                      <span className="text-slate-500">District:</span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.district}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-slate-500">State:</span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.state}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                selectedAdmin.status === 'Active'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400'
-                  : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${selectedAdmin.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                {selectedAdmin.status}
-              </span>
-            </div>
 
-            {/* Profile Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              <div className={`p-4 rounded-xl border space-y-2 ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
-                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-2 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-blue-500" />
-                  Personal Information
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
-                  <span className="text-slate-500">Email:</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.email}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
-                  <span className="text-slate-500">Phone:</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.phone}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-500">Login ID:</span>
-                  <span className="font-mono text-slate-800 dark:text-slate-200">{selectedAdmin.loginId || '-'}</span>
-                </div>
-              </div>
+              {/* SECTION 2: DIVISION DETAILS (DIRECTLY BELOW ADMIN PROFILE) */}
+              {div && (
+                <div className="pt-5 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                  {/* Section Title Bar */}
+                  <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 ${
+                    isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-gradient-to-r from-blue-50/90 to-cyan-50/60 border-blue-200/80'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          {div.name} Division Operations & Territory Breakdown
+                        </h4>
+                        <div className="text-xs text-slate-500 font-mono mt-0.5">
+                          ID: {div.id} • Parent District: <span className="font-semibold text-slate-800 dark:text-slate-200">{div.districtName || div.district}</span> • State: {div.stateName || div.state || 'Tamil Nadu'}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900/50 shrink-0">
+                      {div.status || 'Active'}
+                    </span>
+                  </div>
 
-              <div className={`p-4 rounded-xl border space-y-2 ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200/80'}`}>
-                <div className="font-bold text-slate-500 uppercase tracking-wider text-[11px] mb-2 flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-500" />
-                  Territory Assignment
+                  {/* Quick KPI Stats Summary */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Assigned Pincodes</div>
+                      <div className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">
+                        {divisionPincodes.length > 0 ? divisionPincodes.length : (div.pincodesCount || div.pincodes?.length || 0)}
+                      </div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Total Vendors</div>
+                      <div className="text-lg font-bold text-cyan-600 dark:text-cyan-400 mt-1">{div.totalVendors || 0}</div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Total Customers</div>
+                      <div className="text-lg font-bold text-violet-600 dark:text-violet-400 mt-1">{(div.totalCustomers || 0).toLocaleString()}</div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Total Orders</div>
+                      <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-1">{(div.totalOrders || 0).toLocaleString()}</div>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="text-[11px] text-slate-500 font-medium">Bookings</div>
+                      <div className="text-lg font-bold text-rose-600 dark:text-rose-400 mt-1">{(div.totalBookings || 0).toLocaleString()}</div>
+                    </div>
+                  </div>
+
+                  {/* Pincodes under this Division */}
+                  <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'}`}>
+                    <div className={`px-4 py-2.5 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-emerald-600" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Pincodes under {div.name} Division ({divisionPincodes.length})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/district-admin/pincodes?division=${encodeURIComponent(div.name)}`)}
+                        className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Open Pincodes Module</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="p-3">
+                      {divisionPincodes.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs">
+                          {divisionPincodes.map((pin, idx) => (
+                            <div key={idx} className={`p-2.5 rounded-lg border flex items-center justify-between ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                              <div>
+                                <div className="font-mono font-bold text-slate-900 dark:text-white">PIN: {pin.pincode}</div>
+                                <div className="text-[10px] text-slate-500 truncate max-w-[140px]">{pin.areaName || pin.area || 'Zone Hub'}</div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold block truncate max-w-[90px]">
+                                  {pin.adminName || pin.assignedAdmin || 'Assigned'}
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400">
+                                  {pin.status || 'Active'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 p-2 text-center">
+                          No pincodes registered under {div.name} Division yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dual-Panel Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Panel 1: Workforce */}
+                    <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'}`}>
+                      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Workforce & Field Operations
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">{workforceMetrics.length} Parameters</span>
+                      </div>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                        {workforceMetrics.map((m, idx) => {
+                          const Icon = m.icon;
+                          return (
+                            <div key={idx} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                              <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
+                                <div className={`p-1.5 rounded-lg border ${m.color}`}><Icon className="w-3.5 h-3.5" /></div>
+                                <span className="font-medium">{m.label}</span>
+                              </div>
+                              <span className="font-bold text-xs font-mono px-2 py-0.5 rounded-md border text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                {m.value}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Panel 2: Commerce */}
+                    <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'}`}>
+                      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${isDark ? 'bg-slate-800/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Business, Orders & Commerce
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">{commerceMetrics.length} Parameters</span>
+                      </div>
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                        {commerceMetrics.map((m, idx) => {
+                          const Icon = m.icon;
+                          return (
+                            <div key={idx} className="px-4 py-2 flex items-center justify-between hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                              <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
+                                <div className={`p-1.5 rounded-lg border ${m.color}`}><Icon className="w-3.5 h-3.5" /></div>
+                                <span className="font-medium">{m.label}</span>
+                              </div>
+                              <span className="font-bold text-xs font-mono px-2 py-0.5 rounded-md border text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                {m.value}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
-                  <span className="text-slate-500">Division:</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.division}</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-200/60 dark:border-slate-800">
-                  <span className="text-slate-500">District:</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.district}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-500">State:</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedAdmin.state}</span>
-                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedAdmin(null); setSelectedDivision(null); }}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-semibold border transition cursor-pointer shadow-xs ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Close Details
+                </button>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* Add Division Admin Modal */}
@@ -894,7 +1206,15 @@ export function DistrictDivisions() {
 
               {currentStep < STEPS.length ? (
                 <button type="button"
-                  onClick={() => { setAddError(''); if (canNextStep()) setCurrentStep(s => s + 1); else setAddError('Please fill all required fields before proceeding.'); }}
+                  onClick={() => {
+                    const err = validateStep(currentStep);
+                    if (!err) {
+                      setAddError('');
+                      setCurrentStep(s => s + 1);
+                    } else {
+                      setAddError(err);
+                    }
+                  }}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow transition cursor-pointer">
                   Next <ChevronRight className="w-4 h-4" />
                 </button>

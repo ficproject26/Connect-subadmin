@@ -225,6 +225,12 @@ const divisionsCollection = new Collection('divisions');
 const pincodesCollection = new Collection('pincodes');
 const vendorsCollection = new Collection('vendors');
 const auditLogsCollection = new Collection('audit_logs');
+const shopVisitsCollection = new Collection('shop_visits');
+const submittedReportsCollection = new Collection('submitted_reports');
+const qcIssuesCollection = new Collection('qc_issues');
+const qcTasksCollection = new Collection('qc_tasks');
+const agentsCollection = new Collection('agents');
+const notificationsCollection = new Collection('notifications');
 
 // Harmonize demo admins and manager users into unified usersCollection
 function initUsers() {
@@ -283,6 +289,11 @@ const db = {
   pincodes: pincodesCollection,
   vendors: vendorsCollection,
   auditLogs: auditLogsCollection,
+  shopVisits: shopVisitsCollection,
+  submittedReports: submittedReportsCollection,
+  qcIssues: qcIssuesCollection,
+  qcTasks: qcTasksCollection,
+  notifications: notificationsCollection,
 
   // Admin access alias
   get admins() {
@@ -292,7 +303,9 @@ const db = {
       u.role === 'Divisional Admin' || 
       u.role === 'Division Admin' ||
       u.role === 'Pincode Admin' ||
-      u.role === 'Super Admin'
+      u.role === 'Super Admin' ||
+      u.role === 'QC Team' ||
+      u.role === 'qc_team'
     );
   },
 
@@ -307,7 +320,7 @@ const db = {
   technicians: JSON.parse(JSON.stringify(seed.technicians)),
   executives: JSON.parse(JSON.stringify(seed.executives)),
   supportTeam: JSON.parse(JSON.stringify(seed.supportTeam)),
-  agents: JSON.parse(JSON.stringify(seed.agents)),
+  agents: agentsCollection,
   agentPayments: JSON.parse(JSON.stringify(seed.agentPayments)),
   agentActivities: JSON.parse(JSON.stringify(seed.agentActivities || [])),
   kycRecords: JSON.parse(JSON.stringify(seed.kycRecords)),

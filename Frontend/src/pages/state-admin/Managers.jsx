@@ -381,18 +381,67 @@ export function StateManagers({ level }) {
     }
   };
 
-  const canNextStep = () => {
-    if (currentStep === 1) return form.fullName.trim() && form.email.trim() && form.mobile.trim();
-    if (currentStep === 2) {
-      const activeRole = form.role || designatedRole;
-      if (activeRole === 'state_manager') return !!(form.assignedState || user?.state);
-      if (activeRole === 'district_manager') return !!(form.assignedState || user?.state) && !!(form.assignedDistrict || user?.district);
-      if (activeRole === 'division_manager') return !!(form.assignedState || user?.state) && !!(form.assignedDistrict || user?.district) && !!(form.assignedDivision || user?.division);
-      if (activeRole === 'pincode_manager') return !!(form.assignedPincode || user?.pincode);
-      return true;
+  const getMaxDobDate = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const is18Plus = (dobString) => {
+    if (!dobString) return true;
+    const dobDate = new Date(dobString);
+    if (isNaN(dobDate.getTime())) return false;
+    const maxDate = new Date();
+    maxDate.setFullYear(maxDate.getFullYear() - 18);
+    maxDate.setHours(23, 59, 59, 999);
+    return dobDate <= maxDate;
+  };
+
+  const handleMobileChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.startsWith('91') && val.length === 12) {
+      val = val.slice(2);
     }
-    if (currentStep === 6) return form.loginId.trim() && form.password.length >= 6 && form.password === form.confirmPassword;
-    return true;
+    if (val.length > 0 && !/^[6-9]/.test(val)) {
+      return;
+    }
+    if (val.length > 10) {
+      val = val.slice(0, 10);
+    }
+    setF({ mobile: val });
+  };
+
+  const validateStep = (step) => {
+    if (step === 1) {
+      if (!form.fullName.trim()) return 'Please enter the Full Name.';
+      if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Please enter a valid Email Address.';
+      if (!form.mobile.trim()) return 'Please enter the Mobile Number.';
+      if (!/^[6-9]\d{9}$/.test(form.mobile.trim())) return 'Mobile number must be 10 digits and start with 6, 7, 8, or 9.';
+      if (form.dob && !is18Plus(form.dob)) return 'Date of Birth must be 18+ years ago (Manager must be at least 18 years old).';
+      return null;
+    }
+    if (step === 2) {
+      const activeRole = form.role || designatedRole;
+      if (activeRole === 'state_manager' && !(form.assignedState || user?.state)) return 'Please assign State jurisdiction.';
+      if (activeRole === 'district_manager' && (!(form.assignedState || user?.state) || !(form.assignedDistrict || user?.district))) return 'Please assign District jurisdiction.';
+      if (activeRole === 'division_manager' && (!(form.assignedState || user?.state) || !(form.assignedDistrict || user?.district) || !(form.assignedDivision || user?.division))) return 'Please assign Division jurisdiction.';
+      if (activeRole === 'pincode_manager' && !(form.assignedPincode || user?.pincode)) return 'Please assign Pincode jurisdiction.';
+      return null;
+    }
+    if (step === 6) {
+      if (!form.loginId.trim()) return 'Please enter a Login ID.';
+      if (form.password.length < 6) return 'Password must be at least 6 characters.';
+      if (form.password !== form.confirmPassword) return 'Password and Confirm Password do not match.';
+      return null;
+    }
+    return null;
+  };
+
+  const canNextStep = () => {
+    return !validateStep(currentStep);
   };
 
   const inputCls = `w-full px-3 py-2.5 rounded-xl border text-sm outline-none transition ${
@@ -438,19 +487,40 @@ export function StateManagers({ level }) {
                 <input
                   type="tel"
                   className={inputCls}
-                  placeholder="e.g. 9876543210"
+                  placeholder="10-digit number (starts with 6,7,8,9)"
                   maxLength={10}
                   value={form.mobile}
-                  onChange={(e) => setF({ mobile: e.target.value.replace(/\D/g, '') })}
+                  onChange={handleMobileChange}
                 />
+                <div className="flex items-center justify-between mt-1 text-[10px]">
+                  <span className="text-slate-400">10 digits starting with 6, 7, 8, 9</span>
+                  {form.mobile && form.mobile.length > 0 && form.mobile.length < 10 && (
+                    <span className="text-amber-500 font-medium">
+                      {10 - form.mobile.length} more digit{10 - form.mobile.length > 1 ? 's' : ''} needed
+                    </span>
+                  )}
+                  {form.mobile && form.mobile.length === 10 && (
+                    <span className="text-emerald-500 font-semibold">Valid 10-digit number</span>
+                  )}
+                </div>
               </FieldInput>
               <FieldInput label="Date of Birth">
                 <input
                   type="date"
                   className={inputCls}
+                  max={getMaxDobDate()}
                   value={form.dob}
                   onChange={(e) => setF({ dob: e.target.value })}
                 />
+                <div className="flex items-center justify-between mt-1 text-[10px]">
+                  <span className="text-slate-400">Must be at least 18 years old (18+)</span>
+                  {form.dob && !is18Plus(form.dob) && (
+                    <span className="text-rose-500 font-semibold">Under 18 not allowed</span>
+                  )}
+                  {form.dob && is18Plus(form.dob) && (
+                    <span className="text-emerald-500 font-semibold">Age verified (18+)</span>
+                  )}
+                </div>
               </FieldInput>
               <FieldInput label="Gender">
                 <select
@@ -1272,13 +1342,12 @@ export function StateManagers({ level }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (canNextStep()) {
+                    const err = validateStep(currentStep);
+                    if (!err) {
                       setAddError('');
                       setCurrentStep((s) => Math.min(STEPS.length, s + 1));
                     } else {
-                      if (currentStep === 1) setAddError('Please fill in Full Name, Email, and Mobile Number.');
-                      else if (currentStep === 2) setAddError('Please complete required location assignments for this role.');
-                      else setAddError('Please complete the required fields.');
+                      setAddError(err);
                     }
                   }}
                   className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"

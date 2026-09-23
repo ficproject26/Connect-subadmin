@@ -105,8 +105,8 @@ export function DataTable({
       ) : (
         <div className={`p-4 sm:px-5 sm:py-3.5 border-b ${
           isDark ? 'border-slate-800 bg-slate-900/30' : 'border-slate-200 bg-slate-50/50'
-        } flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 transition-colors`}>
-          <div className="min-w-0">
+        } flex flex-col md:flex-row md:items-center justify-between gap-3.5 transition-colors`}>
+          <div className="min-w-0 flex-1 mr-2">
             {title && (
               <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 {title}
@@ -119,7 +119,7 @@ export function DataTable({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap justify-start sm:justify-end">
             <SearchBar
               value={search}
               onChange={(val) => {
@@ -127,7 +127,7 @@ export function DataTable({
                 setCurrentPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="w-full sm:w-44 md:w-52 shrink"
+              className="w-full sm:w-48 md:w-56 shrink-0"
             />
 
             {typeof customFilters === 'function'
@@ -153,6 +153,20 @@ export function DataTable({
               </div>
             )}
 
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              title="Export to CSV"
+              className={`h-9 inline-flex items-center gap-1.5 px-3 shrink-0 ${
+                isDark
+                  ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
+                  : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+              } border rounded-xl text-xs font-semibold transition cursor-pointer`}
+            >
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Export CSV</span>
+            </button>
+
             {onRefresh && (
               <button
                 type="button"
@@ -167,20 +181,6 @@ export function DataTable({
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              title="Export to CSV"
-              className={`h-9 inline-flex items-center gap-1.5 px-3 shrink-0 ${
-                isDark
-                  ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
-                  : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
-              } border rounded-xl text-xs font-semibold transition cursor-pointer`}
-            >
-              <Download className="w-3.5 h-3.5 shrink-0" />
-              <span className="whitespace-nowrap">Export CSV</span>
-            </button>
 
             {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
           </div>

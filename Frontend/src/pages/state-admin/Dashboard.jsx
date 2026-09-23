@@ -121,7 +121,7 @@ export function StateAdminDashboard() {
       label: 'Total Admins',
       value: String(adminsCount),
       icon: ShieldCheck,
-      path: '/state-admin/district-admins',
+      path: '/state-admin/districts',
       highlight: 'Nodal Officers',
       badgeColor: isDark ? 'bg-purple-950/80 border-purple-800 text-purple-400' : 'bg-purple-50 border-purple-100 text-purple-600',
       highlightColor: 'text-purple-600'
@@ -130,31 +130,145 @@ export function StateAdminDashboard() {
 
   // 3. Operations Overview (8 items)
   const operationsList = [
-    { label: 'Orders', count: String(metrics.totalOrders || 0), subtext: 'Orders Fulfilled', icon: ShoppingBag, path: '/state-admin/orders' },
-    { label: 'Bookings', count: String(metrics.totalBookings || 0), subtext: 'Scheduled', icon: CalendarCheck, path: '/state-admin/bookings' },
-    { label: 'Jobs', count: String(metrics.totalJobs || 0), subtext: 'In Progress', icon: Briefcase, path: '/state-admin/jobs' },
-    { label: 'Delivery Partners', count: '0', subtext: 'On Duty', icon: Truck, path: '/state-admin/delivery-partners' },
-    { label: 'Technicians', count: String(metrics.totalTechnicians || 0), subtext: 'Field Ready', icon: Wrench, path: '/state-admin/technicians' },
-    { label: 'Executives', count: String(metrics.totalExecutives || 0), subtext: 'Active', icon: UserCheck, path: '/state-admin/executives' },
-    { label: 'Support Team', count: String(metrics.totalSupportTickets || 0), subtext: 'Tickets Logged', icon: Headphones, path: '/state-admin/support-team' },
-    { label: 'Agents', count: String(metrics.totalAgents || 0), subtext: 'Active Agents', icon: UserPlus, path: '/state-admin/agents' }
+    {
+      label: 'Orders',
+      count: String(metrics.totalOrders || 0),
+      subtext: 'Orders Fulfilled',
+      icon: ShoppingBag,
+      path: '/state-admin/orders',
+      badgeColor: isDark ? 'bg-blue-950/80 border-blue-800 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600',
+      highlightColor: 'text-blue-600 dark:text-blue-400'
+    },
+    {
+      label: 'Bookings',
+      count: String(metrics.totalBookings || 0),
+      subtext: 'Scheduled',
+      icon: CalendarCheck,
+      path: '/state-admin/bookings',
+      badgeColor: isDark ? 'bg-indigo-950/80 border-indigo-800 text-indigo-400' : 'bg-indigo-50 border-indigo-100 text-indigo-600',
+      highlightColor: 'text-indigo-600 dark:text-indigo-400'
+    },
+    {
+      label: 'Jobs',
+      count: String(metrics.totalJobs || 0),
+      subtext: 'In Progress',
+      icon: Briefcase,
+      path: '/state-admin/jobs',
+      badgeColor: isDark ? 'bg-amber-950/80 border-amber-800 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-600',
+      highlightColor: 'text-amber-600 dark:text-amber-400'
+    },
+    {
+      label: 'Delivery Partners',
+      count: '0',
+      subtext: 'On Duty',
+      icon: Truck,
+      path: '/state-admin/delivery-partners',
+      badgeColor: isDark ? 'bg-emerald-950/80 border-emerald-800 text-emerald-400' : 'bg-emerald-50 border-emerald-100 text-emerald-600',
+      highlightColor: 'text-emerald-600 dark:text-emerald-400'
+    },
+    {
+      label: 'Technicians',
+      count: String(metrics.totalTechnicians || 0),
+      subtext: 'Field Ready',
+      icon: Wrench,
+      path: '/state-admin/technicians',
+      badgeColor: isDark ? 'bg-purple-950/80 border-purple-800 text-purple-400' : 'bg-purple-50 border-purple-100 text-purple-600',
+      highlightColor: 'text-purple-600 dark:text-purple-400'
+    },
+    {
+      label: 'Executives',
+      count: String(metrics.totalExecutives || 0),
+      subtext: 'Active',
+      icon: UserCheck,
+      path: '/state-admin/executives',
+      badgeColor: isDark ? 'bg-cyan-950/80 border-cyan-800 text-cyan-400' : 'bg-cyan-50 border-cyan-100 text-cyan-600',
+      highlightColor: 'text-cyan-600 dark:text-cyan-400'
+    },
+    {
+      label: 'Support Team',
+      count: String(metrics.totalSupportTickets || 0),
+      subtext: 'Tickets Logged',
+      icon: Headphones,
+      path: '/state-admin/support-team',
+      badgeColor: isDark ? 'bg-rose-950/80 border-rose-800 text-rose-400' : 'bg-rose-50 border-rose-100 text-rose-600',
+      highlightColor: 'text-rose-600 dark:text-rose-400'
+    },
+    {
+      label: 'Agents',
+      count: String(metrics.totalAgents || 0),
+      subtext: 'Active Agents',
+      icon: UserPlus,
+      path: '/state-admin/agents',
+      badgeColor: isDark ? 'bg-teal-950/80 border-teal-800 text-teal-400' : 'bg-teal-50 border-teal-100 text-teal-600',
+      highlightColor: 'text-teal-600 dark:text-teal-400'
+    }
   ];
 
   // 4. Finance & Compliance (6 items)
   const financeComplianceList = [
-    { label: 'Pending KYC', value: String(metrics.totalKYC || 0), detail: 'Verifications Due', icon: FileCheck2, alert: (metrics.totalKYC || 0) > 0, path: '/state-admin/kyc' },
-    { label: 'Pending Payments', value: `₹${((metrics.pendingAgentPayouts || 0) + (metrics.pendingVendorPayouts || 0)).toLocaleString()}`, detail: 'Invoices Pending', icon: Wallet, alert: ((metrics.pendingAgentPayouts || 0) + (metrics.pendingVendorPayouts || 0)) > 0, path: '/state-admin/payments' },
-    { label: 'Vendor Payments', value: `₹${(metrics.totalRevenue || 0).toLocaleString()}`, detail: 'Settled this cycle', icon: Store, path: '/state-admin/vendor-payments' },
-    { label: 'Agent Payments', value: '₹0', detail: 'Commission Payouts', icon: IndianRupee, path: '/state-admin/agent-payments' },
-    { label: 'Pending Payouts', value: '0', detail: 'Batches Queued', icon: CreditCard, path: '/state-admin/payments' },
-    { label: 'Business Reports', value: '0', detail: 'Monthly Statements', icon: BarChart3, path: '/state-admin/reports' }
+    {
+      label: 'Pending KYC',
+      value: String(metrics.totalKYC || 0),
+      detail: 'Verifications Due',
+      icon: FileCheck2,
+      alert: (metrics.totalKYC || 0) > 0,
+      path: '/state-admin/kyc',
+      badgeColor: isDark ? 'bg-amber-950/80 border-amber-800 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-600',
+      highlightColor: 'text-amber-600 dark:text-amber-400'
+    },
+    {
+      label: 'Pending Payments',
+      value: `₹${((metrics.pendingAgentPayouts || 0) + (metrics.pendingVendorPayouts || 0)).toLocaleString()}`,
+      detail: 'Invoices Pending',
+      icon: Wallet,
+      alert: ((metrics.pendingAgentPayouts || 0) + (metrics.pendingVendorPayouts || 0)) > 0,
+      path: '/state-admin/payments',
+      badgeColor: isDark ? 'bg-rose-950/80 border-rose-800 text-rose-400' : 'bg-rose-50 border-rose-100 text-rose-600',
+      highlightColor: 'text-rose-600 dark:text-rose-400'
+    },
+    {
+      label: 'Vendor Payments',
+      value: `₹${(metrics.totalRevenue || 0).toLocaleString()}`,
+      detail: 'Settled this cycle',
+      icon: Store,
+      path: '/state-admin/vendor-payments',
+      badgeColor: isDark ? 'bg-indigo-950/80 border-indigo-800 text-indigo-400' : 'bg-indigo-50 border-indigo-100 text-indigo-600',
+      highlightColor: 'text-indigo-600 dark:text-indigo-400'
+    },
+    {
+      label: 'Agent Payments',
+      value: '₹0',
+      detail: 'Commission Payouts',
+      icon: IndianRupee,
+      path: '/state-admin/agent-payments',
+      badgeColor: isDark ? 'bg-emerald-950/80 border-emerald-800 text-emerald-400' : 'bg-emerald-50 border-emerald-100 text-emerald-600',
+      highlightColor: 'text-emerald-600 dark:text-emerald-400'
+    },
+    {
+      label: 'Pending Payouts',
+      value: '0',
+      detail: 'Batches Queued',
+      icon: CreditCard,
+      path: '/state-admin/payments',
+      badgeColor: isDark ? 'bg-blue-950/80 border-blue-800 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600',
+      highlightColor: 'text-blue-600 dark:text-blue-400'
+    },
+    {
+      label: 'Business Reports',
+      value: '0',
+      detail: 'Monthly Statements',
+      icon: BarChart3,
+      path: '/state-admin/reports',
+      badgeColor: isDark ? 'bg-purple-950/80 border-purple-800 text-purple-400' : 'bg-purple-50 border-purple-100 text-purple-600',
+      highlightColor: 'text-purple-600 dark:text-purple-400'
+    }
   ];
 
   // 5. Pending Actions (7 actionable items with count and arrow)
   const pendingActions = [
-    { label: 'District Admin Requests', count: 0, path: '/state-admin/district-admins', icon: Building2 },
-    { label: 'Division Admin Requests', count: 0, path: '/state-admin/division-admins', icon: Layers },
-    { label: 'Pincode Admin Requests', count: 0, path: '/state-admin/pincode-admins', icon: MapPin },
+    { label: 'District Admin Requests', count: 0, path: '/state-admin/districts', icon: Building2 },
+    { label: 'Division Admin Requests', count: 0, path: '/state-admin/divisions', icon: Layers },
+    { label: 'Pincode Admin Requests', count: 0, path: '/state-admin/pincodes', icon: MapPin },
     { label: 'KYC Verification', count: metrics.totalKYC || 0, path: '/state-admin/kyc', icon: FileCheck2, highlight: (metrics.totalKYC || 0) > 0 },
     { label: 'Payment Requests', count: 0, path: '/state-admin/payments', icon: IndianRupee, highlight: false },
     { label: 'Queries', count: 0, path: '/state-admin/queries', icon: CircleHelp },
@@ -169,7 +283,7 @@ export function StateAdminDashboard() {
     { label: 'View District', path: '/state-admin/districts', icon: Building2 },
     { label: 'View Division', path: '/state-admin/divisions', icon: Layers },
     { label: 'View Pincode', path: '/state-admin/pincodes', icon: MapPin },
-    { label: 'Assign Admin', path: '/state-admin/district-admins', icon: ShieldAlert },
+    { label: 'Assign Admin', path: '/state-admin/districts', icon: ShieldAlert },
     { label: 'Add Vendor', path: '/state-admin/vendors', icon: Store },
     { label: 'Create Task', path: '/state-admin/tasks', icon: ClipboardList }
   ];
@@ -207,105 +321,6 @@ export function StateAdminDashboard() {
         </div>
       </div>
 
-      {/* 2. ADMINISTRATIVE STRUCTURE */}
-      <div className={`admin-card p-4 sm:p-5 ${cardStyle} border rounded-2xl`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              Administrative Structure
-            </div>
-            <div className="text-sm font-bold text-slate-900 dark:text-white mt-1 flex items-center gap-2 flex-wrap">
-              <span>Tamil Nadu</span>
-              <span className="text-blue-600 dark:text-blue-400 font-extrabold">→</span>
-              <span>Districts</span>
-              <span className="text-blue-600 dark:text-blue-400 font-extrabold">→</span>
-              <span>Divisions</span>
-              <span className="text-blue-600 dark:text-blue-400 font-extrabold">→</span>
-              <span>Pincodes</span>
-            </div>
-          </div>
-          <button
-            onClick={() => navigate('/state-admin/districts')}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-400 dark:hover:bg-blue-900/60 border border-blue-100 dark:border-blue-800/40 transition cursor-pointer self-start sm:self-auto"
-          >
-            <span>View Details</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-3.5">
-          <div
-            onClick={() => navigate('/state-admin/districts')}
-            className="p-3 rounded-xl bg-slate-50/70 hover:bg-slate-100/80 dark:bg-slate-800/40 dark:hover:bg-slate-800/70 border border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer transition"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
-                <Building2 className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-slate-900 dark:text-white">38 Districts</div>
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300">Apex territorial units</div>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
-
-          <div
-            onClick={() => navigate('/state-admin/divisions')}
-            className="p-3 rounded-xl bg-slate-50/70 hover:bg-slate-100/80 dark:bg-slate-800/40 dark:hover:bg-slate-800/70 border border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer transition"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
-                <Layers className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-slate-900 dark:text-white">128 Divisions</div>
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300">Regional administration hubs</div>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
-
-          <div
-            onClick={() => navigate('/state-admin/pincodes')}
-            className="p-3 rounded-xl bg-slate-50/70 hover:bg-slate-100/80 dark:bg-slate-800/40 dark:hover:bg-slate-800/70 border border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer transition"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
-                <MapPin className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-slate-900 dark:text-white">1,256 Pincodes</div>
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-300">Micro-zone field coverage</div>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
-        </div>
-      </div>
-
-      {/* 7. QUICK ACTIONS */}
-      <div className={`admin-card p-4 sm:p-5 ${cardStyle} border rounded-2xl`}>
-        <div className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-3">
-          Quick Actions
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {quickActionButtons.map((btn, idx) => {
-            const Icon = btn.icon;
-            return (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => navigate(btn.path)}
-                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/50 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 dark:hover:bg-slate-800 dark:hover:text-blue-400 text-xs font-bold text-slate-900 dark:text-white transition-all cursor-pointer group"
-              >
-                <Icon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span className="truncate">{btn.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* 3. OPERATIONS OVERVIEW (8 compact cards / rows, NOT charts) */}
       <div className={`admin-card p-4 sm:p-5 ${cardStyle} border rounded-2xl`}>
@@ -320,28 +335,28 @@ export function StateAdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
           {operationsList.map((op, idx) => {
             const Icon = op.icon;
             return (
               <div
                 key={idx}
                 onClick={() => navigate(op.path)}
-                className="p-3 rounded-xl bg-slate-50/60 dark:bg-slate-800/30 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-2.5 cursor-pointer transition"
+                className={`p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100/90 dark:hover:bg-slate-800/80 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xs transition cursor-pointer flex flex-col justify-between`}
               >
-                <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 shrink-0">
-                  <Icon className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                <div className="flex items-center justify-between">
+                  <span className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'} truncate`}>
                     {op.label}
+                  </span>
+                  <div className={`p-1.5 rounded-lg border ${op.badgeColor} shrink-0`}>
+                    <Icon className="w-3.5 h-3.5" />
                   </div>
-                  <div className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
-                    {op.count}
-                  </div>
-                  <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate">
-                    {op.subtext}
-                  </div>
+                </div>
+                <div className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'} mt-2`}>
+                  {op.count}
+                </div>
+                <div className={`text-[10px] ${op.highlightColor} font-semibold mt-0.5 truncate`}>
+                  {op.subtext}
                 </div>
               </div>
             );
@@ -366,25 +381,27 @@ export function StateAdminDashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
               {financeComplianceList.map((item, idx) => {
                 const Icon = item.icon;
                 return (
                   <div
                     key={idx}
                     onClick={() => navigate(item.path)}
-                    className="p-3 rounded-xl bg-slate-50/60 dark:bg-slate-800/30 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 border border-slate-100 dark:border-slate-800 cursor-pointer transition"
+                    className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100/90 dark:hover:bg-slate-800/80 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-xs transition cursor-pointer flex flex-col justify-between"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                      <span className={`text-[11px] font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'} truncate`}>
                         {item.label}
                       </span>
-                      <Icon className={`w-3.5 h-3.5 ${item.alert ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
+                      <div className={`p-1.5 rounded-lg border ${item.badgeColor} shrink-0`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                    <div className="text-base font-extrabold text-slate-900 dark:text-white mt-1.5">
+                    <div className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'} mt-2 truncate`}>
                       {item.value}
                     </div>
-                    <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                    <div className={`text-[10px] ${item.highlightColor} font-semibold mt-0.5 truncate`}>
                       {item.detail}
                     </div>
                   </div>
@@ -495,6 +512,29 @@ export function StateAdminDashboard() {
               <span className="font-semibold text-blue-600 dark:text-blue-400">State SLA: 24h</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* QUICK ACTIONS AT BOTTOM */}
+      <div className={`admin-card p-4 sm:p-5 ${cardStyle} border rounded-2xl`}>
+        <div className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-3">
+          Quick Actions
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {quickActionButtons.map((btn, idx) => {
+            const Icon = btn.icon;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => navigate(btn.path)}
+                className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/50 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 dark:hover:bg-slate-800 dark:hover:text-blue-400 text-xs font-bold text-slate-900 dark:text-white transition-all cursor-pointer group"
+              >
+                <Icon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="truncate">{btn.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

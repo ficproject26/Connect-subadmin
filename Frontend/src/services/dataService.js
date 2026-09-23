@@ -4,6 +4,23 @@ export const dataService = {
   // Reports & Summaries
   getDashboardSummary: () => apiRequest('/reports/dashboard-summary'),
   getBusinessReports: () => apiRequest('/reports/business-reports'),
+  getSubmittedManagerReports: (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    return apiRequest(`/reports/submitted${qs ? `?${qs}` : ''}`);
+  },
+  getSubmittedManagerReportById: (id) => apiRequest(`/reports/submitted/${id}`),
+  approveManagerReport: (id, remarks = '') => apiRequest(`/reports/submitted/${id}/approve`, {
+    method: 'PATCH',
+    body: JSON.stringify({ remarks })
+  }),
+  rejectManagerReport: (id, remarks = '') => apiRequest(`/reports/submitted/${id}/reject`, {
+    method: 'PATCH',
+    body: JSON.stringify({ remarks })
+  }),
 
   // Hierarchy & Geo
   getHierarchy: () => apiRequest('/admin/hierarchy'),
@@ -209,6 +226,63 @@ export const dataService = {
   addManager: (data) => apiRequest('/managers', {
     method: 'POST',
     body: JSON.stringify(data)
-  })
+  }),
+
+  // ─── QC Issue & Task Management ─────────────────────────────────────────────
+  // QC Issues
+  raiseQCIssue: (data) => apiRequest('/qc-tasks/issues', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  getQCIssues: (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    return apiRequest(`/qc-tasks/issues${qs ? `?${qs}` : ''}`);
+  },
+  getQCIssueById: (id) => apiRequest(`/qc-tasks/issues/${id}`),
+
+  // Tasks
+  createQCTask: (data) => apiRequest('/qc-tasks/tasks', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  getQCTasks: (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    return apiRequest(`/qc-tasks/tasks${qs ? `?${qs}` : ''}`);
+  },
+  getQCTaskById: (id) => apiRequest(`/qc-tasks/tasks/${id}`),
+  updateQCTaskStatus: (id, data) => apiRequest(`/qc-tasks/tasks/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
+  submitSuspendRequest: (id, data) => apiRequest(`/qc-tasks/tasks/${id}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  reviewSuspendRequest: (id, data) => apiRequest(`/qc-tasks/tasks/${id}/suspend/review`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
+  reviewTaskResolution: (id, data) => apiRequest(`/qc-tasks/tasks/${id}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
+  reviewIssueResolution: (id, data) => apiRequest(`/qc-tasks/issues/${id}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
+
+  // Managers scoped to admin's hierarchy
+  getQCTaskManagers: () => apiRequest('/qc-tasks/managers')
 };
+
+
+
 

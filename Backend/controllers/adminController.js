@@ -249,6 +249,20 @@ async function addStateAdmin(req, res) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Assigned State are required.' });
     }
 
+    if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
+      return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
+    }
+
+    if (dob) {
+      const dobDate = new Date(dob);
+      const maxDate = new Date();
+      maxDate.setFullYear(maxDate.getFullYear() - 18);
+      maxDate.setHours(23, 59, 59, 999);
+      if (isNaN(dobDate.getTime()) || dobDate > maxDate) {
+        return res.status(400).json({ success: false, message: 'Admin must be at least 18 years of age (18+ only).' });
+      }
+    }
+
     const allUsers = Array.from(db.users);
 
     const existingStateAdmins = allUsers.filter(u =>
@@ -493,7 +507,7 @@ function getDistricts(req, res) {
 
       return {
         ...d,
-        divisionsCount: (d.divisions && d.divisions.length > 0) ? d.divisions.length : distDivAdmins.length,
+        divisionsCount: distDivAdmins.length,
         pincodesCount: distPinAdmins.length,
         status,
         adminCount: distAdmins.length,
@@ -554,6 +568,20 @@ async function addDistrictAdmin(req, res) {
 
     if (!adminName || !email || !districtName) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Assigned District are required.' });
+    }
+
+    if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
+      return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
+    }
+
+    if (dob) {
+      const dobDate = new Date(dob);
+      const maxDate = new Date();
+      maxDate.setFullYear(maxDate.getFullYear() - 18);
+      maxDate.setHours(23, 59, 59, 999);
+      if (isNaN(dobDate.getTime()) || dobDate > maxDate) {
+        return res.status(400).json({ success: false, message: 'Admin must be at least 18 years of age (18+ only).' });
+      }
     }
 
     const allUsers = Array.from(db.users);
@@ -755,6 +783,20 @@ async function addDivisionAdmin(req, res) {
 
     if (!adminName || !email || !divisionName) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Division Name are required.' });
+    }
+
+    if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
+      return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
+    }
+
+    if (dob) {
+      const dobDate = new Date(dob);
+      const maxDate = new Date();
+      maxDate.setFullYear(maxDate.getFullYear() - 18);
+      maxDate.setHours(23, 59, 59, 999);
+      if (isNaN(dobDate.getTime()) || dobDate > maxDate) {
+        return res.status(400).json({ success: false, message: 'Admin must be at least 18 years of age (18+ only).' });
+      }
     }
 
     const allUsers = Array.from(db.users);
@@ -1108,6 +1150,20 @@ async function addPincodeAdmin(req, res) {
 
     if (!adminName || !email || !pincode) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Assigned Pincode are required.' });
+    }
+
+    if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
+      return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
+    }
+
+    if (dob) {
+      const dobDate = new Date(dob);
+      const maxDate = new Date();
+      maxDate.setFullYear(maxDate.getFullYear() - 18);
+      maxDate.setHours(23, 59, 59, 999);
+      if (isNaN(dobDate.getTime()) || dobDate > maxDate) {
+        return res.status(400).json({ success: false, message: 'Admin must be at least 18 years of age (18+ only).' });
+      }
     }
 
     const allUsers = Array.from(db.users);

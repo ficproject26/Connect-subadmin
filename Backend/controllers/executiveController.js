@@ -41,10 +41,85 @@ function updateTicketStatus(req, res) {
   }
 }
 
+// Scoped Agent filtering by hierarchical manager / admin role:
+// - Pincode Manager: ONLY Pincode Agents in their assigned pincode
+// - Division Manager: Division Agent and Pincode Agents in their assigned division
+// - District Manager: District Agent, Division Agent, and Pincode Agents in their assigned district
+// - State Manager: State, District, Division, and Pincode Agents in their assigned state
+// - Super Admin: All Agents
+function getHierarchicalScopedAgents(allAgents, user) {
+  if (!allAgents || !Array.isArray(allAgents)) return [];
+  if (!user) return [];
+
+  const rawRole = user.role || '';
+  const role = rawRole.toLowerCase().replace(/_/g, ' ');
+  const userPincode = user.pincode ? String(user.pincode).trim() : null;
+  const userDivision = user.division ? user.division.trim().toLowerCase() : null;
+  const userDistrict = user.district ? user.district.trim().toLowerCase() : null;
+  const userState = user.state ? user.state.trim().toLowerCase() : null;
+
+  // Super Admin / unrestricted admin
+  if (role.includes('super admin') || role === 'admin') {
+    return allAgents;
+  }
+
+  // 1. Pincode Manager / Pincode Admin: Show ONLY Pincode Agents
+  if (role.includes('pincode')) {
+    return allAgents.filter(a => {
+      const aLevel = (a.level || a.role || '').toLowerCase();
+      const isPincodeAgent = aLevel.includes('pincode');
+      const matchesPin = userPincode && a.pincode && String(a.pincode).trim() === userPincode;
+      return isPincodeAgent && matchesPin;
+    });
+  }
+
+  // 2. Division Manager / Divisional Admin: Show Division Agent and Pincode Agents in this division
+  if (role.includes('division') || role.includes('divisional')) {
+    return allAgents.filter(a => {
+      const aLevel = (a.level || a.role || '').toLowerCase();
+      const isAllowedLevel = aLevel.includes('division') || aLevel.includes('pincode');
+      if (!isAllowedLevel) return false;
+
+      const matchesDiv = !userDivision || (a.division && a.division.trim().toLowerCase() === userDivision);
+      const matchesDist = !userDistrict || (a.district && a.district.trim().toLowerCase() === userDistrict);
+      const matchesState = !userState || (a.state && a.state.trim().toLowerCase() === userState);
+      return matchesDiv && matchesDist && matchesState;
+    });
+  }
+
+  // 3. District Manager / District Admin: Show District Agent, Division Agent, and Pincode Agents in this district
+  if (role.includes('district')) {
+    return allAgents.filter(a => {
+      const aLevel = (a.level || a.role || '').toLowerCase();
+      const isAllowedLevel = aLevel.includes('district') || aLevel.includes('division') || aLevel.includes('pincode');
+      if (!isAllowedLevel) return false;
+
+      const matchesDist = !userDistrict || (a.district && a.district.trim().toLowerCase() === userDistrict);
+      const matchesState = !userState || (a.state && a.state.trim().toLowerCase() === userState);
+      return matchesDist && matchesState;
+    });
+  }
+
+  // 4. State Manager / State Admin: Show State Agent, District Agent, Division Agent, and Pincode Agents in this state
+  if (role.includes('state')) {
+    return allAgents.filter(a => {
+      const aLevel = (a.level || a.role || '').toLowerCase();
+      const isAllowedLevel = aLevel.includes('state') || aLevel.includes('district') || aLevel.includes('division') || aLevel.includes('pincode');
+      if (!isAllowedLevel) return false;
+
+      const matchesState = !userState || (a.state && a.state.trim().toLowerCase() === userState);
+      return matchesState;
+    });
+  }
+
+  return [];
+}
+
 // Agents
 function getAgents(req, res) {
   try {
-    let scoped = filterByLocation(db.agents, req.user);
+    const rawAgents = Array.from(db.agents);
+    let scoped = getHierarchicalScopedAgents(rawAgents, req.user);
     const { search, status, level, district, division, pincode } = req.query;
 
     if (level) {

@@ -23,7 +23,7 @@ export function normalizeRole(role) {
   if (r === 'district admin') return 'District Admin';
   if (r === 'pincode admin') return 'Pincode Admin';
   if (r.includes('manager') && !r.includes('admin')) return 'Manager';
-  if (r === 'super admin' || r === 'main admin') return 'Super Admin';
+  if (r === 'super admin' || r === 'main admin') return 'State Admin';
   return role;
 }
 
@@ -36,8 +36,8 @@ export function getRoleDashboardPath(role) {
   const norm = normalizeRole(role);
   const raw = (role || '').toLowerCase().replace(/_/g, ' ').trim();
 
-  if (norm === 'Super Admin' || raw.includes('super admin') || raw.includes('main admin')) {
-    return '/super-admin/dashboard';
+  if (norm === 'State Admin' || raw.includes('state admin') || norm === 'Super Admin' || raw.includes('super admin') || raw.includes('main admin')) {
+    return '/state-admin/dashboard';
   }
   if (norm === 'State Admin' || raw.includes('state admin')) {
     return '/state-admin/dashboard';

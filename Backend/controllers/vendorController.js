@@ -1,6 +1,8 @@
 const { db, filterByLocation } = require('../config/db');
 const { resolvePincodeHierarchy } = require('../utils/pincodeMapping');
 const { getScopeFilter, isVendorInScope } = require('../middleware/scopeMiddleware');
+const notificationService = require('../services/notificationService');
+const bcrypt = require('bcryptjs');
 
 // Mask sensitive identifiers for public / lower view
 const maskPan = (pan) => {
@@ -281,12 +283,33 @@ const createVendor = async (req, res) => {
       divisionId: divisionId || null,
       pincodeId: pincodeId || null,
       regionId: stateId || null,
+      // Extended Business Info
+      logo: data.logo || null,
+      website: data.website || '',
+      operatingHours: data.operatingHours || '09:00 AM - 09:00 PM',
+      businessImages: data.businessImages || [],
+      // Owner Info
+      ownerName: data.ownerName || data.contactPerson || name,
+      alternatePhone: data.alternatePhone || '',
+      agentName: data.agentName || '',
+      coPartnerName: data.coPartnerName || '',
+      passwordHash: data.password ? bcrypt.hashSync(data.password, 10) : undefined,
+      // Documents
       panNumber: data.panNumber || 'ABCDE1234F',
+      aadhaarNumber: data.aadhaarNumber || '',
+      companyRegNumber: data.companyRegNumber || '',
+      gstStatus: data.gstStatus || 'Registered',
+      msmeStatus: data.msmeStatus || 'Not Registered',
+      businessLicense: data.businessLicense || null,
       gstNumber: data.gstNumber || '33ABCDE1234F1Z5',
+      // Bank Details
       accountHolderName: data.accountHolderName || name,
+      bankName: data.bankName || 'HDFC Bank',
+      bankBranch: data.bankBranch || '',
+      bankStreet: data.bankStreet || '',
+      bankCity: data.bankCity || '',
       accountNumber: data.accountNumber || '50200012345678',
       ifsc: data.ifsc || 'HDFC0001234',
-      bankName: data.bankName || 'HDFC Bank',
       status: 'Under Review',
       approvalStatus: 'Pending Pincode Admin Approval',
       kycStatus: 'Pending Verification',
@@ -350,6 +373,16 @@ const createVendor = async (req, res) => {
     }
 
     const populated = await populateVendorLocations(saved);
+
+    // Dispatch real-time notification
+    try {
+      notificationService.notifyVendorOnboarding({
+        vendor: populated,
+        creator: req.user
+      });
+    } catch (notifErr) {
+      console.error('Failed to trigger onboarding notification:', notifErr.message);
+    }
 
     return res.status(201).json({
       success: true,
@@ -432,6 +465,19 @@ const updateVendorStatus = async (req, res) => {
 
     const populated = await populateVendorLocations(updated);
 
+    // Dispatch real-time notification
+    try {
+      notificationService.notifyVendorStatusChange({
+        vendor: populated,
+        oldStatus: vendor.status,
+        newStatus: status,
+        user: req.user,
+        notes: statusNotes
+      });
+    } catch (notifErr) {
+      console.error('Failed to trigger vendor status notification:', notifErr.message);
+    }
+
     return res.json({
       success: true,
       message: `Vendor status updated to ${status}`,
@@ -504,6 +550,18 @@ const pincodeAdminVerifyVendor = async (req, res) => {
 
     const populated = await populateVendorLocations(updated);
 
+    // Dispatch real-time notification
+    try {
+      notificationService.notifyVendorVerification({
+        vendor: populated,
+        action,
+        reason: rejectionReason,
+        admin: req.user
+      });
+    } catch (notifErr) {
+      console.error('Failed to trigger verification notification:', notifErr.message);
+    }
+
     return res.json({
       success: true,
       message: isReject ? 'Vendor rejected by Pincode Admin' : 'Vendor accepted by Pincode Admin and forwarded to KYC Team',
@@ -575,6 +633,19 @@ const kycVerifyVendor = async (req, res) => {
     });
 
     const populated = await populateVendorLocations(updated);
+
+    // Dispatch real-time notification
+    try {
+      notificationService.notifyVendorStatusChange({
+        vendor: populated,
+        oldStatus: vendor.kycStatus || vendor.status,
+        newStatus: updates.status,
+        user: req.user,
+        notes: isReject ? `KYC Rejected: ${rejectionReason.trim()}` : 'KYC Approved & Vendor Activated'
+      });
+    } catch (notifErr) {
+      console.error('Failed to trigger KYC notification:', notifErr.message);
+    }
 
     return res.json({
       success: true,

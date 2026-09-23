@@ -94,7 +94,7 @@ export function DivisionalAdminDashboard() {
 
         {/* 2. Pincode Admins */}
         <div
-          onClick={() => navigate('/divisional-admin/pincode-admins')}
+          onClick={() => navigate('/divisional-admin/pincodes')}
           className={`admin-card p-4 ${
             isDark ? 'bg-[#131f37] border-[#1f3358]' : 'bg-white border-slate-200/90 shadow-sm'
           } hover:border-blue-300 transition cursor-pointer flex flex-col justify-between`}

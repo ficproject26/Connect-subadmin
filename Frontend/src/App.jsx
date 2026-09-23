@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { NotificationProvider } from './context/NotificationContext';
+import NotificationToast from './components/NotificationToast';
 import { AppRoutes } from './routes/AppRoutes';
 
 class GlobalErrorBoundary extends React.Component {
@@ -55,6 +57,7 @@ function AppContent() {
   return (
     <div className={`min-h-screen ${isDark ? 'dark bg-[#0b1322] text-slate-100' : 'light bg-[#f8fafc] text-[#001D51]'} transition-colors duration-200`}>
       <AppRoutes />
+      <NotificationToast />
     </div>
   );
 }
@@ -65,7 +68,9 @@ export default function App() {
       <ThemeProvider>
         <BrowserRouter>
           <AuthProvider>
-            <AppContent />
+            <NotificationProvider>
+              <AppContent />
+            </NotificationProvider>
           </AuthProvider>
         </BrowserRouter>
       </ThemeProvider>

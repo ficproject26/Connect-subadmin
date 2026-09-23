@@ -73,11 +73,26 @@ export function DivisionalVendors() {
     loadData();
   }, [pincodeParam]);
 
+  // Helper to determine if a vendor is awaiting Pincode Admin approval (Stage 1)
+  const isAwaitingPincodeApproval = (v) => {
+    if (!v) return false;
+    if (v.pincodeAdminApproval?.status === 'Approved' || v.pincodeAdminApproval?.status === 'Rejected') return false;
+    const appStatus = (v.approvalStatus || '').toLowerCase();
+    if (appStatus.includes('pincode admin approved') || appStatus.includes('pincode admin rejected')) return false;
+    const kyc = (v.kycStatus || '').toLowerCase();
+    if (kyc.includes('kyc pending') || kyc.includes('approved') || kyc === 'verified' || kyc.includes('rejected')) return false;
+    if ((v.status || '').toLowerCase().includes('rejected')) return false;
+    if (v.pincodeAdminApproval?.status === 'Pending') return true;
+    if (appStatus.includes('pending')) return true;
+    if (kyc.includes('pending') || kyc.includes('verification') || (v.status || '').toLowerCase().includes('under review')) return true;
+    return false;
+  };
+
   // Compute 4 KPI stats
   const kpiStats = useMemo(() => {
     const total = vendors.length;
-    const verified = vendors.filter(v => (v.kycStatus || '').toLowerCase().includes('approved') || (v.kycStatus || '').toLowerCase() === 'verified').length;
-    const pendingPincode = vendors.filter(v => (v.kycStatus || '').toLowerCase().includes('pending pincode')).length;
+    const verified = vendors.filter(v => (v.kycStatus || '').toLowerCase().includes('approved') || (v.kycStatus || '').toLowerCase() === 'verified' || (v.status || '').toLowerCase() === 'active').length;
+    const pendingPincode = vendors.filter(isAwaitingPincodeApproval).length;
     const pendingKyc = vendors.filter(v => (v.kycStatus || '').toLowerCase() === 'kyc pending' || (v.kycStatus || '').toLowerCase().includes('admin approved')).length;
     const pendingPayout = vendors.reduce((sum, v) => sum + (Number(v.pendingPayout) || 0), 0);
 
@@ -98,13 +113,13 @@ export function DivisionalVendors() {
         const k = (v.kycStatus || '').toLowerCase();
         const target = kycFilter.toLowerCase();
         if (target === 'approved') {
-          if (!k.includes('approved') && k !== 'verified') return false;
+          if (!k.includes('approved') && k !== 'verified' && (v.status || '').toLowerCase() !== 'active') return false;
         } else if (target === 'pending_pincode') {
-          if (!k.includes('pending pincode')) return false;
+          if (!isAwaitingPincodeApproval(v)) return false;
         } else if (target === 'kyc_pending') {
           if (!k.includes('kyc pending') && !k.includes('pincode admin approved')) return false;
         } else if (target === 'rejected') {
-          if (!k.includes('rejected')) return false;
+          if (!k.includes('rejected') && (v.status || '').toLowerCase() !== 'rejected') return false;
         } else if (!k.includes(target)) {
           return false;
         }

@@ -337,10 +337,375 @@ const getLeaderboardData = async (req, res) => {
   }
 };
 
+
+// Submit a manager period report
+const submitManagerReport = async (req, res) => {
+  try {
+    const user = req.user;
+    const {
+      periodLabel,
+      dateRange,
+      startDate,
+      endDate,
+      summary,
+      shopVisits = [],
+      tasks = []
+    } = req.body;
+
+    if (!periodLabel) {
+      return res.status(400).json({ success: false, message: 'Report period is required.' });
+    }
+
+    const reportId = `rpt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const pinPart = (user.pincode || user.division || user.district || 'GEN').replace(/\s+/g, '').toUpperCase();
+    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const reportNumber = `RPT-${pinPart}-${datePart}-${Math.floor(100 + Math.random() * 900)}`;
+
+    const newReport = {
+      _id: reportId,
+      id: reportId,
+      reportNumber,
+      periodLabel,
+      dateRange: dateRange || periodLabel,
+      startDate: startDate || new Date().toISOString(),
+      endDate: endDate || new Date().toISOString(),
+      managerId: user._id || user.id,
+      managerName: user.name || 'Field Manager',
+      managerRole: user.role || 'pincode_manager',
+      managerEmail: user.email || '',
+      managerPhone: user.phone || user.mobile || '',
+      state: user.state || 'Tamil Nadu',
+      district: user.district || '',
+      division: user.division || '',
+      pincode: user.pincode || '',
+      stateId: user.stateId || null,
+      districtId: user.districtId || null,
+      divisionId: user.divisionId || null,
+      pincodeId: user.pincodeId || null,
+      summary: summary || {
+        totalVisits: shopVisits.length,
+        interested: shopVisits.filter(v => v.interestedStatus === 'YES').length,
+        notInterested: shopVisits.filter(v => v.interestedStatus === 'NO').length,
+        newTieups: shopVisits.filter(v => v.vendorId).length,
+        tasksAssigned: tasks.length,
+        tasksCompleted: tasks.filter(t => t.status === 'Completed').length,
+        tasksPending: tasks.filter(t => t.status !== 'Completed').length
+      },
+      shopVisits,
+      tasks,
+      status: 'Submitted',
+      submittedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    if (db.submittedReports) {
+      db.submittedReports.push(newReport);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Report submitted successfully and forwarded to supervisory managers.',
+      data: newReport
+    });
+  } catch (err) {
+    console.error('Submit report error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to submit report', error: err.message });
+  }
+};
+
+// Get hierarchical submitted reports
+const getSubmittedReports = async (req, res) => {
+  try {
+    const user = req.user;
+    const allReports = Array.from(db.submittedReports || []);
+    const { district, division, pincode, managerRole, period, search } = req.query;
+
+    const rawRole = (user?.role || '').toLowerCase();
+
+    // 1. RBAC Hierarchy Filter (Strict Territory Cascading)
+    let filtered = allReports.filter(rpt => {
+      // Super Admin / Admin: unrestricted access to all submitted reports
+      if (rawRole.includes('super admin') || rawRole === 'admin' || user.role === 'Super Admin') return true;
+
+      const userState = (user.state || user.scope?.stateName || '').toLowerCase();
+      const rptState = (rpt.state || '').toLowerCase();
+      const userDist = (user.district || user.scope?.districtName || '').toLowerCase();
+      const rptDist = (rpt.district || '').toLowerCase();
+      const userDiv = (user.division || user.scope?.divisionName || '').toLowerCase();
+      const rptDiv = (rpt.division || '').toLowerCase();
+      const userPin = String(user.pincode || user.pincodeCode || user.scope?.pincodeCode || '').trim();
+      const rptPin = String(rpt.pincode || '').trim();
+
+      // State Admin / State Manager: sees all reports across all districts, divisions, pincodes in their state
+      if (rawRole.includes('state')) {
+        if (!userState || userState === 'all india') return true;
+        return rptState === userState || (user.stateId && rpt.stateId === user.stateId);
+      }
+
+      // District Admin / District Manager: sees all reports across all divisions and pincodes in their district
+      if (rawRole.includes('district')) {
+        if (!userDist) return true;
+        const matchDist = rptDist === userDist || (user.districtId && rpt.districtId && String(rpt.districtId).toLowerCase().includes(userDist));
+        return matchDist;
+      }
+
+      // Divisional Admin / Division Manager: sees all reports across all pincodes in their division
+      if (rawRole.includes('division') || rawRole.includes('divisional')) {
+        if (!userDiv) return true;
+        const matchDiv = rptDiv === userDiv || (user.divisionId && rpt.divisionId === user.divisionId);
+        return matchDiv;
+      }
+
+      // Pincode Admin / Pincode Manager: sees reports in their assigned pincode or self
+      if (rawRole.includes('pincode')) {
+        const isSelf = rpt.managerId === user._id || rpt.managerId === user.id;
+        const isPin = userPin && (rptPin === userPin || rpt.pincodeId === user.pincodeId);
+        return isPin || isSelf;
+      }
+
+      return false;
+    });
+
+    // 2. Query Filters
+    if (district && district !== 'All') {
+      filtered = filtered.filter(r => r.district === district || r.districtId === district);
+    }
+    if (division && division !== 'All') {
+      filtered = filtered.filter(r => r.division === division || r.divisionId === division);
+    }
+    if (pincode && pincode !== 'All') {
+      filtered = filtered.filter(r => r.pincode === pincode || r.pincodeId === pincode);
+    }
+    if (managerRole && managerRole !== 'All') {
+      filtered = filtered.filter(r => (r.managerRole || '').toLowerCase().includes(managerRole.toLowerCase()));
+    }
+    if (period && period !== 'All') {
+      filtered = filtered.filter(r => (r.periodLabel || '').toLowerCase().includes(period.toLowerCase()));
+    }
+    if (search && search.trim()) {
+      const q = search.toLowerCase().trim();
+      filtered = filtered.filter(r =>
+        (r.managerName && r.managerName.toLowerCase().includes(q)) ||
+        (r.reportNumber && r.reportNumber.toLowerCase().includes(q)) ||
+        (r.pincode && r.pincode.toLowerCase().includes(q)) ||
+        (r.district && r.district.toLowerCase().includes(q)) ||
+        (r.division && r.division.toLowerCase().includes(q))
+      );
+    }
+
+    // Sort newest first
+    filtered.sort((a, b) => new Date(b.submittedAt || b.createdAt) - new Date(a.submittedAt || a.createdAt));
+
+    // Extract available hierarchy filters based on visible reports
+    const availableDistricts = Array.from(new Set(filtered.map(r => r.district).filter(Boolean)));
+    const availableDivisions = Array.from(new Set(filtered.map(r => r.division).filter(Boolean)));
+    const availablePincodes = Array.from(new Set(filtered.map(r => r.pincode).filter(Boolean)));
+
+    return res.json({
+      success: true,
+      data: filtered,
+      count: filtered.length,
+      hierarchy: {
+        districts: availableDistricts,
+        divisions: availableDivisions,
+        pincodes: availablePincodes
+      }
+    });
+  } catch (err) {
+    console.error('Get submitted reports error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve submitted reports', error: err.message });
+  }
+};
+
+// Get single submitted report by ID
+const getSubmittedReportById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allReports = Array.from(db.submittedReports || []);
+    const report = allReports.find(r => r._id === id || r.id === id || r.reportNumber === id);
+
+    if (!report) {
+      return res.status(404).json({ success: false, message: 'Submitted report not found.' });
+    }
+
+    // Enrich shop visits with live vendor approval & kyc info if applicable
+    const enrichedVisits = (report.shopVisits || []).map(v => {
+      if (v.vendorId) {
+        const found = Array.from(db.vendors || []).find(vend => vend.id === v.vendorId || vend._id === v.vendorId);
+        if (found) {
+          return {
+            ...v,
+            vendor: {
+              id: found.id || found._id,
+              businessName: found.businessName || found.name,
+              contactPerson: found.contactPerson || found.ownerName,
+              phone: found.phone || found.mobile,
+              approvalStatus: found.approvalStatus || 'Pending Pincode Admin Approval',
+              kycStatus: found.kycStatus || 'Pending Verification',
+              status: found.status || 'Under Review',
+              adminApprovedBy: found.adminApprovedBy || null,
+              documents: found.documents || []
+            }
+          };
+        }
+      }
+      return v;
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        ...report,
+        shopVisits: enrichedVisits
+      }
+    });
+  } catch (err) {
+    console.error('Get report by ID error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to get report details', error: err.message });
+  }
+};
+
+// Approve a submitted manager report (Pincode Admin only, for pincode_manager reports)
+const approveManagerReport = async (req, res) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    const { remarks } = req.body;
+
+    const rawRole = (user?.role || '').toLowerCase();
+    // Only Pincode Admin (and higher roles) can approve reports
+    const canApprove = rawRole.includes('pincode') || rawRole.includes('district') ||
+                       rawRole.includes('division') || rawRole.includes('state') ||
+                       rawRole.includes('super') || rawRole === 'admin';
+
+    if (!canApprove) {
+      return res.status(403).json({ success: false, message: 'You do not have permission to approve reports.' });
+    }
+
+    const allReports = Array.from(db.submittedReports || []);
+    const reportIndex = allReports.findIndex(r => r._id === id || r.id === id || r.reportNumber === id);
+
+    if (reportIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Report not found.' });
+    }
+
+    const report = allReports[reportIndex];
+
+    // Scope check: Pincode Admin can only approve reports in their pincode
+    if (rawRole.includes('pincode admin') || rawRole === 'pincode_admin') {
+      const userPin = String(user.pincode || user.pincodeCode || '').trim();
+      const rptPin = String(report.pincode || '').trim();
+      if (userPin && rptPin !== userPin) {
+        return res.status(403).json({ success: false, message: 'You can only approve reports from your assigned pincode.' });
+      }
+    }
+
+    // Update approval status
+    const updatedReport = {
+      ...report,
+      approvalStatus: 'Approved',
+      status: 'Approved',
+      approvedBy: user.name || user.username || 'Admin',
+      approvedByRole: user.role,
+      approvedByUserId: user._id || user.id,
+      approvedAt: new Date().toISOString(),
+      approvalRemarks: remarks || ''
+    };
+
+    allReports[reportIndex] = updatedReport;
+    db.submittedReports = allReports;
+
+    // Persist to JSON file
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join(__dirname, '../data/submitted_reports.json');
+    fs.writeFileSync(filePath, JSON.stringify(allReports, null, 2), 'utf-8');
+
+    return res.json({
+      success: true,
+      message: `Report ${report.reportNumber} approved successfully.`,
+      data: updatedReport
+    });
+  } catch (err) {
+    console.error('Approve report error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to approve report', error: err.message });
+  }
+};
+
+// Reject a submitted manager report with remarks
+const rejectManagerReport = async (req, res) => {
+  try {
+    const user = req.user;
+    const { id } = req.params;
+    const { remarks } = req.body;
+
+    const rawRole = (user?.role || '').toLowerCase();
+    const canReject = rawRole.includes('pincode') || rawRole.includes('district') ||
+                      rawRole.includes('division') || rawRole.includes('state') ||
+                      rawRole.includes('super') || rawRole === 'admin';
+
+    if (!canReject) {
+      return res.status(403).json({ success: false, message: 'You do not have permission to reject reports.' });
+    }
+
+    const allReports = Array.from(db.submittedReports || []);
+    const reportIndex = allReports.findIndex(r => r._id === id || r.id === id || r.reportNumber === id);
+
+    if (reportIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Report not found.' });
+    }
+
+    const report = allReports[reportIndex];
+
+    // Scope check
+    if (rawRole.includes('pincode admin') || rawRole === 'pincode_admin') {
+      const userPin = String(user.pincode || user.pincodeCode || '').trim();
+      const rptPin = String(report.pincode || '').trim();
+      if (userPin && rptPin !== userPin) {
+        return res.status(403).json({ success: false, message: 'You can only reject reports from your assigned pincode.' });
+      }
+    }
+
+    const updatedReport = {
+      ...report,
+      approvalStatus: 'Rejected',
+      status: 'Rejected',
+      rejectedBy: user.name || user.username || 'Admin',
+      rejectedByRole: user.role,
+      rejectedByUserId: user._id || user.id,
+      rejectedAt: new Date().toISOString(),
+      rejectionRemarks: remarks || 'Report rejected by supervisor.'
+    };
+
+    allReports[reportIndex] = updatedReport;
+    db.submittedReports = allReports;
+
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = path.join(__dirname, '../data/submitted_reports.json');
+    fs.writeFileSync(filePath, JSON.stringify(allReports, null, 2), 'utf-8');
+
+    return res.json({
+      success: true,
+      message: `Report ${report.reportNumber} rejected.`,
+      data: updatedReport
+    });
+  } catch (err) {
+    console.error('Reject report error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to reject report', error: err.message });
+  }
+};
+
 module.exports = {
   getDashboardSummary,
   getBusinessReports,
   getDashboardStats,
   getVendorReportData,
-  getLeaderboardData
+  getLeaderboardData,
+  submitManagerReport,
+  getSubmittedReports,
+  getSubmittedReportById,
+  approveManagerReport,
+  rejectManagerReport
 };
+
