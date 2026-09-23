@@ -68,86 +68,13 @@ function FieldInput({ label, required, children }) {
   );
 }
 
-const FALLBACK_DIVISIONAL_PINCODES = [
-  {
-    id: 'pin_636112',
-    pincode: '636112',
-    areaName: 'Attur Hub',
-    division: 'Attur',
-    divisionName: 'Attur',
-    district: 'Salem',
-    districtName: 'Salem',
-    state: 'Tamil Nadu',
-    adminId: 'ADM-PIN-65273F',
-    employeeCode: 'EMP-PIN-001',
-    adminName: 'Charu',
-    assignedAdmin: 'Charu',
-    adminEmail: 'charu@gmail.com',
-    adminPhone: '8765445678',
-    status: 'Active',
-    customerCount: 124,
-    customers: 124,
-    vendors: 18,
-    orders: 342,
-    totalBookings: 89,
-    managerName: 'Karthik Raja',
-    managerEmail: 'karthik.mgr@subadmin.com',
-    managerPhone: '9845211234',
-    agentName: 'Suresh V',
-    agentEmail: 'suresh.agent@subadmin.com',
-    agentPhone: '9789123456',
-    deliveryPartner: 12,
-    technician: 6,
-    executive: 4,
-    pendingKYC: 2,
-    totalManagers: 1,
-    totalAgents: 3,
-    totalJobApplied: 28,
-    totalMembershipCards: 45
-  },
-  {
-    id: 'pin_636114',
-    pincode: '636114',
-    areaName: 'Attur Hub',
-    division: 'Attur',
-    divisionName: 'Attur',
-    district: 'Salem',
-    districtName: 'Salem',
-    state: 'Tamil Nadu',
-    adminId: 'ADM-PIN-D8C325',
-    employeeCode: 'EMP-PIN-002',
-    adminName: 'Kumar',
-    assignedAdmin: 'Kumar',
-    adminEmail: 'kumar@gmail.com',
-    adminPhone: '8765434567',
-    status: 'Active',
-    customerCount: 98,
-    customers: 98,
-    vendors: 14,
-    orders: 215,
-    totalBookings: 64,
-    managerName: 'Praveen S',
-    managerEmail: 'praveen.mgr@subadmin.com',
-    managerPhone: '9845299887',
-    agentName: 'Mani K',
-    agentEmail: 'mani.agent@subadmin.com',
-    agentPhone: '9789198765',
-    deliveryPartner: 8,
-    technician: 4,
-    executive: 3,
-    pendingKYC: 1,
-    totalManagers: 1,
-    totalAgents: 2,
-    totalJobApplied: 19,
-    totalMembershipCards: 32
-  }
-];
+const FALLBACK_DIVISIONAL_PINCODES = [];
 
 export function DivisionalPincodes() {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const navigate = useNavigate();
-  const [pincodes, setPincodes] = useState(FALLBACK_DIVISIONAL_PINCODES);
+  const [pincodes, setPincodes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [selectedPincode, setSelectedPincode] = useState(null);
@@ -257,9 +184,9 @@ export function DivisionalPincodes() {
       const allManagers = mgrRes?.subordinates || mgrRes?.data || mgrRes?.managers || [];
       const allAgents = agentRes?.agents || agentRes?.data || [];
 
-      // Enrich with personnel hierarchy and operational fallback data
+      // Enrich with personnel hierarchy data
       const enrichedList = list.map((p, idx) => {
-        const fallback = FALLBACK_DIVISIONAL_PINCODES[idx % FALLBACK_DIVISIONAL_PINCODES.length];
+        const fallback = (FALLBACK_DIVISIONAL_PINCODES && FALLBACK_DIVISIONAL_PINCODES.length > 0) ? FALLBACK_DIVISIONAL_PINCODES[idx % FALLBACK_DIVISIONAL_PINCODES.length] : {};
 
         const matchedMgr = allManagers.find(m => 
           m.assignedPincode === p.pincode || 
@@ -274,34 +201,34 @@ export function DivisionalPincodes() {
 
         return {
           ...p,
-          employeeCode: p.employeeCode || fallback.employeeCode,
-          managerName: matchedMgr?.fullName || matchedMgr?.name || p.managerName || fallback.managerName,
-          managerEmail: matchedMgr?.email || p.managerEmail || fallback.managerEmail,
-          managerPhone: matchedMgr?.mobile || matchedMgr?.phone || p.managerPhone || fallback.managerPhone,
-          agentName: matchedAgent?.name || matchedAgent?.fullName || p.agentName || fallback.agentName,
-          agentEmail: matchedAgent?.email || p.agentEmail || fallback.agentEmail,
-          agentPhone: matchedAgent?.phone || matchedAgent?.mobile || p.agentPhone || fallback.agentPhone,
-          customers: p.customers || p.customerCount || fallback.customers,
-          customerCount: p.customerCount || p.customers || fallback.customerCount,
-          vendors: p.vendors || p.totalVendors || fallback.vendors,
-          orders: p.orders || p.totalOrders || fallback.orders,
-          totalBookings: p.totalBookings || fallback.totalBookings,
-          deliveryPartner: p.deliveryPartner || fallback.deliveryPartner,
-          technician: p.technician || fallback.technician,
-          executive: p.executive || fallback.executive,
-          pendingKYC: p.pendingKYC || fallback.pendingKYC,
-          totalManagers: p.totalManagers || fallback.totalManagers,
-          totalAgents: p.totalAgents || fallback.totalAgents,
-          totalJobApplied: p.totalJobApplied || fallback.totalJobApplied,
-          totalMembershipCards: p.totalMembershipCards || fallback.totalMembershipCards
+          employeeCode: p.employeeCode || fallback.employeeCode || `EMP-PIN-${String(p.pincode).slice(-3)}`,
+          managerName: matchedMgr?.fullName || matchedMgr?.name || p.managerName || fallback.managerName || '-',
+          managerEmail: matchedMgr?.email || p.managerEmail || fallback.managerEmail || '-',
+          managerPhone: matchedMgr?.mobile || matchedMgr?.phone || p.managerPhone || fallback.managerPhone || '-',
+          agentName: matchedAgent?.name || matchedAgent?.fullName || p.agentName || fallback.agentName || '-',
+          agentEmail: matchedAgent?.email || p.agentEmail || fallback.agentEmail || '-',
+          agentPhone: matchedAgent?.phone || matchedAgent?.mobile || p.agentPhone || fallback.agentPhone || '-',
+          customers: p.customers || p.customerCount || 0,
+          customerCount: p.customerCount || p.customers || 0,
+          vendors: p.vendors || p.totalVendors || 0,
+          orders: p.orders || p.totalOrders || 0,
+          totalBookings: p.totalBookings || 0,
+          deliveryPartner: p.deliveryPartner || 0,
+          technician: p.technician || 0,
+          executive: p.executive || 0,
+          pendingKYC: p.pendingKYC || 0,
+          totalManagers: p.totalManagers || 0,
+          totalAgents: p.totalAgents || 0,
+          totalJobApplied: p.totalJobApplied || 0,
+          totalMembershipCards: p.totalMembershipCards || 0
         };
       });
 
       enrichedList.sort((a, b) => String(a.pincode).localeCompare(String(b.pincode)));
-      setPincodes(enrichedList.length > 0 ? enrichedList : FALLBACK_DIVISIONAL_PINCODES);
+      setPincodes(enrichedList);
     } catch (e) {
       console.error('Failed to load divisional pincodes:', e);
-      setPincodes(FALLBACK_DIVISIONAL_PINCODES);
+      setPincodes([]);
     } finally {
       setLoading(false);
     }

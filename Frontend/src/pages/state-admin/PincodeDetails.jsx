@@ -23,64 +23,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Modal } from '../../components/Modal';
 
-const FALLBACK_REGISTERED_PINCODES = [
-  {
-    id: 'pin_636112',
-    pincode: '636112',
-    area: 'Attur Hub (636112)',
-    division: 'Attur',
-    divisionName: 'Attur',
-    district: 'Salem',
-    districtName: 'Salem',
-    state: 'Tamil Nadu',
-    status: 'Active',
-    admin: 'Charu',
-    adminEmail: 'charu@gmail.com',
-    adminPhone: '8765445678',
-    totalCustomers: 0,
-    customers: 0,
-    vendors: 0,
-    totalManagers: 0,
-    totalAgents: 0,
-    deliveryPartner: 0,
-    technician: 0,
-    executive: 0,
-    pendingKYC: 0,
-    totalOrders: 0,
-    orders: 0,
-    totalBookings: 0,
-    totalJobApplied: 0,
-    totalMembershipCards: 0
-  },
-  {
-    id: 'pin_636114',
-    pincode: '636114',
-    area: 'Attur Hub (636114)',
-    division: 'Attur',
-    divisionName: 'Attur',
-    district: 'Salem',
-    districtName: 'Salem',
-    state: 'Tamil Nadu',
-    status: 'Active',
-    admin: 'Kumar',
-    adminEmail: 'kumar@gmail.com',
-    adminPhone: '8765434567',
-    totalCustomers: 0,
-    customers: 0,
-    vendors: 0,
-    totalManagers: 0,
-    totalAgents: 0,
-    deliveryPartner: 0,
-    technician: 0,
-    executive: 0,
-    pendingKYC: 0,
-    totalOrders: 0,
-    orders: 0,
-    totalBookings: 0,
-    totalJobApplied: 0,
-    totalMembershipCards: 0
-  }
-];
+const FALLBACK_REGISTERED_PINCODES = [];
 
 export function StatePincodeDetails() {
   const { user } = useAuth();
@@ -104,7 +47,7 @@ export function StatePincodeDetails() {
           res = await dataService.getPincodes();
         }
 
-        const rawList = (res?.success && res.pincodes?.length > 0) ? res.pincodes : FALLBACK_REGISTERED_PINCODES;
+        const rawList = (res?.success && res.pincodes?.length > 0) ? res.pincodes : [];
         const list = rawList.map(p => ({
           id: p.id || `PIN-${p.pincode}`,
           pincode: p.pincode,
@@ -134,7 +77,7 @@ export function StatePincodeDetails() {
         setPincodes(list);
       } catch (err) {
         console.error('Failed to load pincode details:', err);
-        setPincodes(FALLBACK_REGISTERED_PINCODES);
+        setPincodes([]);
       } finally {
         setLoading(false);
       }
