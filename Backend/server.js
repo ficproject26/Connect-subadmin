@@ -27,7 +27,7 @@ const qcTaskRoutes = require('./routes/qcTaskRoutes'); // QC & Task Routes
 const notificationRoutes = require('./routes/notificationRoutes'); // Real-time Notifications
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5005;
 
 // Middleware
 app.use(cors({
