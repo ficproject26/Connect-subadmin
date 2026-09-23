@@ -43,7 +43,7 @@ PINCODE ADMIN (e.g. Pincode 636001)
 cd Backend
 npm install
 npm run dev
-# Backend runs at http://localhost:8006
+# Backend runs at http://localhost:8005
 ```
 
 ### 2. Run Frontend Application
