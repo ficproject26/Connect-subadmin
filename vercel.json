@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "buildCommand": "cd Frontend && npm install && npm run build",
+  "outputDirectory": "Frontend/dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "http://3.110.88.42:8005/api/:path*"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "http://3.110.88.42:8005/uploads/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
