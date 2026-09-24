@@ -60,5 +60,31 @@
     "avatarUrl": null,
     "updatedAt": "2026-09-18T06:01:23.880Z",
     "createdAt": "2026-09-18T06:01:23.880Z"
+  },
+  {
+    "_id": "6ab4ad5f674fbdab18506159",
+    "id": "6ab4ad5f674fbdab18506159",
+    "name": "Dora",
+    "email": "dora@gmail.com",
+    "loginId": "dora@gmail.com",
+    "mobile": "9876543254",
+    "phone": "9876543254",
+    "passwordHash": "/xMi659hJXMY1v53A2x.2fbMb/HcC1eE6t5AVgbikJrTNaukrd2",
+    "role": "Pincode Admin",
+    "level": 4,
+    "state": "Tamil Nadu",
+    "district": "Chennai",
+    "division": "Chennai Division",
+    "pincode": "600001",
+    "stateId": "ST-TAM",
+    "districtId": null,
+    "divisionId": null,
+    "pincodeId": null,
+    "regionId": "ST-TAM",
+    "status": "active",
+    "avatar": null,
+    "avatarUrl": null,
+    "updatedAt": "2026-09-24T04:55:59.551Z",
+    "createdAt": "2026-09-24T04:55:59.551Z"
   }
 ]

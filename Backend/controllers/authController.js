@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { db } = require('../config/db');
 const { generateToken, JWT_SECRET } = require('../utils/jwt');
+const { getMongoDb } = require('../config/mongo');
 
 const ROLE_LIMITS = {
   state_manager: 8,      // 8 managers per State
@@ -67,10 +68,10 @@ const buildUserProfile = async (user) => {
     user.pincodeId ? db.pincodes.findById(user.pincodeId) : null
   ]);
 
-  const stateName = user.state || state?.name || null;
-  const districtName = user.district || district?.name || null;
-  const divisionName = user.division || division?.name || null;
-  const pincodeCode = user.pincode || pincode?.code || null;
+  const stateName = user.state || user.assignedState || state?.name || null;
+  const districtName = user.district || user.assignedDistrict || district?.name || null;
+  const divisionName = user.division || user.assignedDivision || division?.name || null;
+  const pincodeCode = user.pincode || user.assignedPincode || pincode?.code || null;
   const avatar = user.avatar || user.avatarUrl || null;
   const mobile = user.mobile || user.phone || null;
   const phone = user.phone || user.mobile || null;
@@ -123,21 +124,53 @@ const buildUserProfile = async (user) => {
 const login = async (req, res) => {
   try {
     const { email, identifier, loginId: rawLoginId, username, password } = req.body;
-    const loginId = (identifier || email || rawLoginId || username || '').trim();
+    const rawId = (identifier || email || rawLoginId || username || '').trim();
+    const loginId = rawId.toLowerCase();
 
-    if (!loginId || !password) {
+    if (!rawId || !password) {
       return res.status(400).json({ success: false, message: 'Please provide email or mobile number, and password.' });
     }
 
-    const allUsers = Array.from(db.users);
-    const user = allUsers.find(u => 
-      (u.email && u.email.toLowerCase() === loginId.toLowerCase()) ||
-      (u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase()) ||
-      (u.mobile && u.mobile === loginId) ||
-      (u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === loginId.replace(/[^0-9]/g, '').slice(-10)) ||
-      (u.id && String(u.id).toLowerCase() === loginId.toLowerCase()) ||
-      (u._id && String(u._id).toLowerCase() === loginId.toLowerCase())
-    );
+    let user = null;
+    const phoneDigits = rawId.replace(/[^0-9]/g, '');
+    const isPhone = phoneDigits.length >= 10;
+
+    // 1. Primary lookup: Check MongoDB Atlas users collection
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        const safeRegex = new RegExp("^" + loginId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i");
+        const queryConditions = [
+          { email: loginId },
+          { email: safeRegex }
+        ];
+        if (isPhone) {
+          queryConditions.push({ phone: rawId });
+          queryConditions.push({ phone: phoneDigits.slice(-10) });
+          queryConditions.push({ mobile: rawId });
+          queryConditions.push({ mobile: phoneDigits.slice(-10) });
+        }
+        const mongoUser = await mdb.collection("users").findOne({ $or: queryConditions });
+        if (mongoUser) {
+          user = { ...mongoUser };
+        }
+      }
+    } catch (mErr) {
+      console.warn("MongoDB lookup in login warning:", mErr.message);
+    }
+
+    // 2. Fallback lookup: Check local db.users (data/users.json)
+    if (!user) {
+      const allUsers = Array.from(db.users);
+      user = allUsers.find(u => 
+        (u.email && u.email.toLowerCase() === loginId) ||
+        (u.loginId && u.loginId.toLowerCase() === loginId) ||
+        (isPhone && u.mobile && u.mobile.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
+        (isPhone && u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
+        (u.id && String(u.id).toLowerCase() === loginId) ||
+        (u._id && String(u._id).toLowerCase() === loginId)
+      );
+    }
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials. User not found.' });
@@ -149,6 +182,15 @@ const login = async (req, res) => {
         isMatch = bcrypt.compareSync(password, user.passwordHash);
       }
     } catch (e) {}
+    if (!isMatch && user.password) {
+      try {
+        if (typeof user.password === 'string' && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$'))) {
+          isMatch = bcrypt.compareSync(password, user.password);
+        } else if (user.password === password) {
+          isMatch = true;
+        }
+      } catch (e) {}
+    }
     if (!isMatch) {
       if (password === 'admin123' || password === 'admin@123' || (user.password && password === user.password)) {
         isMatch = true;
@@ -158,55 +200,103 @@ const login = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials. Incorrect password.' });
     }
 
-    if (user.status === 'rejected') {
+    // Status evaluation
+    let currentStatus = (user.status || 'active').toLowerCase();
+    if (currentStatus === 'approved' || currentStatus === 'active') {
+      currentStatus = 'active';
+    }
+
+    if (currentStatus === 'rejected') {
       return res.status(403).json({
         success: false,
         status: 'rejected',
         rejectionReason: user.rejectionReason || 'Application rejected by administrator.',
-        message: `Your registration application was rejected by the administrator. Reason: ${user.rejectionReason || 'Documents or eligibility criteria not met.'}`
+        message: 'Your registration application was rejected by the administrator. Reason: ' + (user.rejectionReason || 'Documents or eligibility criteria not met.')
       });
     }
 
-    if (user.status === 'pending_admin_approval' || user.status === 'under_review' || user.status === 'pending') {
+    if (currentStatus === 'pending_admin_approval' || currentStatus === 'under_review' || currentStatus === 'pending' || currentStatus === 'pending_approval' || currentStatus === 'in_review') {
       const targetAdmin = user.targetAdminRole || 'Respective Administrator';
       return res.status(403).json({
         success: false,
         status: 'pending_admin_approval',
-        message: `Your registration is pending approval by your designated ${targetAdmin}. Login is disabled until admin approval.`
+        message: 'Your registration is pending approval by your designated ' + targetAdmin + '. Login is disabled until admin approval.'
       });
     }
 
-    if (user.status === 'pending_kyc' || user.status === 'kyc_pending') {
-      // Auto-activate since KYC is skipped in current flow
-      if (user.adminApprovalStatus === 'approved') {
-        user.status = 'active';
+    if (currentStatus === 'pending_kyc' || currentStatus === 'kyc_pending') {
+      if (user.adminApprovalStatus === 'approved' || user.status === 'approved') {
+        currentStatus = 'active';
         user.kycStatus = 'Verified';
-        await db.users.update(user);
+        try { await db.users.update(user); } catch (e) {}
       } else {
         return res.status(403).json({
           success: false,
           status: 'pending_admin_approval',
-          message: `Your registration is pending approval by ${user.targetAdminRole || 'the administrator'}. Login is disabled until admin approval.`
+          message: 'Your registration is pending approval by ' + (user.targetAdminRole || 'the administrator') + '. Login is disabled until admin approval.'
         });
       }
     }
 
-    if (user.status !== 'active') {
+    if (currentStatus !== 'active' || user.isActive === false) {
       return res.status(403).json({
         success: false,
         status: user.status || 'inactive',
-        message: `Your account is currently ${user.status.replace(/_/g, ' ')}. Login is disabled.`
+        message: 'Your account is currently ' + String(user.status || 'inactive').replace(/_/g, ' ') + '. Login is disabled.'
       });
     }
 
-    // KYC verification step is skipped for now - Admin approval directly activates manager accounts
+    // Role mapping
+    let normalizedRole = user.role;
+    const rawRole = (user.role || '').toLowerCase().replace(/_/g, ' ').trim();
+    const levelStr = String(user.level || user.adminLevel || user.adminRole || '').toLowerCase().replace(/_/g, ' ').trim();
 
-    const token = generateToken(user);
-    const userProfile = await buildUserProfile(user);
+    if (rawRole === 'admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Pincode Admin', 'Super Admin'].includes(user.role)) {
+      if (levelStr.includes('pincode') || rawRole.includes('pincode') || levelStr === 'branch-admin') {
+        normalizedRole = 'Pincode Admin';
+      } else if (levelStr.includes('divis') || rawRole.includes('divis')) {
+        normalizedRole = 'Divisional Admin';
+      } else if (levelStr.includes('dist') || rawRole.includes('dist')) {
+        normalizedRole = 'District Admin';
+      } else if (levelStr.includes('state') || rawRole.includes('state')) {
+        normalizedRole = 'State Admin';
+      } else {
+        normalizedRole = 'Pincode Admin';
+      }
+    }
+
+    const roleLevelMap = {
+      'Super Admin': 0,
+      'State Admin': 1,
+      'District Admin': 2,
+      'Divisional Admin': 3,
+      'Division Admin': 3,
+      'Pincode Admin': 4,
+      'Manager': 1
+    };
+    const assignedLevel = roleLevelMap[normalizedRole] || (typeof user.level === 'number' ? user.level : 4);
+
+    const mappedUser = {
+      ...user,
+      _id: user._id || user.id,
+      id: user._id || user.id,
+      role: normalizedRole,
+      level: assignedLevel,
+      status: 'active',
+      state: user.state || user.assignedState || '',
+      district: user.district || user.assignedDistrict || '',
+      division: user.division || user.assignedDivision || '',
+      pincode: user.pincode || user.assignedPincode || '',
+      mobile: user.mobile || user.phone || '',
+      phone: user.phone || user.mobile || ''
+    };
+
+    const token = generateToken(mappedUser);
+    const userProfile = await buildUserProfile(mappedUser);
 
     return res.json({
       success: true,
-      message: `Welcome ${user.name}. Logged in successfully.`,
+      message: 'Welcome ' + (mappedUser.name || 'Admin') + '. Logged in successfully.',
       token,
       user: userProfile
     });
@@ -215,12 +305,56 @@ const login = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Login failed', error: err.message });
   }
 };
-
 const getMe = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
     const allUsers = Array.from(db.users);
-    const user = allUsers.find(u => String(u._id || u.id) === String(userId));
+    let user = allUsers.find(u => String(u._id || u.id) === String(userId));
+
+    if (!user) {
+      try {
+        const mdb = await getMongoDb();
+        if (mdb) {
+          const { ObjectId } = require('mongodb');
+          let mongoUser = null;
+          try {
+            mongoUser = await mdb.collection("users").findOne({ _id: new ObjectId(userId) });
+          } catch (e) {
+            mongoUser = await mdb.collection("users").findOne({ _id: String(userId) });
+          }
+          if (mongoUser) {
+            let normalizedRole = mongoUser.role;
+            const rawRole = (mongoUser.role || '').toLowerCase().replace(/_/g, ' ').trim();
+            const levelStr = String(mongoUser.level || mongoUser.adminLevel || mongoUser.adminRole || '').toLowerCase().replace(/_/g, ' ').trim();
+
+            if (rawRole === 'admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Pincode Admin', 'Super Admin'].includes(mongoUser.role)) {
+              if (levelStr.includes('pincode') || rawRole.includes('pincode') || levelStr === 'branch-admin') {
+                normalizedRole = 'Pincode Admin';
+              } else if (levelStr.includes('divis') || rawRole.includes('divis')) {
+                normalizedRole = 'Divisional Admin';
+              } else if (levelStr.includes('dist') || rawRole.includes('dist')) {
+                normalizedRole = 'District Admin';
+              } else if (levelStr.includes('state') || rawRole.includes('state')) {
+                normalizedRole = 'State Admin';
+              }
+            }
+
+            user = {
+              ...mongoUser,
+              _id: mongoUser._id || mongoUser.id,
+              id: mongoUser._id || mongoUser.id,
+              role: normalizedRole,
+              state: mongoUser.state || mongoUser.assignedState || '',
+              district: mongoUser.district || mongoUser.assignedDistrict || '',
+              division: mongoUser.division || mongoUser.assignedDivision || '',
+              pincode: mongoUser.pincode || mongoUser.assignedPincode || '',
+              mobile: mongoUser.mobile || mongoUser.phone || '',
+              phone: mongoUser.phone || mongoUser.mobile || ''
+            };
+          }
+        }
+      } catch (err) {}
+    }
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -233,7 +367,6 @@ const getMe = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to retrieve profile', error: err.message });
   }
 };
-
 const getDemoAdmins = (req, res) => {
   const demoList = db.admins.map(a => ({
     id: a.id || a._id,
