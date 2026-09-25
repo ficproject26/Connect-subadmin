@@ -1,20 +1,38 @@
-const { db } = require('../config/db');
+﻿const { db } = require('../config/db');
+
+// Helper to fetch live from Admin Master Territory API
+async function fetchAdminTerritory(path, params = {}) {
+  const queryStr = new URLSearchParams(params).toString();
+  const endpoints = [
+    http://127.0.0.1:8004/api/territory/,
+    http://localhost:8004/api/territory/,
+    https://api.ficapp.in/api/territory/
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      // try next
+    }
+  }
+  return null;
+}
 
 // GET /api/states - Filtered by caller's scope
 const getStates = async (req, res) => {
   try {
-    const user = req.user;
-    let states = [];
+    const liveStates = await fetchAdminTerritory('states', { status: 'Active' });
+    let states = Array.isArray(liveStates) ? liveStates : await db.states.find({ status: 'Active' });
 
+    const user = req.user;
     if (user?.stateId) {
-      const state = await db.states.findById(user.stateId);
-      if (state) states = [state];
+      states = states.filter(s => s._id === user.stateId || s.id === user.stateId);
     } else if (user?.state) {
-      const state = await db.states.findOne({ name: user.state });
-      if (state) states = [state];
-      else states = await db.states.find();
-    } else {
-      states = await db.states.find();
+      states = states.filter(s => s.name?.toLowerCase() === user.state.toLowerCase());
     }
 
     res.json({ success: true, data: states, states });
@@ -28,28 +46,21 @@ const getStates = async (req, res) => {
 const getDistricts = async (req, res) => {
   try {
     const user = req.user;
-    const { stateId } = req.query;
-
+    const { stateId, state } = req.query;
+    const queryState = state || user?.state;
     const queryStateId = stateId || user?.stateId;
-    let districts = [];
 
-    if (queryStateId) {
-      districts = await db.districts.find({ stateId: queryStateId });
-    } else if (user?.state) {
-      const state = await db.states.findOne({ name: user.state });
-      if (state) {
-        districts = await db.districts.find({ stateId: state._id });
-      } else {
-        districts = await db.districts.find();
-      }
-    } else {
-      districts = await db.districts.find();
-    }
+    const params = { status: 'Active' };
+    if (queryStateId) params.stateId = queryStateId;
+    if (queryState) params.state = queryState;
+
+    const liveDistricts = await fetchAdminTerritory('districts', params);
+    let districts = Array.isArray(liveDistricts) ? liveDistricts : await db.districts.find({ status: 'Active' });
 
     if (user?.districtId) {
-      districts = districts.filter(d => d._id === user.districtId);
+      districts = districts.filter(d => d._id === user.districtId || d.id === user.districtId);
     } else if (user?.district) {
-      districts = districts.filter(d => d.name === user.district);
+      districts = districts.filter(d => d.name?.toLowerCase() === user.district.toLowerCase());
     }
 
     res.json({ success: true, data: districts, districts });
@@ -63,21 +74,24 @@ const getDistricts = async (req, res) => {
 const getDivisions = async (req, res) => {
   try {
     const user = req.user;
-    const { districtId, stateId } = req.query;
+    const { districtId, district, stateId, state } = req.query;
 
     const queryDistrictId = districtId || user?.districtId;
+    const queryDistrict = district || user?.district;
 
-    let divisions = [];
-    if (queryDistrictId) {
-      divisions = await db.divisions.find({ districtId: queryDistrictId });
-    } else if (stateId || user?.stateId) {
-      divisions = await db.divisions.find({ stateId: stateId || user?.stateId });
-    } else {
-      divisions = await db.divisions.find();
-    }
+    const params = { status: 'Active' };
+    if (queryDistrictId) params.districtId = queryDistrictId;
+    if (queryDistrict) params.district = queryDistrict;
+    if (stateId) params.stateId = stateId;
+    if (state) params.state = state;
+
+    const liveDivisions = await fetchAdminTerritory('divisions', params);
+    let divisions = Array.isArray(liveDivisions) ? liveDivisions : await db.divisions.find({ status: 'Active' });
 
     if (user?.divisionId) {
-      divisions = divisions.filter(d => d._id === user.divisionId);
+      divisions = divisions.filter(d => d._id === user.divisionId || d.id === user.divisionId);
+    } else if (user?.division) {
+      divisions = divisions.filter(d => d.name?.toLowerCase() === user.division.toLowerCase());
     }
 
     res.json({ success: true, data: divisions, divisions });
@@ -91,25 +105,24 @@ const getDivisions = async (req, res) => {
 const getPincodes = async (req, res) => {
   try {
     const user = req.user;
-    const { divisionId, districtId, stateId } = req.query;
+    const { divisionId, division, districtId, stateId } = req.query;
 
     const queryDivId = divisionId || user?.divisionId;
+    const queryDiv = division || user?.division;
 
-    let pincodes = [];
-    if (queryDivId) {
-      pincodes = await db.pincodes.find({ divisionId: queryDivId });
-    } else if (districtId || user?.districtId) {
-      pincodes = await db.pincodes.find({ districtId: districtId || user?.districtId });
-    } else if (stateId || user?.stateId) {
-      pincodes = await db.pincodes.find({ stateId: stateId || user?.stateId });
-    } else {
-      pincodes = await db.pincodes.find();
-    }
+    const params = { status: 'Active' };
+    if (queryDivId) params.divisionId = queryDivId;
+    if (queryDiv) params.division = queryDiv;
+    if (districtId) params.districtId = districtId;
+    if (stateId) params.stateId = stateId;
+
+    const livePincodes = await fetchAdminTerritory('pincodes', params);
+    let pincodes = Array.isArray(livePincodes) ? livePincodes : await db.pincodes.find({ status: 'Active' });
 
     if (user?.pincodeId) {
-      pincodes = pincodes.filter(p => p._id === user.pincodeId);
+      pincodes = pincodes.filter(p => p._id === user.pincodeId || p.id === user.pincodeId);
     } else if (user?.pincode) {
-      pincodes = pincodes.filter(p => p.code === user.pincode);
+      pincodes = pincodes.filter(p => (p.code || p.pincode) === user.pincode);
     }
 
     res.json({ success: true, data: pincodes, pincodes });

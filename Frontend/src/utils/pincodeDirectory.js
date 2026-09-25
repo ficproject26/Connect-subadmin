@@ -1,130 +1,60 @@
 /**
- * Frontend Pincode Directory & Hierarchy Resolver
+ * Dynamic Pincode Directory & Hierarchy Resolver
  * Automatically identifies and displays the complete location hierarchy:
  * State -> District -> Division -> Pincode
- * And resolves the assigned Pincode Admin, Pincode Manager, and Pincode Agent.
+ * Sourced directly from Admin Territory Database
  */
+
+import { INDIA_POSTAL_DATA } from './indiaPostalData';
 
 const defaultTeam = {
-  pincodeAdmin: {
-    id: '-',
-    name: 'Unassigned',
-    role: 'Pincode Admin',
-    phone: '-',
-    email: '-'
-  },
-  pincodeManager: {
-    id: '-',
-    name: 'Unassigned',
-    role: 'Pincode Manager',
-    phone: '-',
-    email: '-'
-  },
-  pincodeAgent: {
-    id: '-',
-    name: 'Unassigned',
-    role: 'Pincode Agent',
-    phone: '-',
-    email: '-'
-  }
+  pincodeAdmin: { id: '-', name: 'Unassigned', role: 'Pincode Admin', phone: '-', email: '-' },
+  pincodeManager: { id: '-', name: 'Unassigned', role: 'Pincode Manager', phone: '-', email: '-' },
+  pincodeAgent: { id: '-', name: 'Unassigned', role: 'Pincode Agent', phone: '-', email: '-' }
 };
 
-export const PINCODE_DIRECTORY = {
-  '636001': {
-    state: 'Tamil Nadu',
-    district: 'Salem',
-    division: 'Salem North',
-    pincode: '636001',
-    areaName: 'Salem Town Fort & Bazaar',
-    ...defaultTeam
-  },
-  '636002': {
-    state: 'Tamil Nadu',
-    district: 'Salem',
-    division: 'Salem North',
-    pincode: '636002',
-    areaName: 'Shevapet & Wholesale Grain Market',
-    ...defaultTeam
-  },
-  '636007': {
-    state: 'Tamil Nadu',
-    district: 'Salem',
-    division: 'Salem North',
-    pincode: '636007',
-    areaName: 'Alagapuram & Fairlands Zone',
-    ...defaultTeam
-  },
-  '636003': {
-    state: 'Tamil Nadu',
-    district: 'Salem',
-    division: 'Salem South',
-    pincode: '636003',
-    areaName: 'Ammapet Colony Hub',
-    ...defaultTeam
-  },
-  '636004': {
-    state: 'Tamil Nadu',
-    district: 'Salem',
-    division: 'Salem South',
-    pincode: '636004',
-    areaName: 'Gugai Industrial Yard',
-    ...defaultTeam
-  },
-  '641001': {
-    state: 'Tamil Nadu',
-    district: 'Coimbatore',
-    division: 'Coimbatore Central',
-    pincode: '641001',
-    areaName: 'Town Hall & Big Bazaar',
-    ...defaultTeam
-  },
-  '641002': {
-    state: 'Tamil Nadu',
-    district: 'Coimbatore',
-    division: 'Coimbatore Central',
-    pincode: '641002',
-    areaName: 'RS Puram & DB Road',
-    ...defaultTeam
-  }
-};
+export const PINCODE_DIRECTORY = {};
+export const AVAILABLE_PINCODES = [];
 
-export const AVAILABLE_PINCODES = Object.keys(PINCODE_DIRECTORY);
-
-/**
- * Resolve any postal code string into location hierarchy + assigned team.
- */
 export function resolvePincodeHierarchy(pincode) {
   const pin = String(pincode || '').trim();
-  if (PINCODE_DIRECTORY[pin]) {
-    return PINCODE_DIRECTORY[pin];
+  if (!pin) {
+    return {
+      state: '',
+      district: '',
+      division: '',
+      pincode: '',
+      areaName: 'Not Assigned',
+      ...defaultTeam
+    };
   }
 
-  // Fallback heuristic for custom pincode
-  let state = 'Tamil Nadu';
-  let district = 'Salem';
-  let division = 'Salem North';
-
-  if (pin.startsWith('641')) {
-    district = 'Coimbatore';
-    division = 'Coimbatore Central';
-  } else if (pin.startsWith('600')) {
-    district = 'Chennai';
-    division = 'Chennai Central';
-  } else if (pin.startsWith('625')) {
-    district = 'Madurai';
-    division = 'Madurai Central';
-  } else if (pin.startsWith('411')) {
-    state = 'Maharashtra';
-    district = 'Pune';
-    division = 'Pune West';
+  // Search across dynamic Admin Postal Data
+  for (const [stName, stData] of Object.entries(INDIA_POSTAL_DATA || {})) {
+    if (!stData || !stData.districts) continue;
+    for (const [dtName, dtData] of Object.entries(stData.districts)) {
+      if (!dtData || !dtData.divisions) continue;
+      for (const [divName, pins] of Object.entries(dtData.divisions)) {
+        if (Array.isArray(pins) && pins.includes(pin)) {
+          return {
+            state: stName,
+            district: dtName,
+            division: divName,
+            pincode: pin,
+            areaName: divName + ' Area',
+            ...defaultTeam
+          };
+        }
+      }
+    }
   }
 
   return {
-    state,
-    district,
-    division,
-    pincode: pin || '-',
-    areaName: `${division} Zone`,
+    state: '',
+    district: '',
+    division: '',
+    pincode: pin,
+    areaName: 'Sector ' + pin,
     ...defaultTeam
   };
 }
