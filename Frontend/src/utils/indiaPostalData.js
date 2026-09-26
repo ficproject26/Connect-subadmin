@@ -74,6 +74,9 @@ export function buildPostalDataFromHierarchy(hierarchyArray) {
  * Fetch latest active hierarchy from Admin Territory API
  */
 export async function syncTerritoryFromAdmin() {
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('ams_token') || localStorage.getItem('agent_mgr_token')) : null;
+  if (!token) return;
+
   const hierarchyEndpoints = [
     '/admin/hierarchy',
     '/territory/hierarchy',

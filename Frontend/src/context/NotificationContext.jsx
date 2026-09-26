@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { apiRequest } from '../services/api';
+import { apiRequest, API_BASE_URL } from '../services/api';
 
 const NotificationContext = createContext(null);
 
@@ -83,7 +83,10 @@ export const NotificationProvider = ({ children }) => {
       }
 
       const authToken = localStorage.getItem('ams_token') || '';
-      const sseUrl = `/api/notifications/stream?token=${encodeURIComponent(authToken)}`;
+      if (!authToken) return;
+
+      const base = API_BASE_URL || '';
+      const sseUrl = `${base}/api/notifications/stream?token=${encodeURIComponent(authToken)}`;
 
       try {
         const es = new EventSource(sseUrl);
@@ -114,17 +117,23 @@ export const NotificationProvider = ({ children }) => {
         };
 
         es.onerror = () => {
-          es.close();
-          // Auto reconnect after 5s
-          reconnectTimeoutRef.current = setTimeout(connectSSE, 5000);
+          try { es.close(); } catch (e) {}
+          // Gentle reconnect after 15s
+          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(connectSSE, 15000);
         };
       } catch (err) {
-        console.error('SSE initialization error:', err);
+        // SSE error handled silently
       }
     }
 
     connectSSE();
     fetchNotifications();
+
+    // Fallback polling every 30s
+    const pollInterval = setInterval(() => {
+      fetchNotifications();
+    }, 30000);
 
     return () => {
       if (eventSourceRef.current) {
@@ -133,6 +142,7 @@ export const NotificationProvider = ({ children }) => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      clearInterval(pollInterval);
     };
   }, [user, fetchNotifications]);
 

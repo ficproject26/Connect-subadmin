@@ -345,20 +345,22 @@ function getDistricts(req, res) {
     const maxLimit = SUB_ADMIN_LIMITS['District Admin'] || 1;
 
     const enrichedDistricts = districts.map(d => {
+      const targetState = (d.stateName || queryState || req.user?.state || '').trim().toLowerCase();
+
       const distAdmins = allUsers.filter(u =>
-        u.state?.trim().toLowerCase() === userState.toLowerCase() &&
+        (!targetState || targetState === 'all india' || (u.state && u.state.trim().toLowerCase() === targetState)) &&
         u.district?.trim().toLowerCase() === d.name.toLowerCase() &&
         (u.role === 'District Admin' || (u.role || '').toLowerCase().includes('district admin'))
       );
 
       const distDivAdmins = allUsers.filter(u =>
-        u.state?.trim().toLowerCase() === userState.toLowerCase() &&
+        (!targetState || targetState === 'all india' || (u.state && u.state.trim().toLowerCase() === targetState)) &&
         u.district?.trim().toLowerCase() === d.name.toLowerCase() &&
         (u.role === 'Division Admin' || u.role === 'Divisional Admin')
       );
 
       const distPinAdmins = allUsers.filter(u =>
-        u.state?.trim().toLowerCase() === userState.toLowerCase() &&
+        (!targetState || targetState === 'all india' || (u.state && u.state.trim().toLowerCase() === targetState)) &&
         u.district?.trim().toLowerCase() === d.name.toLowerCase() &&
         u.role === 'Pincode Admin'
       );
