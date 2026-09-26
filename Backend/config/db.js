@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { v4: uuidv4 } = require('uuid');
 const seed = require('../data/seedData');
 const { getMongoDb } = require('./mongo');
+const eventPublisher = require('../events/eventPublisher');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -32,8 +33,10 @@ class Collection extends Array {
     this.mongoName = mongoCollectionName || name;
     this.filePath = path.join(DATA_DIR, `${name}.json`);
     this._mongoCol = null;
+    this._isReady = false;
     this._ensureFile(initialData);
     this._load();
+    this._isReady = true;
   }
 
   _ensureFile(defaultData = []) {
@@ -123,6 +126,13 @@ class Collection extends Array {
           { upsert: true }
         ).catch(() => {})
       )).catch(() => {});
+    }
+    if (this._isReady && items.length > 0) {
+      if (items.length === 1) {
+        eventPublisher.publishEntityEvent(this.name, 'created', items[0], items[0]._id || items[0].id).catch(() => {});
+      } else {
+        eventPublisher.publishBatchEvent(this.name, 'batch_created', items).catch(() => {});
+      }
     }
     return res;
   }
@@ -231,6 +241,14 @@ class Collection extends Array {
       }
     }
 
+    if (this._isReady) {
+      eventPublisher.publishEntityEvent(this.name, 'created', newDoc, newDoc._id).catch(() => {});
+      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
+      }
+    }
+
     return newDoc;
   }
 
@@ -259,6 +277,14 @@ class Collection extends Array {
         ));
       } catch (err) {
         console.error(`[MongoDB] Error insertMany into ${this.name}:`, err.message);
+      }
+    }
+
+    if (this._isReady && newDocs.length > 0) {
+      eventPublisher.publishBatchEvent(this.name, 'batch_created', newDocs).catch(() => {});
+      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
       }
     }
 
@@ -294,6 +320,14 @@ class Collection extends Array {
       }
     }
 
+    if (this._isReady && updated) {
+      eventPublisher.publishEntityEvent(this.name, 'updated', updated, updated._id || updated.id).catch(() => {});
+      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
+      }
+    }
+
     return updated;
   }
 
@@ -321,6 +355,14 @@ class Collection extends Array {
         );
       } catch (err) {
         console.error(`[MongoDB] Error findByIdAndUpdate in ${this.name}:`, err.message);
+      }
+    }
+
+    if (this._isReady && updated) {
+      eventPublisher.publishEntityEvent(this.name, 'updated', updated, strId).catch(() => {});
+      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
       }
     }
 
@@ -353,6 +395,15 @@ class Collection extends Array {
         await this._mongoCol.deleteOne(cleanQuery);
       } catch (err) {
         console.error(`[MongoDB] Error deleteOne in ${this.name}:`, err.message);
+      }
+    }
+
+    if (this._isReady) {
+      const deletedId = query.id || query._id;
+      eventPublisher.publishEntityEvent(this.name, 'deleted', { id: deletedId, ...query }, deletedId).catch(() => {});
+      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
       }
     }
 
@@ -627,6 +678,27 @@ function initDatabase() {
 
       initUsers();
       syncHierarchyFromDatabase();
+
+      // Ensure performance indexes in MongoDB Atlas
+      try {
+        await Promise.allSettled([
+          mongoDb.collection('users').createIndex({ email: 1 }),
+          mongoDb.collection('users').createIndex({ role: 1, status: 1 }),
+          mongoDb.collection('vendors').createIndex({ status: 1, kycStatus: 1 }),
+          mongoDb.collection('vendors').createIndex({ pincode: 1 }),
+          mongoDb.collection('orders').createIndex({ status: 1, createdAt: -1 }),
+          mongoDb.collection('bookings').createIndex({ status: 1, createdAt: -1 }),
+          mongoDb.collection('jobs').createIndex({ status: 1, createdAt: -1 }),
+          mongoDb.collection('pincodes').createIndex({ code: 1 }),
+          mongoDb.collection('pincodes').createIndex({ divisionId: 1, districtId: 1 }),
+          mongoDb.collection('districts').createIndex({ stateId: 1 }),
+          mongoDb.collection('divisions').createIndex({ districtId: 1 })
+        ]);
+        console.log('⚡ [Database] Performance indexes verified in MongoDB Atlas.');
+      } catch (idxErr) {
+        // Non-blocking index creation
+      }
+
       console.log('✅ [Database] All collections connected to MongoDB Atlas as single source of truth.');
       return true;
     } catch (err) {

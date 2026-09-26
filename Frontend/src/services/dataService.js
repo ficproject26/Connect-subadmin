@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import { realtimeClient } from '../realtime/websocketClient';
 
 export const dataService = {
   // Reports & Summaries
@@ -281,7 +282,10 @@ export const dataService = {
   }),
 
   // Managers scoped to admin's hierarchy
-  getQCTaskManagers: () => apiRequest('/qc-tasks/managers')
+  getQCTaskManagers: () => apiRequest('/qc-tasks/managers'),
+
+  // Real-Time Event Subscription Helpers
+  subscribeRealtime: (entity, callback) => realtimeClient.subscribe(entity, callback)
 };
 
 

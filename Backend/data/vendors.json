@@ -905,8 +905,15 @@
     "aadhaarNumber": "643192515659",
     "address": "2/11, 2nd cross, Attur Post Office, Attur, Salem, Tamil Nadu - 636112",
     "createdAt": "2026-09-26T07:03:16.415Z",
-    "updatedAt": "2026-09-26T07:03:16.415Z",
+    "updatedAt": "2026-09-26T10:17:30.773Z",
     "__v": 0,
-    "isActive": true
+    "isActive": true,
+    "accountHolderName": null,
+    "accountNumber": null,
+    "bankName": null,
+    "description": null,
+    "gstNumber": null,
+    "ifsc": null,
+    "mobile": null
   }
 ]

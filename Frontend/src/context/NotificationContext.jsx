@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { apiRequest, API_BASE_URL } from '../services/api';
+import { realtimeClient, ConnectionStatus } from '../realtime/websocketClient';
 
 const NotificationContext = createContext(null);
 
@@ -14,7 +15,7 @@ export const NotificationProvider = ({ children }) => {
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
 
-  // Fetch notifications from server
+  // Fetch notifications from server on initial mount / filter change
   const fetchNotifications = useCallback(async (type = filterType) => {
     try {
       setLoading(true);
@@ -73,15 +74,55 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // Setup Real-time Server-Sent Events (SSE)
+  // Unified Real-Time WebSocket Event Listener
   useEffect(() => {
     if (!user) return;
 
-    function connectSSE() {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
+    fetchNotifications();
 
+    // Subscribe to centralized real-time notifications via WebSocket
+    const unsubRealtime = realtimeClient.subscribe('notifications', (event) => {
+      const action = (event.action || '').toLowerCase();
+      const notifData = event.data;
+
+      if (action === 'created' && notifData) {
+        setNotifications(prev => {
+          if (prev.some(n => (n._id || n.id) === (notifData._id || notifData.id))) {
+            return prev;
+          }
+          return [notifData, ...prev];
+        });
+
+        setUnreadCount(prev => prev + 1);
+        setLatestToast(notifData);
+      } else if (action === 'updated' && notifData) {
+        setNotifications(prev =>
+          prev.map(n => ((n._id || n.id) === (notifData._id || notifData.id) ? { ...n, ...notifData } : n))
+        );
+      } else if (action === 'deleted') {
+        const delId = String(event.entityId || notifData?._id || notifData?.id);
+        setNotifications(prev => prev.filter(n => String(n._id || n.id) !== delId));
+      }
+    });
+
+    // Secondary SSE fallback only if WebSocket is disconnected for prolonged periods
+    let fallbackTimer = null;
+    const unsubStatus = realtimeClient.onStatusChange((status) => {
+      if (status === ConnectionStatus.DISCONNECTED) {
+        fallbackTimer = setTimeout(() => {
+          connectSSEFallback();
+        }, 15000);
+      } else if (status === ConnectionStatus.CONNECTED) {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+      }
+    });
+
+    function connectSSEFallback() {
+      if (eventSourceRef.current || realtimeClient.getStatus() === ConnectionStatus.CONNECTED) return;
       const authToken = localStorage.getItem('ams_token') || '';
       if (!authToken) return;
 
@@ -97,52 +138,31 @@ export const NotificationProvider = ({ children }) => {
             const parsed = JSON.parse(event.data);
             if (parsed.type === 'notification' && parsed.data) {
               const newNotif = parsed.data;
-
-              // Prepend to notifications list
               setNotifications(prev => {
-                if (prev.some(n => n._id === newNotif._id || n.id === newNotif.id)) {
-                  return prev;
-                }
+                if (prev.some(n => (n._id || n.id) === (newNotif._id || newNotif.id))) return prev;
                 return [newNotif, ...prev];
               });
-
               setUnreadCount(prev => prev + 1);
-
-              // Trigger interactive floating toast
               setLatestToast(newNotif);
             }
-          } catch (e) {
-            // keepalive or non-JSON message
-          }
+          } catch (e) {}
         };
 
         es.onerror = () => {
           try { es.close(); } catch (e) {}
-          // Gentle reconnect after 15s
-          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = setTimeout(connectSSE, 15000);
+          eventSourceRef.current = null;
         };
-      } catch (err) {
-        // SSE error handled silently
-      }
+      } catch (err) {}
     }
 
-    connectSSE();
-    fetchNotifications();
-
-    // Fallback polling every 30s
-    const pollInterval = setInterval(() => {
-      fetchNotifications();
-    }, 30000);
-
     return () => {
+      unsubRealtime();
+      unsubStatus();
+      if (fallbackTimer) clearTimeout(fallbackTimer);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      clearInterval(pollInterval);
     };
   }, [user, fetchNotifications]);
 

@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { RealtimeProvider } from './context/RealtimeContext';
 import NotificationToast from './components/NotificationToast';
 import { AppRoutes } from './routes/AppRoutes';
 
@@ -68,9 +69,11 @@ export default function App() {
       <ThemeProvider>
         <BrowserRouter>
           <AuthProvider>
-            <NotificationProvider>
-              <AppContent />
-            </NotificationProvider>
+            <RealtimeProvider>
+              <NotificationProvider>
+                <AppContent />
+              </NotificationProvider>
+            </RealtimeProvider>
           </AuthProvider>
         </BrowserRouter>
       </ThemeProvider>

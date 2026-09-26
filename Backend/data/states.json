@@ -11,5 +11,12 @@
     "createdAt": "2026-09-09T07:49:04.611Z",
     "updatedAt": "2026-09-09T07:49:04.611Z",
     "__v": 0
+  },
+  {
+    "_id": "state_ka",
+    "code": "KAR",
+    "name": "Karnataka",
+    "stateId": "ST-KAR-0001",
+    "status": "Active"
   }
 ]

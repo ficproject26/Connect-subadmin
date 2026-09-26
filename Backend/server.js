@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
 
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -25,6 +26,14 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const shopVisitRoutes = require('./routes/shopVisitRoutes');
 const qcTaskRoutes = require('./routes/qcTaskRoutes'); // QC & Task Routes
 const notificationRoutes = require('./routes/notificationRoutes'); // Real-time Notifications
+
+// Real-Time Event, Redis & WebSocket Architecture
+const { initRedis } = require('./redis/redisClient');
+const { initEventSubscriber } = require('./events/eventSubscriber');
+const { initWebSocketServer } = require('./websocket/websocketServer');
+const { getSystemRealtimeTelemetry } = require('./realtime/realtimeMetrics');
+const eventPublisher = require('./events/eventPublisher');
+const { initDatabase } = require('./config/db');
 
 const app = express();
 const PORT = process.env.PORT || 8006;
@@ -56,12 +65,16 @@ app.use('/api/quality', qualityRoutes);
 app.use('/api/pincodes', pincodeRoutes);
 app.use('/api/operations', executiveRoutes);
 
-// Unified Health Check (Public) - Cleaned Mock Stores
+// Unified Health Check (Public)
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
     timestamp: new Date().toISOString(),
     service: 'Unified Hierarchical Sub-Admin & Field Manager Backend API',
+    realtime: {
+      engine: 'Redis Pub/Sub + WebSocket',
+      targetLatency: '< 500ms'
+    },
     portals: [
       { name: 'Hierarchical Admin Management Portal', defaultClient: 'http://localhost:3000' },
       { name: 'Agent & Field Manager Portal', defaultClient: 'http://localhost:5173' }
@@ -78,6 +91,22 @@ app.use('/api/qc-tasks', qcTaskRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/territory', locationRoutes);
 app.use('/api', locationRoutes); // /api/states, /api/districts, /api/divisions, /api/pincodes, /api/hierarchy
+
+// Real-Time System Telemetry & Reconnection Sync
+app.get('/api/realtime/metrics', (req, res) => {
+  res.json(getSystemRealtimeTelemetry());
+});
+
+app.get('/api/realtime/sync', (req, res) => {
+  const { since } = req.query;
+  const events = eventPublisher.getEventsSince(since);
+  res.json({
+    success: true,
+    count: events.length,
+    serverTimestamp: new Date().toISOString(),
+    events
+  });
+});
 
 // Global 404
 app.use((req, res) => {
@@ -98,14 +127,27 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('UNHANDLED PROMISE REJECTION:', reason);
 });
 
-const { initDatabase } = require('./config/db');
+// HTTP + WebSocket Server Creation
+const server = http.createServer(app);
+
+// Attach WebSocket Server
+initWebSocketServer(server);
+
+// Initialize Redis Pub/Sub & Local Bus Subscriber
+initRedis().then(() => {
+  initEventSubscriber();
+}).catch(err => {
+  console.warn('[RealTime] Event system initialization notice:', err.message);
+});
 
 if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log('================================================================');
     console.log('🚀 Unified Sub-Admin & Field Manager Backend is running!');
     console.log('📡 Local URL:   http://localhost:' + PORT);
+    console.log('⚡ WebSocket:   ws://localhost:' + PORT + '/ws');
     console.log('🩺 Health Check: http://localhost:' + PORT + '/api/health');
+    console.log('📊 Telemetry:   http://localhost:' + PORT + '/api/realtime/metrics');
     console.log('================================================================');
 
     initDatabase().catch(err => {
@@ -116,4 +158,4 @@ if (require.main === module) {
 
 // Unified API Server - Clean Production Ready Data Store
 module.exports = app;
-
+module.exports.server = server;
