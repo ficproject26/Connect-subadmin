@@ -34,35 +34,15 @@
     "__v": 0
   },
   {
-    "_id": "6ab661bab499c69d9e5b6267",
-    "divisionId": "DIV-KGI-DIV",
-    "stateId": "6aa10f70ca0932e6eaec1f5c",
-    "districtId": "6aa10f71ca0932e6eaec1f5d",
-    "name": "Krishnagiri Division",
-    "code": "KGID",
-    "divisionType": "Administrative",
-    "talukInfo": "",
-    "description": "",
-    "notes": "",
-    "status": "Active",
-    "createdAt": "2026-09-25T11:57:46.617Z",
-    "updatedAt": "2026-09-25T11:57:46.617Z",
-    "__v": 0
-  },
-  {
-    "_id": "6ab661bab499c69d9e5b626a",
+    "_id": "6ab75143dc9de0f359d86bfb",
     "divisionId": "DIV-NMK-TGD",
     "stateId": "6aa10f70ca0932e6eaec1f5c",
     "districtId": "6ab661bab499c69d9e5b6269",
     "name": "Tiruchengode",
     "code": "TGD",
     "divisionType": "Administrative",
-    "talukInfo": "",
-    "description": "",
-    "notes": "",
     "status": "Active",
-    "createdAt": "2026-09-25T11:57:46.839Z",
-    "updatedAt": "2026-09-25T11:57:46.839Z",
-    "__v": 0
+    "createdAt": "2026-09-26T04:59:47.652Z",
+    "updatedAt": "2026-09-26T04:59:47.652Z"
   }
 ]

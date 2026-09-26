@@ -76,7 +76,8 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/shop-visits', shopVisitRoutes);
 app.use('/api/qc-tasks', qcTaskRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api', locationRoutes); // /api/states, /api/districts, /api/divisions, /api/pincodes
+app.use('/api/territory', locationRoutes);
+app.use('/api', locationRoutes); // /api/states, /api/districts, /api/divisions, /api/pincodes, /api/hierarchy
 
 // Global 404
 app.use((req, res) => {

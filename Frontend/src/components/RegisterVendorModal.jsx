@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { dataService } from '../services/dataService';
 import { resolvePincodeHierarchy } from '../utils/pincodeDirectory';
+import { useAuth } from '../context/AuthContext';
 import {
   Store, User, Phone, Mail, MapPin, Globe, Clock, Image as ImageIcon,
   FileText, CreditCard, Building2, CheckCircle, AlertCircle,
@@ -125,8 +126,16 @@ const RSection = ({ title, icon: Icon, children }) => (
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════ */
 export function RegisterVendorModal({ isOpen, onClose, onVendorCreated, initialPincode = '' }) {
+  const { user } = useAuth();
+  const isPincodeLocked = Boolean(
+    user?.pincode && 
+    (user.role?.toLowerCase().includes('pincode') || user.role?.toLowerCase().includes('agent'))
+  );
+
+  const defaultPin = initialPincode || (isPincodeLocked ? user?.pincode : '') || '';
+
   const [step,        setStep]        = useState(1);
-  const [form,        setForm]        = useState({ ...blank, pincode: initialPincode || '' });
+  const [form,        setForm]        = useState({ ...blank, pincode: defaultPin });
   const [errors,      setErrors]      = useState({});
   const [showPw,      setShowPw]      = useState(false);
   const [showCPw,     setShowCPw]     = useState(false);
@@ -139,19 +148,20 @@ export function RegisterVendorModal({ isOpen, onClose, onVendorCreated, initialP
   const bodyRef    = useRef(null);
 
   useEffect(() => {
-    if (initialPincode !== undefined)
-      setForm(p => ({ ...p, pincode: initialPincode || '' }));
-  }, [initialPincode]);
+    const pin = initialPincode || (isPincodeLocked ? user?.pincode : '') || '';
+    setForm(p => ({ ...p, pincode: pin }));
+  }, [initialPincode, user]);
 
   useEffect(() => {
     if (!isOpen) {
+      const pin = initialPincode || (isPincodeLocked ? user?.pincode : '') || '';
       const t = setTimeout(() => {
-        setStep(1); setForm({ ...blank, pincode: initialPincode || '' });
+        setStep(1); setForm({ ...blank, pincode: pin });
         setErrors({}); setGlobalError('');
       }, 300);
       return () => clearTimeout(t);
     }
-  }, [isOpen]);
+  }, [isOpen, user]);
 
   // Scroll body back to top on every step change
   useEffect(() => {
@@ -242,6 +252,10 @@ export function RegisterVendorModal({ isOpen, onClose, onVendorCreated, initialP
     setSubmitting(true); setGlobalError('');
     try {
       const resolved = resolvePincodeHierarchy(form.pincode.trim());
+      const stateVal = resolved.state || user?.state || 'Tamil Nadu';
+      const districtVal = resolved.district || user?.district || '';
+      const divisionVal = resolved.division || user?.division || '';
+
       const payload  = {
         businessName: form.businessName.trim(), name: form.businessName.trim(),
         category: form.category,
@@ -259,7 +273,16 @@ export function RegisterVendorModal({ isOpen, onClose, onVendorCreated, initialP
         bankBranch: form.bankBranch.trim(), bankStreet: form.bankStreet.trim(),
         bankCity: form.bankCity.trim(), accountNumber: form.accountNumber.trim(),
         ifsc: form.ifsc.toUpperCase().trim(),
-        state: resolved.state, district: resolved.district, division: resolved.division,
+        state: stateVal, district: districtVal, division: divisionVal,
+        addedBy: {
+          id: user?._id || user?.id || 'admin',
+          name: user?.name || 'Administrator',
+          role: user?.role || 'Admin',
+          pincode: form.pincode.trim(),
+          division: divisionVal,
+          district: districtVal,
+          state: stateVal
+        }
       };
       const res = await dataService.createVendor(payload);
       if (res.success) { if (onVendorCreated) onVendorCreated(res.vendor); onClose(); }
@@ -330,13 +353,37 @@ export function RegisterVendorModal({ isOpen, onClose, onVendorCreated, initialP
       </Field>
 
       {/* Pincode */}
-      <Field label="PIN Code" required error={errors.pincode}>
+      <Field label={`PIN Code ${isPincodeLocked ? '(Locked to your Territory)' : ''}`} required error={errors.pincode}>
         <MapPin className="w-3.5 h-3.5 text-blue-500 absolute left-2.5 top-2.5 pointer-events-none" />
         <input type="text" name="pincode" value={form.pincode} maxLength={6}
-          onChange={e => upd('pincode', e.target.value.replace(/\D/g,'').slice(0,6))}
+          readOnly={isPincodeLocked}
+          onChange={e => !isPincodeLocked && upd('pincode', e.target.value.replace(/\D/g,'').slice(0,6))}
           placeholder="6-digit Pincode"
-          className={ic(true, !!errors.pincode) + ' font-mono font-bold'} />
+          className={ic(true, !!errors.pincode) + ' font-mono font-bold ' + (isPincodeLocked ? 'opacity-70 cursor-not-allowed bg-slate-100 dark:bg-slate-800' : '')} />
       </Field>
+
+      {/* Territory auto-derived display */}
+      {(() => {
+        const res = resolvePincodeHierarchy(form.pincode);
+        const resolvedDiv = res.division || user?.division;
+        const resolvedDist = res.district || user?.district;
+        const resolvedState = res.state || user?.state || 'Tamil Nadu';
+        if (form.pincode && form.pincode.length === 6) {
+          return (
+            <div className="col-span-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 text-xs flex items-center justify-between">
+              <span className="text-blue-700 dark:text-blue-300 font-semibold">Hierarchy Scope:</span>
+              <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-white">
+                <span>{resolvedState}</span>
+                <span className="text-slate-400">›</span>
+                <span>{resolvedDist || 'District'}</span>
+                <span className="text-slate-400">›</span>
+                <span>{resolvedDiv || 'Division'}</span>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Address — full width */}
       <div className="col-span-2">

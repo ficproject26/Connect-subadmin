@@ -27,33 +27,48 @@ function syncHierarchyWithUsers() {
 
   rawStates.forEach(s => {
     const sId = String(s._id || s.id || s.stateId);
+    const sName = (s.name || '').trim();
     const stateObj = {
       id: sId,
-      name: s.name.trim(),
-      code: s.code || s.name.trim().slice(0, 2).toUpperCase(),
+      name: sName,
+      code: s.code || sName.slice(0, 2).toUpperCase(),
       status: s.status || 'Active',
       districts: []
     };
 
-    const distList = rawDistricts.filter(d => String(d.stateId) === sId || String(d.stateId) === String(s._id));
+    const distList = rawDistricts.filter(d => 
+      String(d.stateId) === sId || 
+      String(d.stateId) === String(s._id) || 
+      (d.state && d.state.toLowerCase() === sName.toLowerCase())
+    );
     distList.forEach(d => {
       const dId = String(d._id || d.id || d.districtId);
+      const dName = (d.name || '').trim();
       const distObj = {
         id: dId,
-        name: d.name.trim(),
-        code: d.code || d.name.trim().slice(0, 3).toUpperCase(),
+        name: dName,
+        code: d.code || dName.slice(0, 3).toUpperCase(),
         status: d.status || 'Active',
         divisions: []
       };
 
-      const divList = rawDivisions.filter(v => String(v.districtId) === dId || String(v.districtId) === String(d._id));
+      const divList = rawDivisions.filter(v => 
+        String(v.districtId) === dId || 
+        String(v.districtId) === String(d._id) || 
+        (v.district && v.district.toLowerCase() === dName.toLowerCase())
+      );
       divList.forEach(v => {
         const vId = String(v._id || v.id || v.divisionId);
-        const pinList = rawPincodes.filter(p => String(p.divisionId) === vId || String(p.divisionId) === String(v._id));
+        const vName = (v.name || '').trim();
+        const pinList = rawPincodes.filter(p => 
+          String(p.divisionId) === vId || 
+          String(p.divisionId) === String(v._id) || 
+          (p.division && p.division.toLowerCase() === vName.toLowerCase())
+        );
         const divObj = {
           id: vId,
-          name: v.name.trim(),
-          code: v.code || v.name.trim().slice(0, 3).toUpperCase(),
+          name: vName,
+          code: v.code || vName.slice(0, 3).toUpperCase(),
           status: v.status || 'Active',
           pincodes: pinList.map(p => String(p.code || p.pincode).trim()).filter(Boolean)
         };
@@ -700,14 +715,25 @@ function getDivisions(req, res) {
   try {
     syncHierarchyWithUsers();
     const allUsers = Array.from(db.users);
-    const stateObj = db.hierarchy.states.find(s => s.name === req.user.state);
+    const reqState = (req.user?.state || '').trim().toLowerCase();
+    const reqDistrict = (req.user?.district || '').trim().toLowerCase();
+    const reqDivision = (req.user?.division || '').trim().toLowerCase();
+
+    let stateObj = db.hierarchy.states.find(s => 
+      !reqState || 
+      reqState === 'all india' || 
+      s.name.toLowerCase() === reqState
+    );
+    if (!stateObj && db.hierarchy.states.length > 0) {
+      stateObj = db.hierarchy.states[0];
+    }
     if (!stateObj) return res.json({ success: true, divisions: [] });
 
     let divisions = [];
     stateObj.districts.forEach(d => {
-      if (!req.user.district || d.name === req.user.district) {
+      if (!reqDistrict || d.name.toLowerCase() === reqDistrict) {
         d.divisions.forEach(div => {
-          if (!req.user.division || div.name === req.user.division) {
+          if (!reqDivision || div.name.toLowerCase() === reqDivision) {
             const assigned = allUsers.find(a =>
               a.division?.toLowerCase() === div.name.toLowerCase() &&
               (a.role === 'Divisional Admin' || a.role === 'Division Admin' || (a.role || '').toLowerCase().includes('division'))
@@ -784,6 +810,18 @@ async function addDivisionAdmin(req, res) {
     const allUsers = Array.from(db.users);
     const stateName = assignedState || req.user.state || 'Tamil Nadu';
     const districtName = assignedDistrict || req.user.district || 'Salem';
+
+    const callerRole = (req.user?.role || '').toLowerCase();
+    if (callerRole.includes('district') && req.user?.district) {
+      if (districtName.trim().toLowerCase() !== req.user.district.trim().toLowerCase()) {
+        return res.status(403).json({ success: false, message: 'Access Denied: You cannot assign or manage a Division outside your assigned district.' });
+      }
+    }
+    if (callerRole.includes('state') && req.user?.state && req.user.state !== 'All India') {
+      if (stateName.trim().toLowerCase() !== req.user.state.trim().toLowerCase()) {
+        return res.status(403).json({ success: false, message: 'Access Denied: You cannot assign or manage a Division outside your assigned state.' });
+      }
+    }
 
     const existingDivAdmins = allUsers.filter(u =>
       u.state?.trim().toLowerCase() === stateName.trim().toLowerCase() &&
@@ -889,6 +927,29 @@ async function addDivisionAdmin(req, res) {
         ...docPayload,
         createdAt: new Date().toISOString()
       });
+    }
+
+    if (db.divisions) {
+      const existingDbDiv = Array.from(db.divisions).find(v => 
+        v.name?.toLowerCase() === div.name.toLowerCase() &&
+        (v.district?.toLowerCase() === dist.name.toLowerCase() || String(v.districtId) === String(dist.id))
+      );
+      if (!existingDbDiv) {
+        try {
+          await db.divisions.insertOne({
+            _id: div.id,
+            id: div.id,
+            name: div.name,
+            code: div.code,
+            districtId: dist.id,
+            district: dist.name,
+            stateId: stateObj.id,
+            state: stateObj.name,
+            status: 'Active',
+            createdAt: new Date().toISOString()
+          });
+        } catch (e) {}
+      }
     }
 
     return res.json({
@@ -1130,6 +1191,23 @@ async function addPincodeAdmin(req, res) {
     const divisionName = assignedDivision || req.user.division || 'Attur';
     const pincode = assignedPincode || addrPincode;
 
+    const callerRole = (req.user?.role || '').toLowerCase();
+    if (callerRole.includes('division') && req.user?.division) {
+      if (divisionName.trim().toLowerCase() !== req.user.division.trim().toLowerCase()) {
+        return res.status(403).json({ success: false, message: 'Access Denied: You cannot assign or manage a Pincode Admin outside your assigned division.' });
+      }
+    }
+    if (callerRole.includes('district') && req.user?.district) {
+      if (districtName.trim().toLowerCase() !== req.user.district.trim().toLowerCase()) {
+        return res.status(403).json({ success: false, message: 'Access Denied: You cannot assign or manage a Pincode Admin outside your assigned district.' });
+      }
+    }
+    if (callerRole.includes('state') && req.user?.state && req.user.state !== 'All India') {
+      if (stateName.trim().toLowerCase() !== req.user.state.trim().toLowerCase()) {
+        return res.status(403).json({ success: false, message: 'Access Denied: You cannot assign or manage a Pincode Admin outside your assigned state.' });
+      }
+    }
+
     if (!adminName || !email || !pincode) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Assigned Pincode are required.' });
     }
@@ -1257,6 +1335,30 @@ async function addPincodeAdmin(req, res) {
         ...docPayload,
         createdAt: new Date().toISOString()
       });
+    }
+
+    if (db.pincodes) {
+      const pinStr = String(pincode).trim();
+      const existingPin = Array.from(db.pincodes).find(p => String(p.code || p.pincode).trim() === pinStr);
+      if (!existingPin) {
+        try {
+          await db.pincodes.insertOne({
+            _id: `PIN-${pinStr}`,
+            id: `PIN-${pinStr}`,
+            code: pinStr,
+            pincode: pinStr,
+            name: `${div.name} Area (${pinStr})`,
+            divisionId: div.id,
+            division: div.name,
+            districtId: dist.id,
+            district: dist.name,
+            stateId: stateObj.id,
+            state: stateObj.name,
+            status: 'Active',
+            createdAt: new Date().toISOString()
+          });
+        } catch (e) {}
+      }
     }
 
     return res.json({

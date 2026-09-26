@@ -139,7 +139,7 @@
     "read": false,
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-25T13:48:29.140Z"
+    "updatedAt": "2026-09-26T05:40:03.908Z"
   },
   {
     "_id": "6ab624b7c3c80ae7e778e73f",
@@ -166,5 +166,53 @@
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
     "updatedAt": "2026-09-25T13:48:29.140Z"
+  },
+  {
+    "_id": "6ab749c3c3c80ae7e778f91c",
+    "receiver": "6ab5f81fb8654beabd8f91b5",
+    "title": "New Target Assigned",
+    "message": "You have been assigned a target of 20 visits: asdfg",
+    "read": false,
+    "priority": "high",
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T04:27:47.136Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab754e0c3c80ae7e778fad1",
+    "receiver": "6ab64f46c3c80ae7e778f144",
+    "title": "New Target Assigned",
+    "message": "You have been assigned a target of 20 visits: Onboarding target",
+    "read": false,
+    "priority": "high",
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T05:15:12.681Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab749c3c3c80ae7e778f91c",
+    "__v": 0,
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T04:27:47.136Z",
+    "id": "6ab749c3c3c80ae7e778f91c",
+    "message": "You have been assigned a target of 20 visits: asdfg",
+    "priority": "high",
+    "read": false,
+    "receiver": "6ab5f81fb8654beabd8f91b5",
+    "title": "New Target Assigned",
+    "updatedAt": "2026-09-26T05:38:14.973Z"
+  },
+  {
+    "_id": "6ab754e0c3c80ae7e778fad1",
+    "__v": 0,
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T05:15:12.681Z",
+    "id": "6ab754e0c3c80ae7e778fad1",
+    "message": "You have been assigned a target of 20 visits: Onboarding target",
+    "priority": "high",
+    "read": false,
+    "receiver": "6ab64f46c3c80ae7e778f144",
+    "title": "New Target Assigned",
+    "updatedAt": "2026-09-26T05:38:14.973Z"
   }
 ]

@@ -37,7 +37,7 @@ import {
   Award,
   CreditCard
 } from 'lucide-react';
-import { getDivisionsForDistrict } from '../../utils/indiaPostalData';
+import { getDivisionsForDistrict, syncTerritoryFromAdmin } from '../../utils/indiaPostalData';
 
 const STEPS = [
   { id: 1, label: 'Personal',   icon: User },
@@ -94,7 +94,9 @@ export function DistrictDivisions() {
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState('');
   const [showPwd, setShowPwd] = useState(false);
-  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [allDistrictDivisions, setAllDistrictDivisions] = useState([]);
+  const [customDivMode, setCustomDivMode] = useState(false);
+  const [territoryVersion, setTerritoryVersion] = useState(0);
   const fileRef = useRef();
   const aadharFileRef = useRef();
   const panFileRef = useRef();
@@ -156,12 +158,13 @@ export function DistrictDivisions() {
         let list = res.divisions || [];
         if (districtName) {
           list = list.filter(
-            d => (d.districtName || '').toLowerCase() === districtName
+            d => (d.districtName || d.district || '').toLowerCase() === districtName
           );
         }
+        setAllDistrictDivisions(list);
         // Only show divisions with registered admins
-        list = list.filter(d => d.adminName && d.adminName.toLowerCase() !== 'unassigned' && d.adminName.trim() !== '-' && d.adminName.trim() !== '');
-        setDivisions(list);
+        const registered = list.filter(d => d.adminName && d.adminName.toLowerCase() !== 'unassigned' && d.adminName.trim() !== '-' && d.adminName.trim() !== '');
+        setDivisions(registered);
       }
       if (pinRes.success && pinRes.pincodes) {
         setAllPincodes(pinRes.pincodes);
@@ -175,6 +178,10 @@ export function DistrictDivisions() {
 
   useEffect(() => {
     loadData();
+    syncTerritoryFromAdmin().then(() => setTerritoryVersion(v => v + 1)).catch(() => {});
+    const onTerritorySync = () => setTerritoryVersion(v => v + 1);
+    window.addEventListener('territory_updated', onTerritorySync);
+    return () => window.removeEventListener('territory_updated', onTerritorySync);
   }, [user]);
 
   const handleToggleStatus = async (row) => {
@@ -203,6 +210,7 @@ export function DistrictDivisions() {
       assignedDistrict: user?.district || '',
       district: user?.district || ''
     });
+    setCustomDivMode(false);
     setCurrentStep(1);
     setAddError('');
     setAddSuccess('');
@@ -582,24 +590,54 @@ export function DistrictDivisions() {
               </FieldInput>
               <div className="sm:col-span-2">
                 <FieldInput label="Division Name" required>
-                  <select
-                    className={inputCls}
-                    value={form.divisionName}
-                    onChange={e => setF({ divisionName: e.target.value })}
-                  >
-                    <option value="">Select Postal Division</option>
-                    {getDivisionsForDistrict(form.assignedState || user?.state || 'Tamil Nadu', form.assignedDistrict || user?.district || 'Salem').map((divName, idx) => {
-                      const existing = divisions.find(d => d.name?.toLowerCase() === divName.toLowerCase());
-                      const count = (existing && existing.adminName && existing.adminName !== 'Unassigned') ? 1 : 0;
-                      const isFull = count >= 1;
-                      return (
-                        <option key={idx} value={divName} disabled={isFull}>
-                          {divName} — {count}/1 Admin {isFull ? '(FULL)' : '(Available)'}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <p className="text-[10px] text-slate-400 mt-1">Select from official India Post postal divisions under your district.</p>
+                  {(() => {
+                    const postalDivs = getDivisionsForDistrict(form.assignedState || user?.state || 'Tamil Nadu', form.assignedDistrict || user?.district || '');
+                    const dbDivNames = allDistrictDivisions.map(d => d.name).filter(Boolean);
+                    const availableDivList = Array.from(new Set([...dbDivNames, ...postalDivs])).sort();
+
+                    return (
+                      <div className="space-y-2">
+                        <select
+                          className={inputCls}
+                          value={customDivMode ? '__custom__' : form.divisionName}
+                          onChange={e => {
+                            if (e.target.value === '__custom__') {
+                              setCustomDivMode(true);
+                              setF({ divisionName: '' });
+                            } else {
+                              setCustomDivMode(false);
+                              setF({ divisionName: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">Select Postal Division</option>
+                          {availableDivList.map((divName, idx) => {
+                            const existing = divisions.find(d => d.name?.toLowerCase() === divName.toLowerCase());
+                            const count = (existing && existing.adminName && existing.adminName !== 'Unassigned') ? 1 : 0;
+                            const isFull = count >= 1;
+                            return (
+                              <option key={idx} value={divName} disabled={isFull}>
+                                {divName} — {count}/1 Admin {isFull ? '(FULL)' : '(Available)'}
+                              </option>
+                            );
+                          })}
+                          <option value="__custom__">+ Enter Custom Division Name...</option>
+                        </select>
+
+                        {customDivMode && (
+                          <input
+                            type="text"
+                            className={inputCls}
+                            placeholder="Enter division name (e.g. Tiruchengode)"
+                            value={form.divisionName}
+                            onChange={e => setF({ divisionName: e.target.value })}
+                            autoFocus
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <p className="text-[10px] text-slate-400 mt-1">Select from official India Post postal divisions under your district or enter a custom division name.</p>
                 </FieldInput>
               </div>
               <div className="sm:col-span-2">

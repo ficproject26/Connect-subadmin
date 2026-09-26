@@ -1,33 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Store, MapPin, User, Phone, Layers, Building2, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { resolvePincodeHierarchy } from '../utils/pincodeDirectory';
 
-export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defaultPincode = '636001' }) {
+export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defaultPincode = '' }) {
+  const { user } = useAuth();
+
+  const isPincodeLocked = Boolean(
+    user?.pincode && 
+    (user.role?.toLowerCase().includes('pincode') || user.role?.toLowerCase().includes('agent'))
+  );
+
+  const initialPin = defaultPincode || user?.pincode || '';
+  const initialResolved = resolvePincodeHierarchy(initialPin);
+
   const [formData, setFormData] = useState({
     vendorName: '',
     category: 'Services',
     contactPerson: '',
     phone: '',
     address: '',
-    pincode: defaultPincode,
-    division: 'Salem North',
-    district: 'Salem',
-    notes: 'Ground vendor onboarding initiated by Pincode Agent'
+    pincode: initialPin,
+    division: initialResolved.division || user?.division || '',
+    district: initialResolved.district || user?.district || '',
+    state: initialResolved.state || user?.state || 'Tamil Nadu',
+    notes: 'Ground vendor onboarding initiated by Field Agent'
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const pin = defaultPincode || user?.pincode || formData.pincode;
+    if (pin) {
+      const resolved = resolvePincodeHierarchy(pin);
+      setFormData(prev => ({
+        ...prev,
+        pincode: pin,
+        division: resolved.division || prev.division || user?.division || '',
+        district: resolved.district || prev.district || user?.district || '',
+        state: resolved.state || prev.state || user?.state || 'Tamil Nadu'
+      }));
+    }
+  }, [defaultPincode, user]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'pincode') {
+      const pinOnly = value.replace(/\D/g, '').slice(0, 6);
+      const resolved = resolvePincodeHierarchy(pinOnly);
+      setFormData(prev => ({
+        ...prev,
+        pincode: pinOnly,
+        division: resolved.division || prev.division || user?.division || '',
+        district: resolved.district || prev.district || user?.district || '',
+        state: resolved.state || prev.state || user?.state || 'Tamil Nadu'
+      }));
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: value,
-      // Auto adjust division & district based on pincode
-      ...(name === 'pincode' && value === '636001' ? { division: 'Salem North', district: 'Salem' } : {}),
-      ...(name === 'pincode' && value === '636002' ? { division: 'Salem North', district: 'Salem' } : {}),
-      ...(name === 'pincode' && value === '636003' ? { division: 'Salem South', district: 'Salem' } : {}),
-      ...(name === 'pincode' && value === '636004' ? { division: 'Salem South', district: 'Salem' } : {}),
-      ...(name === 'pincode' && value === '641001' ? { division: 'Coimbatore Central', district: 'Coimbatore' } : {})
+      [name]: value
     }));
   };
 
@@ -37,11 +71,26 @@ export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defa
       setError('Vendor business name is required');
       return;
     }
+    if (!formData.pincode.trim() || formData.pincode.length !== 6) {
+      setError('A valid 6-digit operating pincode is required');
+      return;
+    }
     setError('');
     setSubmitting(true);
     try {
       if (onSuccess) {
-        await onSuccess(formData);
+        await onSuccess({
+          ...formData,
+          addedBy: {
+            id: user?._id || user?.id || 'agent',
+            name: user?.name || 'Local Agent',
+            role: user?.role || 'Pincode Agent',
+            pincode: formData.pincode,
+            division: formData.division,
+            district: formData.district,
+            state: formData.state
+          }
+        });
       }
       onClose();
     } catch (err) {
@@ -52,7 +101,7 @@ export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defa
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Initiate Vendor Onboarding (Pincode Ground Agent)" maxWidth="max-w-xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Initiate Vendor Onboarding (Ground Agent)" maxWidth="max-w-xl">
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Info banner explaining the activity flow */}
         <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 text-xs text-blue-900 dark:text-blue-200">
@@ -61,7 +110,7 @@ export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defa
             Agent Activity Flow: Pincode Agent ➔ Divisional Agent ➔ District Agent ➔ State Agent
           </div>
           <p className="text-[11px] text-blue-700 dark:text-blue-300 mt-0.5">
-            Submitting this onboarding creates an active activity record initiated by the local Pincode Agent and automatically escalates it to the Divisional Agent for cluster verification.
+            Submitting this onboarding creates an active activity record under your assigned territory and escalates it to the Divisional Agent for cluster verification.
           </p>
         </div>
 
@@ -139,31 +188,35 @@ export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defa
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Operating Pincode
+                Operating Pincode {isPincodeLocked ? '(Locked to your Territory)' : '*'}
               </label>
-              <select
+              <input
+                type="text"
                 name="pincode"
+                maxLength={6}
                 value={formData.pincode}
                 onChange={handleChange}
-                className="w-full text-xs px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono"
-              >
-                <option value="636001">636001 (Salem Fort / Naveen Kumar)</option>
-                <option value="636002">636002 (Shevapet / Dinesh Karthik)</option>
-                <option value="636003">636003 (Ammapet / Pravin Chandran)</option>
-                <option value="636004">636004 (Gugai / Gowtham Raj)</option>
-                <option value="641001">641001 (Gandhipuram / Kavin Selvan)</option>
-              </select>
+                readOnly={isPincodeLocked}
+                placeholder="6-digit PIN"
+                className={`w-full text-xs px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-bold ${
+                  isPincodeLocked ? 'opacity-70 cursor-not-allowed bg-slate-100 dark:bg-slate-800' : ''
+                }`}
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
+          <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
             <div>
-              <span className="text-slate-500 dark:text-slate-400">Assigned Division:</span>
-              <div className="font-bold text-slate-900 dark:text-white">{formData.division}</div>
+              <span className="text-slate-500 dark:text-slate-400 text-[10px]">Division:</span>
+              <div className="font-bold text-slate-900 dark:text-white truncate">{formData.division || '-'}</div>
             </div>
             <div>
-              <span className="text-slate-500 dark:text-slate-400">Assigned District:</span>
-              <div className="font-bold text-slate-900 dark:text-white">{formData.district}</div>
+              <span className="text-slate-500 dark:text-slate-400 text-[10px]">District:</span>
+              <div className="font-bold text-slate-900 dark:text-white truncate">{formData.district || '-'}</div>
+            </div>
+            <div>
+              <span className="text-slate-500 dark:text-slate-400 text-[10px]">State:</span>
+              <div className="font-bold text-slate-900 dark:text-white truncate">{formData.state || '-'}</div>
             </div>
           </div>
 
@@ -186,7 +239,7 @@ export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defa
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+            className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
           >
             Cancel
           </button>

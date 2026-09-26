@@ -326,11 +326,20 @@
         "amount": 15000,
         "status": "SUCCESS",
         "date": "2026-09-24T09:12:20.738Z"
+      },
+      {
+        "plan": "Diamond Prestige",
+        "previousPlan": "Gold Elite",
+        "paymentId": "pay_mem_1790399492778_9079",
+        "orderId": "order_test_1790399493512_3007",
+        "amount": 35000,
+        "status": "SUCCESS",
+        "date": "2026-09-26T05:11:35.873Z"
       }
     ],
     "membershipStatus": "ACTIVE",
-    "membershipTier": "Gold Elite",
-    "membershipUpdatedAt": "2026-09-24T09:12:20.738Z",
+    "membershipTier": "Diamond Prestige",
+    "membershipUpdatedAt": "2026-09-26T05:11:35.873Z",
     "walletBalance": 15000,
     "walletUpdatedAt": "2026-09-25T11:36:41.273Z"
   },
@@ -732,7 +741,30 @@
       }
     ],
     "createdAt": "2026-09-25T12:17:22.683Z",
-    "updatedAt": "2026-09-25T13:48:31.508Z"
+    "updatedAt": "2026-09-25T13:48:31.508Z",
+    "membershipHistory": [
+      {
+        "plan": "Silver Tier",
+        "previousPlan": "None",
+        "paymentId": "pay_mem_1790399435944_2347",
+        "orderId": "order_test_1790399434149_6388",
+        "amount": 8000,
+        "status": "SUCCESS",
+        "date": "2026-09-26T05:10:36.032Z"
+      },
+      {
+        "plan": "Gold Elite",
+        "previousPlan": "Silver Tier",
+        "paymentId": "pay_mem_1790399502305_8990",
+        "orderId": "order_test_1790399490125_9665",
+        "amount": 15000,
+        "status": "SUCCESS",
+        "date": "2026-09-26T05:11:42.396Z"
+      }
+    ],
+    "membershipStatus": "ACTIVE",
+    "membershipTier": "Gold Elite",
+    "membershipUpdatedAt": "2026-09-26T05:11:42.396Z"
   },
   {
     "_id": "cust_1790338650224",

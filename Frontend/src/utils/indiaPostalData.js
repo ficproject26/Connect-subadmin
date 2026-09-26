@@ -1,7 +1,7 @@
 /**
  * Dynamic Admin-Managed Territory Hierarchy Data Provider
- * Single Source of Truth: Admin Territory Database
- * State -> District -> Division -> PIN Code
+ * Single Source of Truth: Admin Territory Database (MongoDB Atlas)
+ * Hierarchy: State -> District -> Division -> PIN Code
  */
 
 // In-memory runtime hierarchy store - populated exclusively from Database API
@@ -72,37 +72,99 @@ export function buildPostalDataFromHierarchy(hierarchyArray) {
  * Fetch latest active hierarchy from Admin Territory API
  */
 export async function syncTerritoryFromAdmin() {
+  const token = typeof window !== 'undefined' ? (localStorage.getItem('ams_token') || localStorage.getItem('agent_mgr_token')) : null;
+  const headers = {
+    'Accept': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+
   const endpoints = [
-    '/api/admin/hierarchy',
     '/api/territory/hierarchy',
+    '/api/admin/hierarchy',
+    '/api/hierarchy',
     'http://127.0.0.1:8004/api/territory/hierarchy',
     'http://localhost:8004/api/territory/hierarchy',
-    'http://127.0.0.1:8006/api/admin/hierarchy',
     'https://api.ficapp.in/api/territory/hierarchy'
   ];
 
   for (const url of endpoints) {
     try {
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(2500) });
       if (res.ok) {
         const json = await res.json();
         const hierarchy = json.hierarchy || json.states || (Array.isArray(json) ? json : null);
-        if (hierarchy && Array.isArray(hierarchy)) {
+        if (hierarchy && Array.isArray(hierarchy) && hierarchy.length > 0) {
           const built = buildPostalDataFromHierarchy(hierarchy);
-            if (Object.keys(built).length > 0) {
-              INDIA_POSTAL_DATA = built;
-              ALL_INDIAN_STATES = Object.keys(built).sort();
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('territory_updated', { detail: built }));
-              }
-              return built;
+          if (Object.keys(built).length > 0) {
+            INDIA_POSTAL_DATA = built;
+            ALL_INDIAN_STATES = Object.keys(built).sort();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('territory_updated', { detail: built }));
             }
+            return built;
+          }
         }
       }
     } catch (e) {
       // Try next endpoint
     }
   }
+
+  // Fallback: If hierarchy endpoint did not populate, query individual district/division endpoints
+  try {
+    const [distRes, divRes, pinRes] = await Promise.all([
+      fetch('/api/districts', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/divisions', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/pincodes', { headers }).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]);
+
+    const rawDistricts = distRes?.districts || distRes?.data || [];
+    const rawDivisions = divRes?.divisions || divRes?.data || [];
+    const rawPincodes = pinRes?.pincodes || pinRes?.data || [];
+
+    if (rawDistricts.length > 0 || rawDivisions.length > 0) {
+      const fallbackTree = { 'Tamil Nadu': { id: 'state_tn', code: 'TAM', status: 'Active', districts: {} } };
+      rawDistricts.forEach(d => {
+        const dName = d.name?.trim();
+        if (dName) {
+          fallbackTree['Tamil Nadu'].districts[dName] = {
+            id: d._id || d.id,
+            code: d.code || dName.slice(0, 3).toUpperCase(),
+            status: d.status || 'Active',
+            divisions: {}
+          };
+        }
+      });
+
+      rawDivisions.forEach(v => {
+        const vName = v.name?.trim();
+        const dName = v.districtName || v.district || 'Namakkal';
+        if (!fallbackTree['Tamil Nadu'].districts[dName]) {
+          fallbackTree['Tamil Nadu'].districts[dName] = { id: `dist_${dName.toLowerCase()}`, code: dName.slice(0, 3).toUpperCase(), status: 'Active', divisions: {} };
+        }
+        fallbackTree['Tamil Nadu'].districts[dName].divisions[vName] = [];
+      });
+
+      rawPincodes.forEach(p => {
+        const pCode = String(p.code || p.pincode || '').trim();
+        const vName = p.divisionName || p.division;
+        const dName = p.districtName || p.district;
+        if (dName && vName && fallbackTree['Tamil Nadu'].districts[dName]?.divisions[vName]) {
+          if (!fallbackTree['Tamil Nadu'].districts[dName].divisions[vName].includes(pCode)) {
+            fallbackTree['Tamil Nadu'].districts[dName].divisions[vName].push(pCode);
+          }
+        }
+      });
+
+      INDIA_POSTAL_DATA = fallbackTree;
+      ALL_INDIAN_STATES = Object.keys(fallbackTree).sort();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('territory_updated', { detail: fallbackTree }));
+      }
+      return fallbackTree;
+    }
+  } catch (err) {}
+
   return INDIA_POSTAL_DATA;
 }
 
@@ -110,7 +172,7 @@ export async function syncTerritoryFromAdmin() {
 if (typeof window !== 'undefined') {
   setTimeout(() => {
     syncTerritoryFromAdmin();
-  }, 100);
+  }, 50);
 }
 
 /**
@@ -155,4 +217,8 @@ export function getPincodesForDivision(stateName, districtName, divisionName) {
   if (!divKey) return [];
 
   return (distData.divisions[divKey] || []).sort();
+}
+
+export function getTerritoryHierarchy() {
+  return INDIA_POSTAL_DATA;
 }
