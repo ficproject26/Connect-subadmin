@@ -73,9 +73,11 @@ export function buildPostalDataFromHierarchy(hierarchyArray) {
  */
 export async function syncTerritoryFromAdmin() {
   const endpoints = [
+    '/api/admin/hierarchy',
     '/api/territory/hierarchy',
     'http://127.0.0.1:8004/api/territory/hierarchy',
     'http://localhost:8004/api/territory/hierarchy',
+    'http://127.0.0.1:8006/api/admin/hierarchy',
     'https://api.ficapp.in/api/territory/hierarchy'
   ];
 
@@ -84,7 +86,7 @@ export async function syncTerritoryFromAdmin() {
       const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
       if (res.ok) {
         const json = await res.json();
-        const hierarchy = json.hierarchy || (Array.isArray(json) ? json : null);
+        const hierarchy = json.hierarchy || json.states || (Array.isArray(json) ? json : null);
         if (hierarchy && Array.isArray(hierarchy)) {
           const built = buildPostalDataFromHierarchy(hierarchy);
             if (Object.keys(built).length > 0) {

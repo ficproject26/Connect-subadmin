@@ -1,19 +1,23 @@
-const { db } = require('../config/db');
+﻿const { db } = require('../config/db');
 
 // Helper to fetch live from Admin Master Territory API
 async function fetchAdminTerritory(path, params = {}) {
   const queryStr = new URLSearchParams(params).toString();
   const endpoints = [
-    'http://127.0.0.1:8004/api/territory/',
-    'http://localhost:8004/api/territory/',
-    'https://api.ficapp.in/api/territory/'
+    'http://127.0.0.1:8004/api/territory',
+    'http://localhost:8004/api/territory',
+    'https://api.ficapp.in/api/territory'
   ];
 
-  for (const url of endpoints) {
+  for (const base of endpoints) {
     try {
+      const url = `${base}/${path}${queryStr ? '?' + queryStr : ''}`;
       const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
       if (res.ok) {
-        return await res.json();
+        const json = await res.json();
+        if (json.data && Array.isArray(json.data)) return json.data;
+        if (json[path] && Array.isArray(json[path])) return json[path];
+        if (Array.isArray(json)) return json;
       }
     } catch (e) {
       // try next
@@ -26,12 +30,12 @@ async function fetchAdminTerritory(path, params = {}) {
 const getStates = async (req, res) => {
   try {
     const liveStates = await fetchAdminTerritory('states', { status: 'Active' });
-    let states = Array.isArray(liveStates) ? liveStates : await db.states.find({ status: 'Active' });
+    let states = Array.isArray(liveStates) ? liveStates : Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
 
     const user = req.user;
     if (user?.stateId) {
-      states = states.filter(s => s._id === user.stateId || s.id === user.stateId);
-    } else if (user?.state) {
+      states = states.filter(s => String(s._id || s.id) === String(user.stateId));
+    } else if (user?.state && user.state !== 'All India') {
       states = states.filter(s => s.name?.toLowerCase() === user.state.toLowerCase());
     }
 
@@ -47,7 +51,7 @@ const getDistricts = async (req, res) => {
   try {
     const user = req.user;
     const { stateId, state } = req.query;
-    const queryState = state || user?.state;
+    const queryState = state || (user?.state !== 'All India' ? user?.state : null);
     const queryStateId = stateId || user?.stateId;
 
     const params = { status: 'Active' };
@@ -55,10 +59,21 @@ const getDistricts = async (req, res) => {
     if (queryState) params.state = queryState;
 
     const liveDistricts = await fetchAdminTerritory('districts', params);
-    let districts = Array.isArray(liveDistricts) ? liveDistricts : await db.districts.find({ status: 'Active' });
+    let districts = Array.isArray(liveDistricts) ? liveDistricts : Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
+
+    if (!Array.isArray(liveDistricts)) {
+      if (queryStateId) {
+        districts = districts.filter(d => String(d.stateId) === String(queryStateId));
+      } else if (queryState) {
+        const stateObj = Array.from(db.states || []).find(s => s.name?.toLowerCase() === queryState.toLowerCase());
+        if (stateObj) {
+          districts = districts.filter(d => String(d.stateId) === String(stateObj._id || stateObj.id));
+        }
+      }
+    }
 
     if (user?.districtId) {
-      districts = districts.filter(d => d._id === user.districtId || d.id === user.districtId);
+      districts = districts.filter(d => String(d._id || d.id) === String(user.districtId));
     } else if (user?.district) {
       districts = districts.filter(d => d.name?.toLowerCase() === user.district.toLowerCase());
     }
@@ -86,10 +101,21 @@ const getDivisions = async (req, res) => {
     if (state) params.state = state;
 
     const liveDivisions = await fetchAdminTerritory('divisions', params);
-    let divisions = Array.isArray(liveDivisions) ? liveDivisions : await db.divisions.find({ status: 'Active' });
+    let divisions = Array.isArray(liveDivisions) ? liveDivisions : Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
+
+    if (!Array.isArray(liveDivisions)) {
+      if (queryDistrictId) {
+        divisions = divisions.filter(v => String(v.districtId) === String(queryDistrictId));
+      } else if (queryDistrict) {
+        const distObj = Array.from(db.districts || []).find(d => d.name?.toLowerCase() === queryDistrict.toLowerCase());
+        if (distObj) {
+          divisions = divisions.filter(v => String(v.districtId) === String(distObj._id || distObj.id));
+        }
+      }
+    }
 
     if (user?.divisionId) {
-      divisions = divisions.filter(d => d._id === user.divisionId || d.id === user.divisionId);
+      divisions = divisions.filter(d => String(d._id || d.id) === String(user.divisionId));
     } else if (user?.division) {
       divisions = divisions.filter(d => d.name?.toLowerCase() === user.division.toLowerCase());
     }
@@ -105,7 +131,7 @@ const getDivisions = async (req, res) => {
 const getPincodes = async (req, res) => {
   try {
     const user = req.user;
-    const { divisionId, division, districtId, stateId } = req.query;
+    const { divisionId, division, districtId, district, stateId } = req.query;
 
     const queryDivId = divisionId || user?.divisionId;
     const queryDiv = division || user?.division;
@@ -114,13 +140,25 @@ const getPincodes = async (req, res) => {
     if (queryDivId) params.divisionId = queryDivId;
     if (queryDiv) params.division = queryDiv;
     if (districtId) params.districtId = districtId;
+    if (district) params.district = district;
     if (stateId) params.stateId = stateId;
 
     const livePincodes = await fetchAdminTerritory('pincodes', params);
-    let pincodes = Array.isArray(livePincodes) ? livePincodes : await db.pincodes.find({ status: 'Active' });
+    let pincodes = Array.isArray(livePincodes) ? livePincodes : Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
+
+    if (!Array.isArray(livePincodes)) {
+      if (queryDivId) {
+        pincodes = pincodes.filter(p => String(p.divisionId) === String(queryDivId));
+      } else if (queryDiv) {
+        const divObj = Array.from(db.divisions || []).find(v => v.name?.toLowerCase() === queryDiv.toLowerCase());
+        if (divObj) {
+          pincodes = pincodes.filter(p => String(p.divisionId) === String(divObj._id || divObj.id));
+        }
+      }
+    }
 
     if (user?.pincodeId) {
-      pincodes = pincodes.filter(p => p._id === user.pincodeId || p.id === user.pincodeId);
+      pincodes = pincodes.filter(p => String(p._id || p.id) === String(user.pincodeId));
     } else if (user?.pincode) {
       pincodes = pincodes.filter(p => (p.code || p.pincode) === user.pincode);
     }

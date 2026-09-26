@@ -19,56 +19,51 @@ const SUB_ADMIN_LIMITS = {
 
 function syncHierarchyWithUsers() {
   db.hierarchy.states = [];
-  const allUsers = Array.from(db.users);
 
-  allUsers.forEach(u => {
-    if (!u.state || u.state === 'All India') return;
-    const stateName = u.state.trim();
+  const rawStates = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
+  const rawDistricts = Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
+  const rawDivisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
+  const rawPincodes = Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
 
-    let stateObj = db.hierarchy.states.find(s => s.name?.toLowerCase() === stateName.toLowerCase());
-    if (!stateObj) {
-      stateObj = {
-        id: u.stateId || (stateName === 'Tamil Nadu' ? 'state_tn' : `ST-${stateName.slice(0, 3).toUpperCase()}`),
-        name: stateName,
-        code: stateName.slice(0, 2).toUpperCase(),
-        status: 'Active',
-        districts: []
+  rawStates.forEach(s => {
+    const sId = String(s._id || s.id || s.stateId);
+    const stateObj = {
+      id: sId,
+      name: s.name.trim(),
+      code: s.code || s.name.trim().slice(0, 2).toUpperCase(),
+      status: s.status || 'Active',
+      districts: []
+    };
+
+    const distList = rawDistricts.filter(d => String(d.stateId) === sId || String(d.stateId) === String(s._id));
+    distList.forEach(d => {
+      const dId = String(d._id || d.id || d.districtId);
+      const distObj = {
+        id: dId,
+        name: d.name.trim(),
+        code: d.code || d.name.trim().slice(0, 3).toUpperCase(),
+        status: d.status || 'Active',
+        divisions: []
       };
-      db.hierarchy.states.push(stateObj);
-    }
 
-    if (u.district) {
-      const dName = u.district.trim();
-      let dist = stateObj.districts.find(d => d.name?.toLowerCase() === dName.toLowerCase());
-      if (!dist) {
-        dist = {
-          id: u.districtId || (dName.toLowerCase() === 'salem' ? 'dist_salem' : `DST-${dName.replace(/\s+/g, '-').toUpperCase()}`),
-          name: dName,
-          code: dName.slice(0, 3).toUpperCase(),
-          status: u.status === 'inactive' ? 'Inactive' : 'Active',
-          divisions: []
+      const divList = rawDivisions.filter(v => String(v.districtId) === dId || String(v.districtId) === String(d._id));
+      divList.forEach(v => {
+        const vId = String(v._id || v.id || v.divisionId);
+        const pinList = rawPincodes.filter(p => String(p.divisionId) === vId || String(p.divisionId) === String(v._id));
+        const divObj = {
+          id: vId,
+          name: v.name.trim(),
+          code: v.code || v.name.trim().slice(0, 3).toUpperCase(),
+          status: v.status || 'Active',
+          pincodes: pinList.map(p => String(p.code || p.pincode).trim()).filter(Boolean)
         };
-        stateObj.districts.push(dist);
-      }
+        distObj.divisions.push(divObj);
+      });
 
-      if (u.division) {
-        const divName = u.division.trim();
-        let div = dist.divisions.find(d => d.name?.toLowerCase() === divName.toLowerCase());
-        if (!div) {
-          div = {
-            id: u.divisionId || `DIV-${divName.replace(/\s+/g, '-').toUpperCase()}`,
-            name: divName,
-            code: divName.slice(0, 3).toUpperCase(),
-            pincodes: []
-          };
-          dist.divisions.push(div);
-        }
+      stateObj.districts.push(distObj);
+    });
 
-        if (u.role === 'Pincode Admin' && u.pincode && !div.pincodes.includes(u.pincode)) {
-          div.pincodes.push(u.pincode);
-        }
-      }
-    }
+    db.hierarchy.states.push(stateObj);
   });
 }
 
@@ -614,25 +609,12 @@ async function addDistrictAdmin(req, res) {
 
     let stateObj = db.hierarchy.states.find(s => s.name?.toLowerCase() === stateName.toLowerCase());
     if (!stateObj) {
-      stateObj = {
-        id: `ST-${stateName.slice(0, 3).toUpperCase()}`,
-        name: stateName,
-        code: stateName.slice(0, 2).toUpperCase(),
-        districts: []
-      };
-      db.hierarchy.states.push(stateObj);
+      return res.status(400).json({ success: false, message: `State '${stateName}' is not registered or active in Admin Territory Management.` });
     }
 
     let dist = stateObj.districts.find(d => d.name?.toLowerCase() === districtName.trim().toLowerCase());
     if (!dist) {
-      dist = {
-        id: `DST-${districtName.trim().replace(/\s+/g, '-').toUpperCase()}`,
-        name: districtName.trim(),
-        code: districtName.trim().slice(0, 3).toUpperCase(),
-        status: status || 'Active',
-        divisions: []
-      };
-      stateObj.districts.push(dist);
+      return res.status(400).json({ success: false, message: `District '${districtName}' is not configured under State '${stateName}' in Admin Territory Management.` });
     }
 
     const DEFAULT_HASH = bcrypt.hashSync(password || 'admin123', 10);
