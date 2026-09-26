@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { dataService } from '../../services/dataService';
 import { useAuth } from '../../context/AuthContext';
+import { normalizeRole } from '../../utils/permissions';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { ManagerApprovalModal } from '../../components/ManagerApprovalModal';
@@ -154,8 +155,23 @@ export function StateManagers({ level }) {
   const [selectedManager, setSelectedManager] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // Identify admin role
-  const userRole = (user?.role || '').toLowerCase();
+  // Resilient user extraction (supports auth state + localStorage fallback during rehydration)
+  const effectiveUser = useMemo(() => {
+    if (user && user.role) return user;
+    try {
+      const stored = localStorage.getItem('ams_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && (parsed.role || parsed.name)) return { ...parsed, ...user };
+      }
+    } catch (e) {
+      // ignore JSON parse error
+    }
+    return user || {};
+  }, [user]);
+
+  const rawRole = (effectiveUser?.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const normalizedUserRole = normalizeRole(effectiveUser?.role || '');
 
   // Determine active level from path or prop
   let activeLevel = 'state';
@@ -164,12 +180,15 @@ export function StateManagers({ level }) {
   else if (location.pathname.includes('/managers/pincode')) activeLevel = 'pincode';
   else if (location.pathname.includes('/managers/state')) activeLevel = 'state';
   else if (level) activeLevel = level;
+  else if (location.pathname.includes('/district-admin/')) activeLevel = 'district';
+  else if (location.pathname.includes('/divisional-admin/') || location.pathname.includes('/division-admin/')) activeLevel = 'divisional';
+  else if (location.pathname.includes('/pincode-admin/')) activeLevel = 'pincode';
   else {
-    activeLevel = userRole.includes('district')
+    activeLevel = rawRole.includes('district')
       ? 'district'
-      : userRole.includes('division') || userRole.includes('divisional')
+      : rawRole.includes('division') || rawRole.includes('divisional')
       ? 'divisional'
-      : userRole.includes('pincode')
+      : rawRole.includes('pincode')
       ? 'pincode'
       : 'state';
   }
@@ -246,30 +265,51 @@ export function StateManagers({ level }) {
 
   const setF = (patch) => setForm(f => ({ ...f, ...patch }));
 
-  const isSuperAdmin = userRole === 'super admin' || userRole.includes('super');
-  const isStateAdmin = userRole.includes('state') && !userRole.includes('manager');
-  const isDistrictAdmin = userRole.includes('district') && !userRole.includes('manager');
-  const isDivisionalAdmin = (userRole.includes('division') || userRole.includes('divisional')) && !userRole.includes('manager');
-  const isPincodeAdmin = userRole.includes('pincode') && !userRole.includes('manager');
+  const isSuperAdmin = 
+    normalizedUserRole === 'Super Admin' ||
+    rawRole === 'admin' ||
+    rawRole.includes('super') ||
+    rawRole.includes('main admin');
 
-  // Strict User Requirement:
-  // State Admin only adds State Manager
-  // District Admin only adds District Manager
-  // Division Admin only adds Division Manager
-  // Pincode Admin only adds Pincode Manager
+  const isStateAdmin = 
+    normalizedUserRole === 'State Admin' ||
+    location.pathname.includes('/state-admin/') ||
+    (rawRole.includes('state') && !rawRole.includes('manager'));
+
+  const isDistrictAdmin = 
+    normalizedUserRole === 'District Admin' ||
+    location.pathname.includes('/district-admin/') ||
+    (rawRole.includes('district') && !rawRole.includes('manager'));
+
+  const isDivisionalAdmin = 
+    normalizedUserRole === 'Divisional Admin' ||
+    location.pathname.includes('/divisional-admin/') ||
+    location.pathname.includes('/division-admin/') ||
+    ((rawRole.includes('division') || rawRole.includes('divisional')) && !rawRole.includes('manager'));
+
+  const isPincodeAdmin = 
+    normalizedUserRole === 'Pincode Admin' ||
+    location.pathname.includes('/pincode-admin/') ||
+    (rawRole.includes('pincode') && !rawRole.includes('manager'));
+
+  // Authorization for adding managers:
+  // - Super Admin can add at any level
+  // - State Admin can add State, District, Divisional, and Pincode Managers (all management under State)
+  // - District Admin can add District, Divisional, and Pincode Managers
+  // - Divisional Admin can add Divisional and Pincode Managers
+  // - Pincode Admin can add Pincode Managers
   const canAddManager = 
-    (isStateAdmin && activeLevel === 'state') ||
-    (isDistrictAdmin && activeLevel === 'district') ||
-    (isDivisionalAdmin && activeLevel === 'divisional') ||
-    (isPincodeAdmin && activeLevel === 'pincode') ||
-    isSuperAdmin;
+    isSuperAdmin ||
+    isStateAdmin ||
+    (isDistrictAdmin && activeLevel !== 'state') ||
+    (isDivisionalAdmin && (activeLevel === 'divisional' || activeLevel === 'pincode')) ||
+    (isPincodeAdmin && activeLevel === 'pincode');
 
   const designatedRole = 
-    isStateAdmin ? 'state_manager' :
-    isDistrictAdmin ? 'district_manager' :
-    isDivisionalAdmin ? 'division_manager' :
-    isPincodeAdmin ? 'pincode_manager' :
-    (activeLevel === 'district' ? 'district_manager' : activeLevel === 'divisional' ? 'division_manager' : activeLevel === 'pincode' ? 'pincode_manager' : 'state_manager');
+    activeLevel === 'district' ? 'district_manager' :
+    activeLevel === 'divisional' ? 'division_manager' :
+    activeLevel === 'pincode' ? 'pincode_manager' :
+    'state_manager';
 
   const designatedRoleLabel = 
     designatedRole === 'state_manager' ? 'State Manager' :
@@ -281,12 +321,12 @@ export function StateManagers({ level }) {
     setForm({
       ...EMPTY_MGR_FORM,
       role: designatedRole,
-      assignedState: user?.state || 'Tamil Nadu',
-      assignedDistrict: isStateAdmin ? '' : (user?.district || ''),
-      assignedDivision: (isStateAdmin || isDistrictAdmin) ? '' : (user?.division || ''),
-      assignedPincode: isPincodeAdmin ? (user?.pincode || '') : '',
-      state: user?.state || 'Tamil Nadu',
-      district: user?.district || '',
+      assignedState: effectiveUser?.state || user?.state || 'Tamil Nadu',
+      assignedDistrict: isStateAdmin ? '' : (effectiveUser?.district || user?.district || ''),
+      assignedDivision: (isStateAdmin || isDistrictAdmin) ? '' : (effectiveUser?.division || user?.division || ''),
+      assignedPincode: isPincodeAdmin ? (effectiveUser?.pincode || user?.pincode || '') : '',
+      state: effectiveUser?.state || user?.state || 'Tamil Nadu',
+      district: effectiveUser?.district || user?.district || '',
       status: 'active'
     });
     setCurrentStep(1);
@@ -1129,7 +1169,8 @@ export function StateManagers({ level }) {
           <button
             type="button"
             onClick={openAddManager}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer shrink-0 self-start sm:self-auto"
+            id="add-manager-header-btn"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold transition shadow-sm cursor-pointer shrink-0 self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" />
             <span>Add Manager</span>
@@ -1230,6 +1271,20 @@ export function StateManagers({ level }) {
         onFilterChange={setStatusFilter}
         searchPlaceholder={`Search ${config.title.toLowerCase()} by name, jurisdiction, or phone...`}
         exportFileName={config.exportFile}
+        actions={
+          canAddManager ? (
+            <button
+              type="button"
+              onClick={openAddManager}
+              id="add-manager-table-btn"
+              className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+              title={`Add ${designatedRoleLabel}`}
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Add Manager</span>
+            </button>
+          ) : null
+        }
       />
 
       {/* Manager Registration & KYC Review Modal */}
