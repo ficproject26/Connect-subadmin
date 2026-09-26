@@ -10,7 +10,7 @@ const BACKEND_URL = (
   process.env.BACKEND_API_URL ||
   process.env.VITE_API_BASE_URL ||
   process.env.VITE_API_BASE ||
-  'http://3.110.88.42:8006'
+  'https://api.ficapp.in/subadmin-api'
 ).replace(/\/+$/, '');
 
 module.exports = async function handler(req, res) {

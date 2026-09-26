@@ -5,7 +5,7 @@ export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
   import.meta.env.VITE_API_URL ||
-  ''
+  (import.meta.env.PROD ? 'https://api.ficapp.in/subadmin-api' : '')
 ).trim().replace(/\/+$/, '');
 
 // Sanitizes raw server/proxy/network error messages to keep UI clean and secure
