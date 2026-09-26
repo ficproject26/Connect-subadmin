@@ -9,11 +9,6 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 // Auth Pages
 import { Login } from '../pages/auth/Login';
 
-// State Admin Dashboard used as Super Admin default dashboard
-import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
-
-
-
 // State Admin Pages
 import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
 import { StatesOverview } from '../pages/state-admin/StatesOverview';

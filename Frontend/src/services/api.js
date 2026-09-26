@@ -1,9 +1,39 @@
-// Centralized fetch wrapper with Bearer token injection and resilient startup retry.
-//
-// 401 HANDLING POLICY:
-// The api.js layer clears the token only when the request was NOT the login call itself.
-// Clearing the token on every 401 (including the /auth/me call fired just after login)
-// caused a race condition where the token was wiped before navigate() could fire.
+// Centralized fetch wrapper with Bearer token injection, resilient startup retry,
+// and controlled error handling.
+
+export const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_BASE ||
+  import.meta.env.VITE_API_URL ||
+  ''
+).trim().replace(/\/+$/, '');
+
+// Sanitizes raw server/proxy/network error messages to keep UI clean and secure
+export function sanitizeErrorMessage(message, status) {
+  if (!message || typeof message !== 'string') {
+    return 'Unable to connect to the server. Please try again.';
+  }
+
+  const lower = message.toLowerCase();
+
+  // If Vercel router error, gateway error, or connection error
+  if (
+    lower.includes('router_external_target_connection_error') ||
+    lower.includes('an error occurred with this application') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('502 bad gateway') ||
+    lower.includes('504 gateway timeout') ||
+    lower.includes('<!doctype') ||
+    lower.includes('<html')
+  ) {
+    return 'Unable to connect to the server. Please try again.';
+  }
+
+  return message;
+}
 
 export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem('ams_token');
@@ -14,17 +44,25 @@ export async function apiRequest(endpoint, options = {}) {
     ...options.headers,
   };
 
-  const url = endpoint.startsWith('http')
-    ? endpoint
-    : `/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  let url;
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    url = endpoint;
+  } else {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    if (API_BASE_URL) {
+      const hasApiPrefix = API_BASE_URL.endsWith('/api') || cleanEndpoint.startsWith('/api');
+      url = `${API_BASE_URL}${hasApiPrefix ? '' : '/api'}${cleanEndpoint}`;
+    } else {
+      url = cleanEndpoint.startsWith('/api') ? cleanEndpoint : `/api${cleanEndpoint}`;
+    }
+  }
 
   const isGet = !options.method || options.method.toUpperCase() === 'GET';
   const maxRetries = options.retries ?? (isGet ? 2 : 0);
 
   // Endpoints that must NEVER trigger a 401-logout redirect.
-  // /auth/login responses are always intentional (wrong credentials).
-  // /auth/me is called during startup; a 401 there should be handled by
-  // AuthContext.initAuth(), not by a hard page redirect here.
+  // /auth/login responses are intentional (wrong credentials).
+  // /auth/me is called during startup; handled by AuthContext.initAuth().
   const noAutoLogoutEndpoints = ['/auth/login', '/auth/me', '/auth/register'];
   const isNoAutoLogout = noAutoLogoutEndpoints.some((e) => endpoint.includes(e));
 
@@ -38,7 +76,7 @@ export async function apiRequest(endpoint, options = {}) {
         data = await response.json();
       } else {
         const text = await response.text();
-        data = { message: text || `HTTP ${response.status} ${response.statusText}` };
+        data = { message: sanitizeErrorMessage(text, response.status) };
       }
 
       if (!response.ok) {
@@ -58,9 +96,8 @@ export async function apiRequest(endpoint, options = {}) {
           }
         }
 
-        const error = new Error(
-          data?.message || `Request failed with status ${response.status}`
-        );
+        const rawMessage = data?.message || `Request failed with status ${response.status}`;
+        const error = new Error(sanitizeErrorMessage(rawMessage, response.status));
         error.status = response.status;
         throw error;
       }
@@ -71,8 +108,12 @@ export async function apiRequest(endpoint, options = {}) {
         await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
         continue;
       }
-      console.error(`API Error [${endpoint}]:`, error.message || error);
-      throw error;
+
+      const cleanMsg = sanitizeErrorMessage(error.message || '', error.status);
+      const cleanError = new Error(cleanMsg);
+      cleanError.status = error.status;
+      console.error(`API Error [${endpoint}]:`, cleanMsg);
+      throw cleanError;
     }
   }
 }

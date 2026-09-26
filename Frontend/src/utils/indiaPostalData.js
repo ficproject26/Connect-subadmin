@@ -1,3 +1,5 @@
+import { apiRequest } from '../services/api';
+
 /**
  * Dynamic Admin-Managed Territory Hierarchy Data Provider
  * Single Source of Truth: Admin Territory Database (MongoDB Atlas)
@@ -72,51 +74,39 @@ export function buildPostalDataFromHierarchy(hierarchyArray) {
  * Fetch latest active hierarchy from Admin Territory API
  */
 export async function syncTerritoryFromAdmin() {
-  const token = typeof window !== 'undefined' ? (localStorage.getItem('ams_token') || localStorage.getItem('agent_mgr_token')) : null;
-  const headers = {
-    'Accept': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-  };
-
-  const endpoints = [
-    '/api/territory/hierarchy',
-    '/api/admin/hierarchy',
-    '/api/hierarchy',
-    'http://127.0.0.1:8004/api/territory/hierarchy',
-    'http://localhost:8004/api/territory/hierarchy',
-    'https://api.ficapp.in/api/territory/hierarchy'
+  const hierarchyEndpoints = [
+    '/admin/hierarchy',
+    '/territory/hierarchy',
+    '/hierarchy'
   ];
 
-  for (const url of endpoints) {
+  for (const endpoint of hierarchyEndpoints) {
     try {
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(2500) });
-      if (res.ok) {
-        const json = await res.json();
-        const hierarchy = json.hierarchy || json.states || (Array.isArray(json) ? json : null);
-        if (hierarchy && Array.isArray(hierarchy) && hierarchy.length > 0) {
-          const built = buildPostalDataFromHierarchy(hierarchy);
-          if (Object.keys(built).length > 0) {
-            INDIA_POSTAL_DATA = built;
-            ALL_INDIAN_STATES = Object.keys(built).sort();
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('territory_updated', { detail: built }));
-            }
-            return built;
+      const json = await apiRequest(endpoint);
+      const hierarchy = json?.hierarchy || json?.states || (Array.isArray(json) ? json : null);
+      if (hierarchy && Array.isArray(hierarchy) && hierarchy.length > 0) {
+        const built = buildPostalDataFromHierarchy(hierarchy);
+        if (Object.keys(built).length > 0) {
+          INDIA_POSTAL_DATA = built;
+          ALL_INDIAN_STATES = Object.keys(built).sort();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('territory_updated', { detail: built }));
           }
+          return built;
         }
       }
     } catch (e) {
-      // Try next endpoint
+      // Continue to next endpoint
     }
   }
 
   // Fallback: If hierarchy endpoint did not populate, query individual territory endpoints
   try {
     const [stateRes, distRes, divRes, pinRes] = await Promise.all([
-      fetch('/api/states', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/districts', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/divisions', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/pincodes', { headers }).then(r => r.ok ? r.json() : null).catch(() => null)
+      apiRequest('/states').catch(() => null),
+      apiRequest('/districts').catch(() => null),
+      apiRequest('/divisions').catch(() => null),
+      apiRequest('/pincodes').catch(() => null)
     ]);
 
     const rawStates = stateRes?.states || stateRes?.data || [];

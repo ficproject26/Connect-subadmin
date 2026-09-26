@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './AuthContext';
+import { apiRequest } from '../services/api';
 
 const NotificationContext = createContext(null);
 
@@ -13,21 +14,12 @@ export const NotificationProvider = ({ children }) => {
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
 
-  const token = localStorage.getItem('ams_token');
-
   // Fetch notifications from server
   const fetchNotifications = useCallback(async (type = filterType) => {
     try {
       setLoading(true);
-      const authToken = localStorage.getItem('ams_token');
-      const res = await fetch(`/api/notifications?type=${type}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
-        }
-      });
-      const data = await res.json();
-      if (data.success) {
+      const data = await apiRequest(`/notifications?type=${type}`);
+      if (data && data.success) {
         setNotifications(data.notifications || []);
         setUnreadCount(data.unreadCount || 0);
       }
@@ -41,14 +33,7 @@ export const NotificationProvider = ({ children }) => {
   // Mark single notification as read
   const markAsRead = async (id) => {
     try {
-      const authToken = localStorage.getItem('ams_token');
-      await fetch(`/api/notifications/${id}/read`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
-        }
-      });
+      await apiRequest(`/notifications/${id}/read`, { method: 'PATCH' });
 
       setNotifications(prev =>
         prev.map(n => (n._id === id || n.id === id ? { ...n, isRead: true } : n))
@@ -62,14 +47,7 @@ export const NotificationProvider = ({ children }) => {
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const authToken = localStorage.getItem('ams_token');
-      await fetch('/api/notifications/mark-all-read', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
-        }
-      });
+      await apiRequest('/notifications/mark-all-read', { method: 'POST' });
 
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
@@ -81,14 +59,7 @@ export const NotificationProvider = ({ children }) => {
   // Delete / dismiss notification
   const removeNotification = async (id) => {
     try {
-      const authToken = localStorage.getItem('ams_token');
-      await fetch(`/api/notifications/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
-        }
-      });
+      await apiRequest(`/notifications/${id}`, { method: 'DELETE' });
 
       setNotifications(prev => {
         const item = prev.find(n => n._id === id || n.id === id);
