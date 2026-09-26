@@ -22,7 +22,7 @@ export function DivisionalAgents() {
   const [activeTab, setActiveTab] = useState('roster');
   const [selectedActivity, setSelectedActivity] = useState(null);
 
-  const division = user?.division || 'Salem North';
+  const division = user?.division || '';
 
   const loadData = async () => {
     setLoading(true);
@@ -163,7 +163,7 @@ export function DivisionalAgents() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Division Field Operations</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Cluster sales and pincode ground activities within {division} Division.
+          Cluster sales and pincode ground activities within {division ? `${division} Division` : 'assigned division'}.
         </p>
       </div>
 

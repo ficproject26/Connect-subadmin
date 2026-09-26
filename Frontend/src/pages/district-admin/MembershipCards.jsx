@@ -184,7 +184,7 @@ export function DistrictMembershipCards() {
       render: (row) => (
         <div className="space-y-0.5">
           <div className="font-semibold text-xs text-slate-900 dark:text-white">
-            {row.district || user?.district || 'Salem'}{row.division ? ` / ${row.division}` : ''}
+            {row.district || user?.district || '-'}{row.division ? ` / ${row.division}` : ''}
           </div>
           <div className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
             <MapPin className="w-3 h-3" /> PIN: {row.pincode}

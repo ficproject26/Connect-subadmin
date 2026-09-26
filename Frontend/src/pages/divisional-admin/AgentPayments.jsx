@@ -73,7 +73,7 @@ export function DivisionalAgentPayments() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Division Agent Payments</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Agent commission payouts and referral settlements within {user?.division || 'Salem North'} Division.
+          Agent commission payouts and referral settlements within {user?.division ? `${user.division} Division` : 'assigned division'}.
         </p>
       </div>
 

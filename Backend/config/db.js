@@ -73,7 +73,7 @@ class Collection extends Array {
       const docs = await this._mongoCol.find({}).toArray();
       if (docs && docs.length > 0) {
         this.length = 0;
-        this.push(...docs);
+        super.push(...docs);
         this._persist();
         console.log(`[MongoDB] Connected & loaded ${docs.length} records for '${this.name}' (${this.mongoName})`);
       } else if (this.length > 0) {
@@ -88,6 +88,21 @@ class Collection extends Array {
     } catch (err) {
       console.warn(`[MongoDB] Sync warning for '${this.name}':`, err.message);
     }
+  }
+
+  async reloadFromMongo() {
+    if (this._mongoCol) {
+      try {
+        const docs = await this._mongoCol.find({}).toArray();
+        this.length = 0;
+        super.push(...docs);
+        this._persist();
+        return docs;
+      } catch (e) {
+        console.warn(`[MongoDB] Reload error for '${this.name}':`, e.message);
+      }
+    }
+    return Array.from(this);
   }
 
   // Override mutating Array methods
@@ -124,21 +139,30 @@ class Collection extends Array {
     return res;
   }
 
-  find(queryOrFn) {
+  async find(queryOrFn) {
     if (typeof queryOrFn === 'function') {
       return super.find(queryOrFn);
     }
 
     const query = queryOrFn || {};
+    const cleanQuery = sanitizeQuery(query);
+
+    if (this._mongoCol) {
+      try {
+        const docs = await this._mongoCol.find(cleanQuery).toArray();
+        return docs;
+      } catch (e) {}
+    }
+
     const results = Array.from(this).filter(item => {
-      for (const [key, val] of Object.entries(query)) {
+      for (const [key, val] of Object.entries(cleanQuery)) {
         if (val === undefined || val === null) continue;
         if (item[key] !== val) return false;
       }
       return true;
     });
 
-    return Promise.resolve(results);
+    return results;
   }
 
   async findOne(query = {}) {
@@ -472,61 +496,89 @@ const db = {
   pincodeDetails: JSON.parse(JSON.stringify(seed.pincodeDetails))
 };
 
-// Bootstrap hierarchy from users so registered districts/divisions are always available
-function syncHierarchyFromUsers() {
-  db.hierarchy.states = [];
-  const allUsers = Array.from(usersCollection);
+// Build hierarchy exclusively from Admin Pincode Management collections (single source of truth)
+function syncHierarchyFromDatabase() {
+  const rawStates = Array.from(statesCollection).filter(s => (s.status || 'Active').toLowerCase() === 'active');
+  const rawDistricts = Array.from(districtsCollection).filter(d => (d.status || 'Active').toLowerCase() === 'active');
+  const rawDivisions = Array.from(divisionsCollection).filter(v => (v.status || 'Active').toLowerCase() === 'active');
+  const rawPincodes = Array.from(pincodesCollection).filter(p => (p.status || 'Active').toLowerCase() === 'active');
 
-  allUsers.forEach(u => {
-    if (!u.state || u.state === 'All India') return;
-    const stateName = u.state.trim();
-    let stateObj = db.hierarchy.states.find(s => s.name?.toLowerCase() === stateName.toLowerCase());
-    if (!stateObj) {
-      stateObj = {
-        id: u.stateId || (stateName === 'Tamil Nadu' ? 'state_tn' : `ST-${stateName.slice(0, 3).toUpperCase()}`),
-        name: stateName,
-        code: stateName.slice(0, 2).toUpperCase(),
-        districts: []
-      };
-      db.hierarchy.states.push(stateObj);
-    }
+  db.hierarchy = {
+    states: rawStates.map(s => {
+      const sId = String(s._id || s.id || s.stateId);
+      const sName = (s.name || '').trim();
 
-    if (u.district) {
-      const dName = u.district.trim();
-      let dist = stateObj.districts.find(d => d.name?.toLowerCase() === dName.toLowerCase());
-      if (!dist) {
-        dist = {
-          id: u.districtId || (dName.toLowerCase() === 'salem' ? 'dist_salem' : `DST-${dName.replace(/\s+/g, '-').toUpperCase()}`),
-          name: dName,
-          code: dName.slice(0, 3).toUpperCase(),
-          status: u.status === 'inactive' ? 'Inactive' : 'Active',
-          divisions: []
-        };
-        stateObj.districts.push(dist);
-      }
+      const distList = rawDistricts.filter(d => 
+        String(d.stateId) === sId || 
+        String(d.stateId) === String(s._id) || 
+        (d.state && d.state.toLowerCase() === sName.toLowerCase())
+      );
 
-      if (u.division) {
-        const divName = u.division.trim();
-        let div = dist.divisions.find(d => d.name?.toLowerCase() === divName.toLowerCase());
-        if (!div) {
-          div = {
-            id: u.divisionId || `DIV-${divName.replace(/\s+/g, '-').toUpperCase()}`,
-            name: divName,
-            code: divName.slice(0, 3).toUpperCase(),
-            pincodes: []
+      return {
+        id: sId,
+        _id: sId,
+        stateId: s.stateId || sId,
+        name: sName,
+        code: s.code || sName.slice(0, 2).toUpperCase(),
+        status: s.status || 'Active',
+        districts: distList.map(d => {
+          const dId = String(d._id || d.id || d.districtId);
+          const dName = (d.name || '').trim();
+
+          const divList = rawDivisions.filter(v => 
+            String(v.districtId) === dId || 
+            String(v.districtId) === String(d._id) || 
+            (v.district && v.district.toLowerCase() === dName.toLowerCase())
+          );
+
+          return {
+            id: dId,
+            _id: dId,
+            districtId: d.districtId || dId,
+            stateId: sId,
+            stateName: sName,
+            name: dName,
+            code: d.code || dName.slice(0, 3).toUpperCase(),
+            status: d.status || 'Active',
+            divisions: divList.map(v => {
+              const vId = String(v._id || v.id || v.divisionId);
+              const vName = (v.name || '').trim();
+
+              const pinList = rawPincodes.filter(p => 
+                String(p.divisionId) === vId || 
+                String(p.divisionId) === String(v._id) || 
+                (p.division && p.division.toLowerCase() === vName.toLowerCase())
+              );
+
+              return {
+                id: vId,
+                _id: vId,
+                divisionId: v.divisionId || vId,
+                districtId: dId,
+                districtName: dName,
+                stateId: sId,
+                stateName: sName,
+                name: vName,
+                code: v.code || vName.slice(0, 3).toUpperCase(),
+                status: v.status || 'Active',
+                pincodes: pinList.map(p => String(p.code || p.pincode).trim()).filter(Boolean),
+                rawPincodes: pinList.map(p => ({
+                  id: String(p._id || p.id),
+                  _id: String(p._id || p.id),
+                  code: String(p.code || p.pincode).trim(),
+                  name: p.name || p.area || p.postOffice || String(p.code || p.pincode),
+                  status: p.status || 'Active'
+                }))
+              };
+            })
           };
-          dist.divisions.push(div);
-        }
-
-        if (u.role === 'Pincode Admin' && u.pincode && !div.pincodes.includes(u.pincode)) {
-          div.pincodes.push(u.pincode);
-        }
-      }
-    }
-  });
+        })
+      };
+    })
+  };
 }
 
-syncHierarchyFromUsers();
+syncHierarchyFromDatabase();
 
 /**
  * Connect all collections to MongoDB Atlas
@@ -574,7 +626,7 @@ function initDatabase() {
       await Promise.all(collections.map(col => col.initMongo(mongoDb)));
 
       initUsers();
-      syncHierarchyFromUsers();
+      syncHierarchyFromDatabase();
       console.log('✅ [Database] All collections connected to MongoDB Atlas as single source of truth.');
       return true;
     } catch (err) {
@@ -590,7 +642,8 @@ initDatabase().catch(e => console.warn('[Database] Auto-init:', e.message));
 
 /**
  * Enhanced location filter supporting both Sub-Admin roles and Field Manager roles.
- * Matches by geographic name ('Tamil Nadu', 'Salem') or ID ('state_tn', 'dist_salem').
+ * Matches by geographic name ('Tamil Nadu', 'Krishnagiri') or ID ('stateId', 'districtId').
+ * Resolves item coordinates through centralized Pincode database lookup.
  */
 function filterByLocation(items, user) {
   if (!items || !Array.isArray(items)) return [];
@@ -598,41 +651,67 @@ function filterByLocation(items, user) {
 
   const rawRole = user.role || '';
   const role = rawRole.toLowerCase().replace(/_/g, ' ');
-  const { state, district, division, pincode, stateId, districtId, divisionId, pincodeId, regionId } = user;
+  const isSuper = role.includes('super admin') || role === 'admin';
+  if (isSuper) return items;
+
+  const { state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = user;
+  const userState = (state || '').trim().toLowerCase();
+  const userDistrict = (district || '').trim().toLowerCase();
+  const userDivision = (division || '').trim().toLowerCase();
+  const userPincode = (pincode || '').trim();
+
+  // Index pincodes for fast geographic resolution
+  const pinLookup = new Map();
+  Array.from(pincodesCollection).forEach(p => {
+    const code = String(p.code || p.pincode || '').trim();
+    if (code) {
+      pinLookup.set(code, {
+        state: (p.state || '').trim().toLowerCase(),
+        district: (p.district || '').trim().toLowerCase(),
+        division: (p.division || '').trim().toLowerCase()
+      });
+    }
+  });
 
   return items.filter(item => {
-    // Unrestricted
-    if (role === 'super admin' || role === 'admin') return true;
+    let iState = (item.state || '').trim().toLowerCase();
+    let iDist = (item.district || '').trim().toLowerCase();
+    let iDiv = (item.division || '').trim().toLowerCase();
+    const iPin = String(item.pincode || item.pincodeCode || '').trim();
 
-    // Pincode level
+    if (iPin && pinLookup.has(iPin)) {
+      const pinGeo = pinLookup.get(iPin);
+      if (!iState && pinGeo.state) iState = pinGeo.state;
+      if (!iDist && pinGeo.district) iDist = pinGeo.district;
+      if (!iDiv && pinGeo.division) iDiv = pinGeo.division;
+    }
+
+    // Pincode level user
     if (role.includes('pincode')) {
-      if (pincode && item.pincode && item.pincode === pincode) return true;
-      if (pincodeId && item.pincodeId && item.pincodeId === pincodeId) return true;
-      if (pincode && item.pincodeCode && item.pincodeCode === pincode) return true;
+      if (userPincode && iPin && iPin === userPincode) return true;
+      if (pincodeId && item.pincodeId && String(item.pincodeId) === String(pincodeId)) return true;
       return false;
     }
 
-    // Division level
+    // Division level user
     if (role.includes('division') || role.includes('divisional')) {
-      const matchDiv = (!division || item.division === division) && (!divisionId || item.divisionId === divisionId);
-      const matchDist = (!district || item.district === district) && (!districtId || item.districtId === districtId);
-      const matchState = (!state || item.state === state) && (!stateId || item.stateId === stateId);
+      const matchDiv = !userDivision || iDiv === userDivision;
+      const matchDist = !userDistrict || iDist === userDistrict;
+      const matchState = !userState || userState === 'all india' || iState === userState;
       return matchDiv && matchDist && matchState;
     }
 
-    // District level
+    // District level user
     if (role.includes('district')) {
-      const matchDist = (!district || item.district === district) && (!districtId || item.districtId === districtId);
-      const matchState = (!state || item.state === state) && (!stateId || item.stateId === stateId);
+      const matchDist = !userDistrict || iDist === userDistrict;
+      const matchState = !userState || userState === 'all india' || iState === userState;
       return matchDist && matchState;
     }
 
-    // State level
+    // State level user
     if (role.includes('state')) {
-      if (state && item.state && item.state === state) return true;
-      if (stateId && item.stateId && item.stateId === stateId) return true;
-      if (regionId && item.regionId && item.regionId === regionId) return true;
-      return (!state || item.state === state) && (!stateId || item.stateId === stateId);
+      if (!userState || userState === 'all india') return true;
+      return iState === userState || (stateId && String(item.stateId) === String(stateId));
     }
 
     return false;
@@ -644,5 +723,6 @@ module.exports = {
   Collection,
   filterByLocation,
   initDatabase,
-  syncHierarchyFromUsers
+  syncHierarchyFromDatabase,
+  syncHierarchyFromUsers: syncHierarchyFromDatabase
 };

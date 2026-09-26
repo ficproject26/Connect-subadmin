@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 export function PincodeVendorDetails() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const pincode = user?.pincode || '636001';
+  const pincode = user?.pincode || '';
 
   const vendors = [];
 
@@ -15,7 +15,7 @@ export function PincodeVendorDetails() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Vendor Details</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          In-depth merchant profiles, contract parameters, and trade records for PIN {pincode}.
+          In-depth merchant profiles, contract parameters, and trade records for PIN {pincode || '-'}.
         </p>
       </div>
 

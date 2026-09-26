@@ -5789,7 +5789,7 @@
     },
     "status": "failed",
     "timestamp": "2026-08-29T12:51:14.145Z",
-    "updatedAt": "2026-09-25T13:48:30.378Z",
+    "updatedAt": "2026-09-26T07:44:36.483Z",
     "userAgent": "node",
     "userEmail": "admin@example.com",
     "userId": "6a8d22c11bc647d92ae36337",
@@ -9025,7 +9025,7 @@
     },
     "status": "success",
     "timestamp": "2026-09-24T07:54:25.130Z",
-    "updatedAt": "2026-09-25T13:48:30.378Z",
+    "updatedAt": "2026-09-26T05:54:25.510Z",
     "userAgent": "",
     "userEmail": "admin@example.com",
     "userId": "6a8d22c11bc647d92ae36337",
@@ -9419,6 +9419,72 @@
     "timestamp": "2026-08-31T13:03:51.603Z",
     "updatedAt": "2026-09-25T13:48:30.334Z",
     "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "userEmail": "admin@example.com",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userRole": "super-admin"
+  },
+  {
+    "_id": "6ab76fa0cd88571f41b45729",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "vendor_activated",
+    "ipAddress": "205.254.163.153",
+    "userAgent": "",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Admin approved vendor \"harshini\" (harshini@gmail.com)",
+    "metadata": {
+      "adminId": "6a8d22c11bc647d92ae36337",
+      "adminName": "Super Admin",
+      "vendorId": "6ab76e34457d2cf75d46b749",
+      "vendorName": "harshini",
+      "oldStatus": "Pending",
+      "newStatus": "Approved",
+      "reason": "Direct registration approved",
+      "timestamp": "2026-09-26T07:09:20.240Z"
+    },
+    "timestamp": "2026-09-26T07:09:20.245Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab76fa0cd88571f41b45729",
+    "__v": 0,
+    "action": "vendor_activated",
+    "details": "Admin approved vendor \"harshini\" (harshini@gmail.com)",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "id": "6ab76fa0cd88571f41b45729",
+    "ipAddress": "205.254.163.153",
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "metadata": {
+      "adminId": "6a8d22c11bc647d92ae36337",
+      "adminName": "Super Admin",
+      "vendorId": "6ab76e34457d2cf75d46b749",
+      "vendorName": "harshini",
+      "oldStatus": "Pending",
+      "newStatus": "Approved",
+      "reason": "Direct registration approved",
+      "timestamp": "2026-09-26T07:09:20.240Z"
+    },
+    "status": "success",
+    "timestamp": "2026-09-26T07:09:20.245Z",
+    "updatedAt": "2026-09-26T07:44:36.484Z",
+    "userAgent": "",
     "userEmail": "admin@example.com",
     "userId": "6a8d22c11bc647d92ae36337",
     "userRole": "super-admin"

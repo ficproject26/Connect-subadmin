@@ -26,7 +26,7 @@ export function PincodeAgents() {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [showOnboardModal, setShowOnboardModal] = useState(false);
 
-  const pincode = user?.pincode || '636001';
+  const pincode = user?.pincode || '';
 
   const loadData = async () => {
     setLoading(true);
@@ -157,7 +157,7 @@ export function PincodeAgents() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Ground Agents (PIN: {pincode})</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Ground Agents{pincode ? ` (PIN: ${pincode})` : ''}</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">Field sales, customer acquisition, and vendor onboarding.</p>
         </div>
 

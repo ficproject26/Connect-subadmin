@@ -110,25 +110,47 @@ export async function syncTerritoryFromAdmin() {
     }
   }
 
-  // Fallback: If hierarchy endpoint did not populate, query individual district/division endpoints
+  // Fallback: If hierarchy endpoint did not populate, query individual territory endpoints
   try {
-    const [distRes, divRes, pinRes] = await Promise.all([
+    const [stateRes, distRes, divRes, pinRes] = await Promise.all([
+      fetch('/api/states', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/districts', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/divisions', { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('/api/pincodes', { headers }).then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
 
+    const rawStates = stateRes?.states || stateRes?.data || [];
     const rawDistricts = distRes?.districts || distRes?.data || [];
     const rawDivisions = divRes?.divisions || divRes?.data || [];
     const rawPincodes = pinRes?.pincodes || pinRes?.data || [];
 
-    if (rawDistricts.length > 0 || rawDivisions.length > 0) {
-      const fallbackTree = { 'Tamil Nadu': { id: 'state_tn', code: 'TAM', status: 'Active', districts: {} } };
+    if (rawStates.length > 0 || rawDistricts.length > 0) {
+      const fallbackTree = {};
+
+      const stateList = rawStates.length > 0 ? rawStates : [{ id: 'state_default', name: 'Tamil Nadu', code: 'TAM' }];
+      stateList.forEach(s => {
+        const sName = s.name?.trim();
+        if (sName) {
+          fallbackTree[sName] = {
+            id: s._id || s.id || s.stateId,
+            code: s.code || sName.slice(0, 2).toUpperCase(),
+            status: s.status || 'Active',
+            districts: {}
+          };
+        }
+      });
+
       rawDistricts.forEach(d => {
         const dName = d.name?.trim();
-        if (dName) {
-          fallbackTree['Tamil Nadu'].districts[dName] = {
-            id: d._id || d.id,
+        if (!dName) return;
+        const matchedState = stateList.find(s => 
+          String(s._id || s.id || s.stateId) === String(d.stateId) || 
+          (d.state && d.state.toLowerCase() === s.name.toLowerCase())
+        );
+        const sName = matchedState ? matchedState.name.trim() : Object.keys(fallbackTree)[0];
+        if (sName && fallbackTree[sName]) {
+          fallbackTree[sName].districts[dName] = {
+            id: d._id || d.id || d.districtId,
             code: d.code || dName.slice(0, 3).toUpperCase(),
             status: d.status || 'Active',
             divisions: {}
@@ -138,20 +160,45 @@ export async function syncTerritoryFromAdmin() {
 
       rawDivisions.forEach(v => {
         const vName = v.name?.trim();
-        const dName = v.districtName || v.district || 'Namakkal';
-        if (!fallbackTree['Tamil Nadu'].districts[dName]) {
-          fallbackTree['Tamil Nadu'].districts[dName] = { id: `dist_${dName.toLowerCase()}`, code: dName.slice(0, 3).toUpperCase(), status: 'Active', divisions: {} };
+        if (!vName) return;
+
+        let targetStateName = null;
+        let targetDistName = null;
+
+        for (const sName of Object.keys(fallbackTree)) {
+          for (const dName of Object.keys(fallbackTree[sName].districts)) {
+            const distObj = fallbackTree[sName].districts[dName];
+            if (String(distObj.id) === String(v.districtId) || (v.district && v.district.toLowerCase() === dName.toLowerCase())) {
+              targetStateName = sName;
+              targetDistName = dName;
+              break;
+            }
+          }
+          if (targetDistName) break;
         }
-        fallbackTree['Tamil Nadu'].districts[dName].divisions[vName] = [];
+
+        if (targetStateName && targetDistName) {
+          fallbackTree[targetStateName].districts[targetDistName].divisions[vName] = [];
+        }
       });
 
       rawPincodes.forEach(p => {
         const pCode = String(p.code || p.pincode || '').trim();
-        const vName = p.divisionName || p.division;
-        const dName = p.districtName || p.district;
-        if (dName && vName && fallbackTree['Tamil Nadu'].districts[dName]?.divisions[vName]) {
-          if (!fallbackTree['Tamil Nadu'].districts[dName].divisions[vName].includes(pCode)) {
-            fallbackTree['Tamil Nadu'].districts[dName].divisions[vName].push(pCode);
+        if (!pCode) return;
+
+        for (const sName of Object.keys(fallbackTree)) {
+          for (const dName of Object.keys(fallbackTree[sName].districts)) {
+            for (const vName of Object.keys(fallbackTree[sName].districts[dName].divisions)) {
+              const divList = rawDivisions.filter(dv => dv.name?.trim().toLowerCase() === vName.toLowerCase());
+              const isMatch = divList.some(dv => String(dv._id || dv.id || dv.divisionId) === String(p.divisionId)) ||
+                (p.division && p.division.toLowerCase() === vName.toLowerCase());
+
+              if (isMatch) {
+                if (!fallbackTree[sName].districts[dName].divisions[vName].includes(pCode)) {
+                  fallbackTree[sName].districts[dName].divisions[vName].push(pCode);
+                }
+              }
+            }
           }
         }
       });

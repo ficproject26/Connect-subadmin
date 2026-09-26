@@ -1,34 +1,21 @@
 const { db } = require('../config/db');
 
-// Helper to fetch live from Admin Master Territory API if running locally or via remote
-async function fetchAdminTerritory(path, params = {}) {
-  const queryStr = new URLSearchParams(params).toString();
-  const endpoints = [
-    'http://127.0.0.1:8004/api/territory',
-    'http://localhost:8004/api/territory',
-    'https://api.ficapp.in/api/territory'
-  ];
-
-  for (const base of endpoints) {
-    try {
-      const url = `${base}/${path}${queryStr ? '?' + queryStr : ''}`;
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(1500) });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.hierarchy && Array.isArray(json.hierarchy)) return json.hierarchy;
-        if (json.data && Array.isArray(json.data)) return json.data;
-        if (json[path] && Array.isArray(json[path])) return json[path];
-        if (Array.isArray(json)) return json;
-      }
-    } catch (e) {
-      // try next
-    }
+// Reload territory collections live from MongoDB Atlas if connected
+async function reloadTerritoryCollections() {
+  if (db.states && db.states.reloadFromMongo) {
+    await Promise.all([
+      db.states.reloadFromMongo().catch(() => {}),
+      db.districts.reloadFromMongo().catch(() => {}),
+      db.divisions.reloadFromMongo().catch(() => {}),
+      db.pincodes.reloadFromMongo().catch(() => {})
+    ]);
   }
-  return null;
 }
 
 // Build complete hierarchical tree: State -> District -> Division -> Pincode
-function buildCompleteHierarchy(scopeUser = null) {
+async function buildCompleteHierarchy(scopeUser = null) {
+  await reloadTerritoryCollections();
+
   const rawStates = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
   const rawDistricts = Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
   const rawDivisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
@@ -47,6 +34,7 @@ function buildCompleteHierarchy(scopeUser = null) {
     return {
       id: sId,
       _id: sId,
+      stateId: s.stateId || sId,
       name: sName,
       code: s.code || sName.slice(0, 2).toUpperCase(),
       status: s.status || 'Active',
@@ -118,7 +106,7 @@ function buildCompleteHierarchy(scopeUser = null) {
 
       if (role.includes('pincode') && userPincode) {
         fullHierarchy = fullHierarchy
-          .filter(s => !userState || s.name.toLowerCase() === userState)
+          .filter(s => !userState || userState === 'all india' || s.name.toLowerCase() === userState)
           .map(s => ({
             ...s,
             districts: s.districts
@@ -137,9 +125,9 @@ function buildCompleteHierarchy(scopeUser = null) {
               .filter(d => d.divisions.length > 0)
           }))
           .filter(s => s.districts.length > 0);
-      } else if (role.includes('division') && userDivision) {
+      } else if ((role.includes('division') || role.includes('divisional')) && userDivision) {
         fullHierarchy = fullHierarchy
-          .filter(s => !userState || s.name.toLowerCase() === userState)
+          .filter(s => !userState || userState === 'all india' || s.name.toLowerCase() === userState)
           .map(s => ({
             ...s,
             districts: s.districts
@@ -153,7 +141,7 @@ function buildCompleteHierarchy(scopeUser = null) {
           .filter(s => s.districts.length > 0);
       } else if (role.includes('district') && userDistrict) {
         fullHierarchy = fullHierarchy
-          .filter(s => !userState || s.name.toLowerCase() === userState)
+          .filter(s => !userState || userState === 'all india' || s.name.toLowerCase() === userState)
           .map(s => ({
             ...s,
             districts: s.districts.filter(d => d.name.toLowerCase() === userDistrict)
@@ -171,12 +159,7 @@ function buildCompleteHierarchy(scopeUser = null) {
 // GET /api/territory/hierarchy or /api/hierarchy
 const getHierarchy = async (req, res) => {
   try {
-    const live = await fetchAdminTerritory('hierarchy');
-    if (live && Array.isArray(live) && live.length > 0) {
-      return res.json({ success: true, hierarchy: live, states: live });
-    }
-
-    const hierarchy = buildCompleteHierarchy(req.user);
+    const hierarchy = await buildCompleteHierarchy(req.user);
     res.json({
       success: true,
       hierarchy,
@@ -191,8 +174,8 @@ const getHierarchy = async (req, res) => {
 // GET /api/states - Filtered by caller's scope
 const getStates = async (req, res) => {
   try {
-    const liveStates = await fetchAdminTerritory('states', { status: 'Active' });
-    let states = Array.isArray(liveStates) ? liveStates : Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
+    await reloadTerritoryCollections();
+    let states = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
 
     const user = req.user;
     if (user && user.role) {
@@ -200,8 +183,8 @@ const getStates = async (req, res) => {
       const isSuper = role.includes('super admin') || role === 'admin';
       if (!isSuper) {
         if (user.stateId) {
-          states = states.filter(s => String(s._id || s.id) === String(user.stateId));
-        } else if (user.state && user.state !== 'All India') {
+          states = states.filter(s => String(s._id || s.id || s.stateId) === String(user.stateId));
+        } else if (user.state && user.state.toLowerCase() !== 'all india') {
           states = states.filter(s => s.name?.toLowerCase() === user.state.toLowerCase());
         }
       }
@@ -217,26 +200,20 @@ const getStates = async (req, res) => {
 // GET /api/districts - Scoped to state / district
 const getDistricts = async (req, res) => {
   try {
+    await reloadTerritoryCollections();
     const user = req.user;
     const { stateId, state } = req.query;
-    const queryState = state || (user?.state !== 'All India' ? user?.state : null);
+    const queryState = state || (user?.state && user.state.toLowerCase() !== 'all india' ? user.state : null);
     const queryStateId = stateId || user?.stateId;
 
-    const params = { status: 'Active' };
-    if (queryStateId) params.stateId = queryStateId;
-    if (queryState) params.state = queryState;
+    let districts = Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
 
-    const liveDistricts = await fetchAdminTerritory('districts', params);
-    let districts = Array.isArray(liveDistricts) ? liveDistricts : Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
-
-    if (!Array.isArray(liveDistricts)) {
-      if (queryStateId) {
-        districts = districts.filter(d => String(d.stateId) === String(queryStateId));
-      } else if (queryState) {
-        const stateObj = Array.from(db.states || []).find(s => s.name?.toLowerCase() === queryState.toLowerCase());
-        if (stateObj) {
-          districts = districts.filter(d => String(d.stateId) === String(stateObj._id || stateObj.id));
-        }
+    if (queryStateId) {
+      districts = districts.filter(d => String(d.stateId) === String(queryStateId));
+    } else if (queryState) {
+      const stateObj = Array.from(db.states || []).find(s => s.name?.toLowerCase() === queryState.toLowerCase());
+      if (stateObj) {
+        districts = districts.filter(d => String(d.stateId) === String(stateObj._id || stateObj.id || stateObj.stateId));
       }
     }
 
@@ -245,7 +222,7 @@ const getDistricts = async (req, res) => {
       const isSuper = role.includes('super admin') || role === 'admin';
       if (!isSuper) {
         if (user.districtId) {
-          districts = districts.filter(d => String(d._id || d.id) === String(user.districtId));
+          districts = districts.filter(d => String(d._id || d.id || d.districtId) === String(user.districtId));
         } else if (user.district) {
           districts = districts.filter(d => d.name?.toLowerCase() === user.district.toLowerCase());
         }
@@ -262,29 +239,21 @@ const getDistricts = async (req, res) => {
 // GET /api/divisions - Scoped to district / division
 const getDivisions = async (req, res) => {
   try {
+    await reloadTerritoryCollections();
     const user = req.user;
     const { districtId, district, stateId, state } = req.query;
 
     const queryDistrictId = districtId || user?.districtId;
     const queryDistrict = district || user?.district;
 
-    const params = { status: 'Active' };
-    if (queryDistrictId) params.districtId = queryDistrictId;
-    if (queryDistrict) params.district = queryDistrict;
-    if (stateId) params.stateId = stateId;
-    if (state) params.state = state;
+    let divisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
 
-    const liveDivisions = await fetchAdminTerritory('divisions', params);
-    let divisions = Array.isArray(liveDivisions) ? liveDivisions : Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
-
-    if (!Array.isArray(liveDivisions)) {
-      if (queryDistrictId) {
-        divisions = divisions.filter(v => String(v.districtId) === String(queryDistrictId));
-      } else if (queryDistrict) {
-        const distObj = Array.from(db.districts || []).find(d => d.name?.toLowerCase() === queryDistrict.toLowerCase());
-        if (distObj) {
-          divisions = divisions.filter(v => String(v.districtId) === String(distObj._id || distObj.id) || (v.district && v.district.toLowerCase() === queryDistrict.toLowerCase()));
-        }
+    if (queryDistrictId) {
+      divisions = divisions.filter(v => String(v.districtId) === String(queryDistrictId));
+    } else if (queryDistrict) {
+      const distObj = Array.from(db.districts || []).find(d => d.name?.toLowerCase() === queryDistrict.toLowerCase());
+      if (distObj) {
+        divisions = divisions.filter(v => String(v.districtId) === String(distObj._id || distObj.id || distObj.districtId) || (v.district && v.district.toLowerCase() === queryDistrict.toLowerCase()));
       }
     }
 
@@ -293,7 +262,7 @@ const getDivisions = async (req, res) => {
       const isSuper = role.includes('super admin') || role === 'admin';
       if (!isSuper) {
         if (user.divisionId) {
-          divisions = divisions.filter(d => String(d._id || d.id) === String(user.divisionId));
+          divisions = divisions.filter(d => String(d._id || d.id || d.divisionId) === String(user.divisionId));
         } else if (user.division) {
           divisions = divisions.filter(d => d.name?.toLowerCase() === user.division.toLowerCase());
         }
@@ -310,30 +279,21 @@ const getDivisions = async (req, res) => {
 // GET /api/pincodes - Scoped to division / pincode
 const getPincodes = async (req, res) => {
   try {
+    await reloadTerritoryCollections();
     const user = req.user;
     const { divisionId, division, districtId, district, stateId } = req.query;
 
     const queryDivId = divisionId || user?.divisionId;
     const queryDiv = division || user?.division;
 
-    const params = { status: 'Active' };
-    if (queryDivId) params.divisionId = queryDivId;
-    if (queryDiv) params.division = queryDiv;
-    if (districtId) params.districtId = districtId;
-    if (district) params.district = district;
-    if (stateId) params.stateId = stateId;
+    let pincodes = Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
 
-    const livePincodes = await fetchAdminTerritory('pincodes', params);
-    let pincodes = Array.isArray(livePincodes) ? livePincodes : Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
-
-    if (!Array.isArray(livePincodes)) {
-      if (queryDivId) {
-        pincodes = pincodes.filter(p => String(p.divisionId) === String(queryDivId));
-      } else if (queryDiv) {
-        const divObj = Array.from(db.divisions || []).find(v => v.name?.toLowerCase() === queryDiv.toLowerCase());
-        if (divObj) {
-          pincodes = pincodes.filter(p => String(p.divisionId) === String(divObj._id || divObj.id) || (p.division && p.division.toLowerCase() === queryDiv.toLowerCase()));
-        }
+    if (queryDivId) {
+      pincodes = pincodes.filter(p => String(p.divisionId) === String(queryDivId));
+    } else if (queryDiv) {
+      const divObj = Array.from(db.divisions || []).find(v => v.name?.toLowerCase() === queryDiv.toLowerCase());
+      if (divObj) {
+        pincodes = pincodes.filter(p => String(p.divisionId) === String(divObj._id || divObj.id || divObj.divisionId) || (p.division && p.division.toLowerCase() === queryDiv.toLowerCase()));
       }
     }
 
@@ -344,7 +304,7 @@ const getPincodes = async (req, res) => {
         if (user.pincodeId) {
           pincodes = pincodes.filter(p => String(p._id || p.id) === String(user.pincodeId));
         } else if (user.pincode) {
-          pincodes = pincodes.filter(p => (p.code || p.pincode) === user.pincode);
+          pincodes = pincodes.filter(p => String(p.code || p.pincode).trim() === String(user.pincode).trim());
         }
       }
     }

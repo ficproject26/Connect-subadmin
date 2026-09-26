@@ -9,7 +9,7 @@ import { ShoppingBag, Users, CreditCard, TrendingUp, MapPin, Eye } from 'lucide-
 
 export function DistrictOrders() {
   const { user } = useAuth();
-  const districtName = user?.district || 'Salem';
+  const districtName = user?.district || '';
   const { isDark } = useTheme();
 
   const [orders, setOrders] = useState([]);
@@ -43,7 +43,7 @@ export function DistrictOrders() {
     const normalOrders = total - membershipOrders;
 
     // Calculate Highest Ordering Division
-    let peakLocation = total > 0 ? 'Salem North' : '-';
+    let peakLocation = '-';
     let peakCount = 0;
     if (total > 0) {
       const divisionCounts = orders.reduce((acc, o) => {

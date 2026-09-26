@@ -2,30 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getRoleDashboardPath } from '../../utils/permissions';
-import { Mail, Lock, Eye, EyeOff, Shield, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { user, isAuthenticated, login } = useAuth();
+  // Renamed auth loading to authLoading to avoid shadowing the form loading state.
+  const { user, isAuthenticated, loading: authLoading, login } = useAuth();
   const navigate = useNavigate();
 
-  // If already logged in, automatically redirect to assigned role dashboard
+  // Redirect already-authenticated users to their dashboard.
+  // IMPORTANT: Only run after auth initialization is complete (authLoading=false).
+  // If we redirect while authLoading=true, we might see a stale isAuthenticated=false
+  // and stay on the login page when the user is actually logged in.
   useEffect(() => {
-    if (isAuthenticated && user?.role) {
+    if (!authLoading && isAuthenticated && user?.role) {
       navigate(getRoleDashboardPath(user.role), { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [authLoading, isAuthenticated, user, navigate]);
+
+  // While auth is being verified on page open, show a loading state
+  // so that previously-logged-in users don't see a flash of the login form.
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#f2f6fc]">
+        <div className="flex items-center gap-3 text-slate-500 font-sans text-sm">
+          <div className="w-5 h-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          <span>Verifying session...</span>
+        </div>
+      </div>
+    );
+  }
 
   const handleManualLogin = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    setFormLoading(true);
     try {
       const res = await login(email, password);
       if (res.success && res.user) {
@@ -34,7 +51,7 @@ export function Login() {
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
-      setLoading(false);
+      setFormLoading(false);
     }
   };
 
@@ -204,10 +221,10 @@ export function Login() {
           {/* Login Button */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={formLoading}
             className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm tracking-wide shadow-md shadow-blue-500/25 transition-all mt-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
           >
-            {loading ? 'Signing in...' : 'Login'}
+            {formLoading ? 'Signing in...' : 'Login'}
           </button>
         </form>
       </div>

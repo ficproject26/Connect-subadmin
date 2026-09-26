@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge, CardTierIcon } from '../../components/Badge';
@@ -6,6 +7,7 @@ import { BookingDetailsModal } from '../../components/BookingDetailsModal';
 import { useTheme } from '../../context/ThemeContext';
 
 export function DivisionalBookings() {
+  const { user } = useAuth();
   const { isDark } = useTheme();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +56,7 @@ export function DivisionalBookings() {
             PIN: {row.pincode}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-            ({row.district || 'Salem'}{row.division ? `, ${row.division}` : ''})
+            ({row.district || user?.district || ''}{row.division ? `, ${row.division}` : (user?.division ? `, ${user.division}` : '')})
           </div>
         </div>
       )

@@ -31,7 +31,7 @@ export function DistrictDivisionDetails() {
   const [divisionCards, setDivisionCards] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const district = user?.district || 'Salem';
+  const district = user?.district || '';
 
   useEffect(() => {
     const loadDivisions = async () => {
@@ -42,7 +42,7 @@ export function DistrictDivisionDetails() {
           const list = res.divisions
             .filter(d => !district || (d.districtName || user?.district)?.toLowerCase() === district.toLowerCase())
             .map(div => {
-              const state = div.stateName || user?.state || 'Tamil Nadu';
+              const state = div.stateName || user?.state || '';
               const dName = div.districtName || district;
               const registeredPins = Array.isArray(div.pincodes) && div.pincodes.length > 0 ? div.pincodes : [];
               const pinCount = div.pincodesCount !== undefined ? div.pincodesCount : registeredPins.length;
@@ -104,7 +104,7 @@ export function DistrictDivisionDetails() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">District Division Operational Details</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          In-depth structural breakdown and operational health metrics of each authorized division in {user?.district || 'Salem'} District.
+          In-depth structural breakdown and operational health metrics of each authorized division in {user?.district ? `${user.district} District` : 'assigned district'}.
         </p>
       </div>
 

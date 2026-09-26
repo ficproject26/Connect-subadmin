@@ -92,9 +92,9 @@ export function DivisionalPincodes() {
   const aadharFileRef = useRef();
   const panFileRef = useRef();
 
-  const divisionName = user?.division || 'Attur';
-  const districtName = user?.district || 'Salem';
-  const stateName = user?.state || 'Tamil Nadu';
+  const divisionName = user?.division || '';
+  const districtName = user?.district || '';
+  const stateName = user?.state || '';
 
   const setF = (patch) => setForm(f => ({ ...f, ...patch }));
 
@@ -727,9 +727,9 @@ export function DivisionalPincodes() {
               >
                 <option value="">Select PIN Code to Assign</option>
                 {getPincodesForDivision(
-                  form.assignedState || user?.state || 'Tamil Nadu',
-                  form.assignedDistrict || user?.district || 'Salem',
-                  form.assignedDivision || user?.division || 'Attur'
+                  form.assignedState || user?.state || '',
+                  form.assignedDistrict || user?.district || '',
+                  form.assignedDivision || user?.division || ''
                 ).map((pin, idx) => {
                   const existing = pincodes.find(p => p.pincode === pin);
                   const isAssigned = existing && existing.adminName && existing.adminName !== 'Unassigned';

@@ -124,12 +124,12 @@ export function DistrictExecutives() {
         <div className="text-xs">
           <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span className="whitespace-nowrap">{row.district || user?.district || 'Salem'}</span>
+            <span className="whitespace-nowrap">{row.district || user?.district || '-'}</span>
             <span className="text-slate-400">•</span>
-            <span className="text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">{row.division || 'Salem North'}</span>
+            <span className="text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">{row.division || '-'}</span>
           </div>
           <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] mt-0.5 pl-4.5 font-bold whitespace-nowrap">
-            PIN: {row.pincode || '636001'}
+            PIN: {row.pincode || '-'}
           </div>
         </div>
       )
@@ -176,7 +176,7 @@ export function DistrictExecutives() {
       <div>
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">District Vendor Executives</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Vendor-assigned operations personnel managing stay and travel services in {user?.district || 'Salem'} District.
+          Vendor-assigned operations personnel managing stay and travel services in {user?.district ? `${user.district} District` : 'assigned district'}.
         </p>
       </div>
 

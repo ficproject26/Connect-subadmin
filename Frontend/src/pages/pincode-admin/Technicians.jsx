@@ -135,7 +135,7 @@ export function PincodeTechnicians() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Technicians Roster</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Field service crew stationed at Pincode: {user?.pincode || '636001'}.
+          Field service crew stationed at Pincode: {user?.pincode || '-'}.
         </p>
       </div>
 

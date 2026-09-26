@@ -11,7 +11,7 @@ export function DistrictOverview() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">District Overview & Territorial Structure</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Geographic hierarchy, division network, and operational statistics for {user?.district || 'Salem'} District.
+          Geographic hierarchy, division network, and operational statistics for {user?.district ? `${user.district} District` : 'assigned district'}.
         </p>
       </div>
 
@@ -24,14 +24,14 @@ export function DistrictOverview() {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {user?.district || 'Salem'} District Jurisdiction
+                  {user?.district ? `${user.district} District Jurisdiction` : 'District Jurisdiction'}
                 </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   Active
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                State: {user?.state || 'Tamil Nadu'} • 2 Supervised Divisions • 4 Pincode Hubs
+                State: {user?.state || '-'}
               </p>
             </div>
           </div>
@@ -39,7 +39,7 @@ export function DistrictOverview() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="text-xs text-slate-500 font-medium">Headquarters</div>
-              <div className="text-sm font-bold text-slate-900 dark:text-white">Salem Collectorate Complex</div>
+              <div className="text-sm font-bold text-slate-900 dark:text-white">{user?.district ? `${user.district} District HQ` : 'District HQ'}</div>
             </div>
           </div>
         </div>

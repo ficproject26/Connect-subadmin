@@ -82,7 +82,7 @@ export function DistrictVendorPayments() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">District Vendor Payments</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Settlement requests, store disbursement claims, and invoicing in {user?.district || 'Salem'} District.
+          Settlement requests, store disbursement claims, and invoicing in {user?.district ? `${user.district} District` : 'assigned district'}.
         </p>
       </div>
 

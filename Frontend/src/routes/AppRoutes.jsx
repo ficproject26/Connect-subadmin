@@ -9,6 +9,9 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 // Auth Pages
 import { Login } from '../pages/auth/Login';
 
+// State Admin Dashboard used as Super Admin default dashboard
+import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
+
 
 
 // State Admin Pages
@@ -130,7 +133,20 @@ import { ManagerDashboard } from '../pages/manager/Dashboard';
 import NotificationsPage from '../pages/common/Notifications';
 
 function RootRedirect() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
+  // Wait for auth initialization to complete before deciding where to redirect.
+  // Without this guard, the component renders during the token/profile fetch
+  // and incorrectly sees isAuthenticated=false, causing a /login redirect loop.
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-indigo-400 font-mono text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin"></div>
+          <span>Loading...</span>
+        </div>
+      </div>
+    );
+  }
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
   return <Navigate to={getRoleDashboardPath(user.role)} replace />;
 }
@@ -139,7 +155,15 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<RootRedirect />} />
+      {/* /login: already-authenticated users are redirected to their dashboard inside Login.jsx */}
       <Route path="/login" element={<Login />} />
+
+      {/* /dashboard: canonical route for Super Admin and Admin roles */}
+      <Route element={<ProtectedRoute />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<Navigate to="/state-admin/dashboard" replace />} />
+        </Route>
+      </Route>
 
       {/* Protected Dashboards Layout */}
       <Route element={<ProtectedRoute />}>

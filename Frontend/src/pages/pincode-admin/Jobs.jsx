@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
@@ -8,6 +9,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { FileText, MapPin, Building2, Briefcase, UserCheck, Award, XCircle, Code2, Wrench } from 'lucide-react';
 
 export function PincodeJobs() {
+  const { user } = useAuth();
   const { isDark } = useTheme();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +114,7 @@ export function PincodeJobs() {
             <span>PIN: {row.pincode}</span>
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 pl-4">
-            {row.district} / {row.division || 'Salem North'}
+            {row.district || user?.district || '-'} / {row.division || user?.division || '-'}
           </div>
         </div>
       )

@@ -25,7 +25,7 @@ import {
 
 export function PincodeVendors() {
   const { user } = useAuth();
-  const assignedPincode = user?.pincode || '636001';
+  const assignedPincode = user?.pincode || '';
 
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -106,10 +106,10 @@ export function DivisionalKYC() {
         <div className="text-xs">
           <div className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate max-w-[220px]" title={row.address}>
             <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <span className="truncate">{row.address || 'Salem North Division'}</span>
+            <span className="truncate">{row.address || (user?.division ? `${user.division} Division` : 'Division')}</span>
           </div>
           <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pl-4.5 mt-0.5 whitespace-nowrap">
-            PIN: {row.pincode || '636001'}
+            PIN: {row.pincode || '-'}
           </div>
         </div>
       )
@@ -161,7 +161,7 @@ export function DivisionalKYC() {
       <div>
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">Divisional KYC Compliance Desk</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Vendor identity verification clearance and compliance review for {user?.division || 'Salem North'} Division.
+          Vendor identity verification clearance and compliance review for {user?.division ? `${user.division} Division` : 'assigned division'}.
         </p>
       </div>
 

@@ -14,8 +14,8 @@ export function PincodeCustomers() {
   const [loading, setLoading] = useState(true);
   const [tierFilter, setTierFilter] = useState('');
 
-  const pincode = user?.pincode || '636001';
-  const areaName = user?.areaName || 'Salem Town Fort';
+  const pincode = user?.pincode || '';
+  const areaName = user?.pincodeName || user?.areaName || user?.pincode || '';
 
   const loadData = async () => {
     setLoading(true);

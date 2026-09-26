@@ -23,7 +23,7 @@ export function DistrictQueries() {
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('All');
 
-  const district = user?.district || 'Salem';
+  const district = user?.district || '';
 
   const filterOptions = [
     { label: 'All Queries', value: 'All' },
@@ -160,7 +160,7 @@ export function DistrictQueries() {
           District Queries & Grievance Desk
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Review, investigate, and resolve field queries, merchant disputes, and territorial escalations across {district} District.
+          Review, investigate, and resolve field queries, merchant disputes, and territorial escalations across {district ? `${district} District` : 'assigned district'}.
         </p>
       </div>
 

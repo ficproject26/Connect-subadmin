@@ -234,7 +234,7 @@ export function StateManagers({ level }) {
   const fileRef = useRef();
   const aadharFileRef = useRef();
   const panFileRef = useRef();
-  const [registeredDistrictList, setRegisteredDistrictList] = useState(['Salem']);
+  const [registeredDistrictList, setRegisteredDistrictList] = useState([]);
 
   useEffect(() => {
     dataService.getDistricts().then(res => {

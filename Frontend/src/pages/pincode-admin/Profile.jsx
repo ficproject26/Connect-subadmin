@@ -4,7 +4,7 @@ import { Shield, MapPin, Mail, Calendar } from 'lucide-react';
 
 export function PincodeProfile() {
   const { user } = useAuth();
-  const pincode = user?.pincode || '636001';
+  const pincode = user?.pincode || '';
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -24,7 +24,7 @@ export function PincodeProfile() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">{user?.name || 'Pincode Admin'}</h3>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/40 w-fit mx-auto sm:mx-0">
-                Pincode Admin (PIN {pincode})
+                Pincode Admin{pincode ? ` (PIN ${pincode})` : ''}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -37,7 +37,7 @@ export function PincodeProfile() {
               </span>
               <span className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                PIN: {pincode} Control Station
+                PIN: {pincode || '-'} Control Station
               </span>
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-blue-600" />

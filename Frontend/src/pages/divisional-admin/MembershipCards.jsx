@@ -11,8 +11,8 @@ export function DivisionalMembershipCards() {
   const [loading, setLoading] = useState(true);
   const [tierFilter, setTierFilter] = useState('');
 
-  const divisionName = user?.division || 'Salem North';
-  const districtName = user?.district || 'Salem';
+  const divisionName = user?.division || '';
+  const districtName = user?.district || '';
 
   const loadData = async () => {
     setLoading(true);

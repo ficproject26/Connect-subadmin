@@ -15,7 +15,7 @@ export function DistrictPincodeAdmins() {
       try {
         const res = await dataService.getPincodes();
         if (res.success && res.pincodes) {
-          const district = user?.district || 'Salem';
+          const district = user?.district || '';
           const registered = res.pincodes
             .filter(p => p.adminName && p.adminName !== 'Unassigned' && (!district || p.district?.toLowerCase() === district.toLowerCase()))
             .map(p => ({
@@ -94,7 +94,7 @@ export function DistrictPincodeAdmins() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Administrators Roster</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Micro-level administrators appointed for each pincode station in {user?.district || 'Salem'} District.
+          Micro-level administrators appointed for each pincode station in {user?.district ? `${user.district} District` : 'assigned district'}.
         </p>
       </div>
 

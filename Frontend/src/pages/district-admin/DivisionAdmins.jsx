@@ -66,7 +66,7 @@ export function DistrictDivisionAdmins() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Supervised Division Administrators</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Divisional tier administrators appointed across {user?.district || 'Salem'} District divisions.
+          Divisional tier administrators appointed across {user?.district ? `${user.district} District` : 'assigned district'} divisions.
         </p>
       </div>
 

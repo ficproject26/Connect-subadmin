@@ -17,7 +17,7 @@ export function DivisionalCustomers() {
   const [searchParams] = useSearchParams();
 
   const pincodeFilter = searchParams.get('pincode');
-  const divisionName = user?.division || 'Salem North';
+  const divisionName = user?.division || '';
 
   const loadData = async () => {
     setLoading(true);
@@ -53,12 +53,12 @@ export function DivisionalCustomers() {
     const cards = dataset.filter(c => c.membership?.tier).length;
 
     const pinCounts = dataset.reduce((acc, c) => {
-      const pin = String(c.pincode || '636001');
-      acc[pin] = (acc[pin] || 0) + 1;
+      const pin = String(c.pincode || '');
+      if (pin) acc[pin] = (acc[pin] || 0) + 1;
       return acc;
     }, {});
 
-    let peakPin = '636001';
+    let peakPin = '-';
     let peakCount = 0;
     Object.entries(pinCounts).forEach(([pin, count]) => {
       if (count > peakCount) {

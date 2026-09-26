@@ -41,12 +41,12 @@ export function DistrictCustomers() {
 
     // Find District/Division with Peak Customers
     const districtCounts = dataset.reduce((acc, c) => {
-      const dist = c.district || c.division || 'Salem';
-      acc[dist] = (acc[dist] || 0) + 1;
+      const dist = c.district || c.division || '';
+      if (dist) acc[dist] = (acc[dist] || 0) + 1;
       return acc;
     }, {});
 
-    let peakDistrict = 'Salem';
+    let peakDistrict = '-';
     let peakCount = 0;
     Object.entries(districtCounts).forEach(([dist, count]) => {
       if (count > peakCount) {

@@ -7,7 +7,7 @@ import { IndianRupee } from 'lucide-react';
 
 export function PincodePayments() {
   const { user } = useAuth();
-  const pincode = user?.pincode || '636001';
+  const pincode = user?.pincode || '';
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -17,7 +17,7 @@ export function PincodePayments() {
       const res = await dataService.getPayments();
       if (res.success) {
         // Scoped to this pincode
-        const filtered = (res.payments || []).filter(p => !p.pincode || p.pincode === pincode);
+        const filtered = (res.payments || []).filter(p => !pincode || !p.pincode || p.pincode === pincode);
         setPayments(filtered);
       }
     } catch (e) {
@@ -62,7 +62,7 @@ export function PincodePayments() {
       accessor: 'pincode',
       render: (row) => (
         <span className="font-mono text-xs text-blue-600 dark:text-cyan-400 font-bold">
-          PIN: {row.pincode || pincode}
+          PIN: {row.pincode || pincode || '-'}
         </span>
       )
     },
@@ -78,13 +78,13 @@ export function PincodePayments() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Payments Ledger</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Disbursements, vendor invoices, and agent payouts restricted to PIN {pincode}.
+          Disbursements, vendor invoices, and agent payouts restricted to PIN {pincode || '-'}.
         </p>
       </div>
 
       <DataTable
         title="Station Payments Journal"
-        subtitle={`Audit transactions mapped exclusively to Pincode ${pincode}`}
+        subtitle={`Audit transactions mapped exclusively to Pincode ${pincode || '-'}`}
         columns={columns}
         data={payments}
         loading={loading}

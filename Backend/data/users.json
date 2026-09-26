@@ -209,7 +209,7 @@
     "_id": "6a8d49b240fa5bf27930dcbb",
     "name": "Forge India Connect HR",
     "email": "hrblr@forgeindiaconnect.com",
-    "password": "$2a$10$SR4j1XiBAWBwsiGnE4tp5uOXly8OjV69SvodCNdfzcjkPMH7AuF.u",
+    "password": "$2a$10$qLwtrpirE04JoVLzO9njueHt44N9ubbCx67mWyVvfLdnuYQlHS3JS",
     "role": "Vendor",
     "status": "Active",
     "vendorType": "Services",
@@ -306,7 +306,7 @@
       }
     ],
     "createdAt": "2026-08-25T07:52:18.658Z",
-    "updatedAt": "2026-09-25T06:20:44.202Z",
+    "updatedAt": "2026-09-26T06:01:33.665Z",
     "__v": 26,
     "primaryBusinessId": "6a8d49b240fa5bf27930dcbb",
     "assignedArea": "Karnataka / Bangalore",
@@ -333,7 +333,8 @@
     "isApproved": true,
     "kycStatus": "rejected",
     "walletBalance": -659,
-    "walletUpdatedAt": "2026-09-17T11:24:27.608Z"
+    "walletUpdatedAt": "2026-09-17T11:24:27.608Z",
+    "id": "6a8d49b240fa5bf27930dcbb"
   },
   {
     "_id": "6a8d5ba05668db4807afede2",
@@ -464,7 +465,8 @@
     "pincode": "638103",
     "registrationSource": "agent",
     "walletBalance": -480,
-    "walletUpdatedAt": "2026-09-17T11:40:33.626Z"
+    "walletUpdatedAt": "2026-09-17T11:40:33.626Z",
+    "id": "6a8d5ba05668db4807afede2"
   },
   {
     "_id": "cust_1787649167354",
@@ -613,7 +615,8 @@
     ],
     "createdAt": "2026-08-25T12:54:34.596Z",
     "walletBalance": -3119,
-    "walletUpdatedAt": "2026-09-18T10:49:56.696Z"
+    "walletUpdatedAt": "2026-09-18T10:49:56.696Z",
+    "updatedAt": "2026-09-26T05:57:07.897Z"
   },
   {
     "_id": "6a8e8a595668db4807b026f0",
@@ -709,7 +712,8 @@
     "requireCaptcha": false,
     "twoFactorEnabled": false,
     "twoFactorSecret": "",
-    "kycStatus": "approved"
+    "kycStatus": "approved",
+    "id": "6a8e8a595668db4807b026f0"
   },
   {
     "_id": "6a8e8a695668db4807b026fc",
@@ -911,7 +915,8 @@
     "gstNumber": "",
     "swiftCode": "",
     "telephone": "",
-    "kycStatus": "approved"
+    "kycStatus": "approved",
+    "id": "6a8e8a695668db4807b026fc"
   },
   {
     "_id": "6a8e8efd5668db4807b03795",
@@ -1030,7 +1035,8 @@
     "fax": "",
     "gstNumber": "",
     "swiftCode": "",
-    "telephone": ""
+    "telephone": "",
+    "id": "6a8e8efd5668db4807b03795"
   },
   {
     "_id": "6a8e8f3b5668db4807b03846",
@@ -1142,7 +1148,8 @@
     "requireCaptcha": false,
     "twoFactorEnabled": false,
     "twoFactorSecret": "",
-    "kycStatus": "approved"
+    "kycStatus": "approved",
+    "id": "6a8e8f3b5668db4807b03846"
   },
   {
     "_id": "cust_1787736777800",
@@ -1284,7 +1291,8 @@
         "isRegistrationAddress": true
       }
     ],
-    "createdAt": "2026-08-26T10:37:06.911Z"
+    "createdAt": "2026-08-26T10:37:06.911Z",
+    "updatedAt": "2026-09-26T05:57:07.897Z"
   },
   {
     "_id": "cust_1787812261242",
@@ -1809,7 +1817,8 @@
     "requireCaptcha": false,
     "twoFactorEnabled": false,
     "twoFactorSecret": "",
-    "isApproved": true
+    "isApproved": true,
+    "id": "6a911bb522dff47a2fce0df0"
   },
   {
     "_id": "6a9120ab2b7b15bdd1b33730",
@@ -1926,7 +1935,8 @@
         "isRegistrationAddress": true
       }
     ],
-    "createdAt": "2026-08-28T07:07:00.247Z"
+    "createdAt": "2026-08-28T07:07:00.247Z",
+    "updatedAt": "2026-09-26T05:57:07.898Z"
   },
   {
     "_id": "cust_1787921535022",
@@ -2000,11 +2010,20 @@
         "amount": 15000,
         "status": "SUCCESS",
         "date": "2026-09-24T09:12:20.738Z"
+      },
+      {
+        "plan": "Diamond Prestige",
+        "previousPlan": "Gold Elite",
+        "paymentId": "pay_mem_1790399492778_9079",
+        "orderId": "order_test_1790399493512_3007",
+        "amount": 35000,
+        "status": "SUCCESS",
+        "date": "2026-09-26T05:11:35.873Z"
       }
     ],
     "membershipStatus": "ACTIVE",
-    "membershipTier": "Gold Elite",
-    "membershipUpdatedAt": "2026-09-24T09:12:20.738Z",
+    "membershipTier": "Diamond Prestige",
+    "membershipUpdatedAt": "2026-09-26T05:11:35.873Z",
     "walletBalance": 15000,
     "walletUpdatedAt": "2026-09-25T11:36:41.273Z"
   },
@@ -2507,7 +2526,8 @@
     "refreshToken": "",
     "requireCaptcha": false,
     "twoFactorEnabled": false,
-    "twoFactorSecret": ""
+    "twoFactorSecret": "",
+    "id": "6aaa234a93e523aa43cae302"
   },
   {
     "_id": "6aaa2c4c457d2cf75d41acf7",
@@ -2722,7 +2742,8 @@
         "isRegistrationAddress": true
       }
     ],
-    "createdAt": "2026-09-17T06:42:16.149Z"
+    "createdAt": "2026-09-17T06:42:16.149Z",
+    "updatedAt": "2026-09-26T05:57:07.899Z"
   },
   {
     "_id": "cust_1789736225730",
@@ -2757,7 +2778,8 @@
         "isRegistrationAddress": true
       }
     ],
-    "createdAt": "2026-09-18T12:57:05.996Z"
+    "createdAt": "2026-09-18T12:57:05.996Z",
+    "updatedAt": "2026-09-26T05:57:07.899Z"
   },
   {
     "_id": "6ab0c7c76d77b63731432c77",
@@ -2836,7 +2858,8 @@
     "refreshToken": "",
     "requireCaptcha": false,
     "twoFactorEnabled": false,
-    "twoFactorSecret": ""
+    "twoFactorSecret": "",
+    "id": "6ab0c7c76d77b63731432c77"
   },
   {
     "_id": "6ab37593457d2cf75d44a3a8",
@@ -3709,7 +3732,8 @@
     ],
     "membershipStatus": "ACTIVE",
     "membershipTier": "Silver Tier",
-    "membershipUpdatedAt": "2026-09-24T12:26:18.579Z"
+    "membershipUpdatedAt": "2026-09-24T12:26:18.579Z",
+    "updatedAt": "2026-09-26T05:57:07.901Z"
   },
   {
     "_id": "6ab5f821457d2cf75d465f66",
@@ -4320,7 +4344,31 @@
         "isRegistrationAddress": true
       }
     ],
-    "createdAt": "2026-09-25T12:17:22.683Z"
+    "createdAt": "2026-09-25T12:17:22.683Z",
+    "membershipHistory": [
+      {
+        "plan": "Silver Tier",
+        "previousPlan": "None",
+        "paymentId": "pay_mem_1790399435944_2347",
+        "orderId": "order_test_1790399434149_6388",
+        "amount": 8000,
+        "status": "SUCCESS",
+        "date": "2026-09-26T05:10:36.032Z"
+      },
+      {
+        "plan": "Gold Elite",
+        "previousPlan": "Silver Tier",
+        "paymentId": "pay_mem_1790399502305_8990",
+        "orderId": "order_test_1790399490125_9665",
+        "amount": 15000,
+        "status": "SUCCESS",
+        "date": "2026-09-26T05:11:42.396Z"
+      }
+    ],
+    "membershipStatus": "ACTIVE",
+    "membershipTier": "Gold Elite",
+    "membershipUpdatedAt": "2026-09-26T05:11:42.396Z",
+    "updatedAt": "2026-09-26T05:57:07.902Z"
   },
   {
     "_id": "cust_1790338650224",
@@ -4355,6 +4403,52 @@
         "isRegistrationAddress": true
       }
     ],
-    "createdAt": "2026-09-25T12:17:30.244Z"
+    "createdAt": "2026-09-25T12:17:30.244Z",
+    "updatedAt": "2026-09-26T05:57:07.902Z"
+  },
+  {
+    "_id": "6ab76e34457d2cf75d46b749",
+    "email": "harshini@gmail.com",
+    "address": "2/11, 2nd cross, Attur Post Office, Attur, Salem, Tamil Nadu - 636112",
+    "agentId": "6a9120a73cbecf25841b8d87",
+    "assignedAgent": "6a9120a73cbecf25841b8d87",
+    "assignedDistrict": "Salem",
+    "assignedDivision": "Attur Division",
+    "assignedState": "Tamil Nadu",
+    "businessName": "harshini",
+    "category": "Services",
+    "contactPerson": "Harshini",
+    "createdAt": "2026-09-26T07:03:16.639Z",
+    "createdVia": "agent",
+    "joiningType": "agent",
+    "kycStatus": "pending",
+    "name": "harshini",
+    "onboardedBy": "6a9120a73cbecf25841b8d87",
+    "password": "$2a$10$OTDY4n7K82z6gyABQT3tdu8EOADtATTtS2ANbyOXrUJTOMx2DZqOi",
+    "phone": "7677667643",
+    "pincode": "636112",
+    "registrationId": "REG-20260926-2088",
+    "registrationSource": "agent",
+    "role": "Vendor",
+    "status": "Approved",
+    "vendorType": "Services",
+    "isActive": true,
+    "isApproved": true,
+    "isLocked": false,
+    "rejectionReason": "",
+    "adminRole": "staff",
+    "balance": 0,
+    "commissionEarned": 0,
+    "failedLoginAttempts": 0,
+    "isPaid": false,
+    "level": "pincode",
+    "passwordChangedAt": "2026-09-26T07:09:20.188Z",
+    "paymentPinConfigured": false,
+    "paymentPinFailedAttempts": 0,
+    "paymentPinHash": "",
+    "refreshToken": "",
+    "requireCaptcha": false,
+    "twoFactorEnabled": false,
+    "twoFactorSecret": ""
   }
 ]

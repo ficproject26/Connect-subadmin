@@ -27,7 +27,7 @@ export function DistrictProfile() {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Assigned District: <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.district || 'Salem'}</span>, {user?.state || 'Tamil Nadu'}
+              Assigned District: <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.district || '-'}</span>{user?.state ? `, ${user.state}` : ''}
             </p>
             <div className="pt-3 flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-slate-600 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
@@ -36,7 +36,7 @@ export function DistrictProfile() {
               </span>
               <span className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                {user?.district || 'Salem'} District HQ
+                {user?.district ? `${user.district} District HQ` : 'District HQ'}
               </span>
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-blue-600" />
@@ -55,7 +55,7 @@ export function DistrictProfile() {
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
             <div className="font-semibold text-slate-900 dark:text-white">District Scope</div>
             <p className="text-slate-500 text-[11px] mt-0.5">
-              Authorized to view and govern all divisions, pincodes, and businesses within {user?.district || 'Salem'}.
+              Authorized to view and govern all divisions, pincodes, and businesses within {user?.district ? `${user.district} District` : 'assigned territory'}.
             </p>
           </div>
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">

@@ -73,7 +73,7 @@ export function DistrictAgentPayments() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">District Agent Payments</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Agent referral commissions, incentive payouts, and payment records in {user?.district || 'Salem'} District.
+          Agent referral commissions, incentive payouts, and payment records in {user?.district ? `${user.district} District` : 'assigned district'}.
         </p>
       </div>
 

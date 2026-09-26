@@ -5,7 +5,7 @@ import { HierarchyNavigator } from '../../components/HierarchyNavigator';
 
 export function DivisionalOverview() {
   const { user } = useAuth();
-  const divisionName = user?.division || 'Salem North';
+  const divisionName = user?.division || 'Division';
 
   return (
     <div className="space-y-6">
@@ -32,7 +32,7 @@ export function DivisionalOverview() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                District: {user?.district || 'Salem'} • State: {user?.state || 'Tamil Nadu'} • 2 Supervised Pincode Hubs
+                District: {user?.district || '-'} • State: {user?.state || '-'}
               </p>
             </div>
           </div>
@@ -40,7 +40,7 @@ export function DivisionalOverview() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="text-xs text-slate-500 font-medium">Division Headquarters</div>
-              <div className="text-sm font-bold text-slate-900 dark:text-white">Salem North Divisional Office</div>
+              <div className="text-sm font-bold text-slate-900 dark:text-white">{divisionName} Divisional Office</div>
             </div>
           </div>
         </div>

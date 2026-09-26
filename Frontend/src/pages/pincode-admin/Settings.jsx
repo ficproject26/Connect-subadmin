@@ -5,7 +5,7 @@ import { Settings, Shield, Bell, Save } from 'lucide-react';
 export function PincodeSettings() {
   const { user } = useAuth();
   const [saved, setSaved] = useState(false);
-  const pincode = user?.pincode || '636001';
+  const pincode = user?.pincode || '';
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -41,7 +41,7 @@ export function PincodeSettings() {
               <input
                 type="text"
                 disabled
-                defaultValue={`PIN: ${pincode} (${user?.areaName || 'Local Zone'})`}
+                defaultValue={pincode ? `PIN: ${pincode}${user?.pincodeName || user?.areaName ? ` (${user.pincodeName || user.areaName})` : ''}` : 'Unassigned'}
                 className="w-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-500 font-semibold cursor-not-allowed"
               />
             </div>

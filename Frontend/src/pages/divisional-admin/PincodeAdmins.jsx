@@ -22,7 +22,7 @@ import {
 export function DivisionalPincodeAdmins() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const divisionName = user?.division || 'Attur';
+  const divisionName = user?.division || '';
 
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,8 +53,8 @@ export function DivisionalPincodeAdmins() {
             pincode: p.pincode,
             area: p.areaName || `${p.division || divisionName} Hub`,
             division: p.division || p.divisionName || divisionName,
-            district: p.district || p.districtName || user?.district || 'Salem',
-            state: p.state || user?.state || 'Tamil Nadu',
+            district: p.district || p.districtName || user?.district || '',
+            state: p.state || user?.state || '',
             status: p.status || 'Active',
             joinedDate: p.adminCreatedAt ? new Date(p.adminCreatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Active',
             address: p.adminAddress || `Pincode Station ${p.pincode}`,

@@ -109,7 +109,7 @@ export function PincodeKYC() {
             <span className="truncate">{row.address || 'Local Pincode'}</span>
           </div>
           <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pl-4.5 mt-0.5 whitespace-nowrap">
-            PIN: {row.pincode || user?.pincode || '636001'}
+            PIN: {row.pincode || user?.pincode || '-'}
           </div>
         </div>
       )
@@ -161,7 +161,7 @@ export function PincodeKYC() {
       <div>
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">Pincode KYC Compliance Desk</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Vendor identity verification clearance and local compliance review for PIN: {user?.pincode || '636001'}.
+          Vendor identity verification clearance and local compliance review for PIN: {user?.pincode || '-'}.
         </p>
       </div>
 

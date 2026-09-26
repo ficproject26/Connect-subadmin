@@ -8,7 +8,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-24T10:09:13.315Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.432Z"
   },
   {
     "_id": "6ab4f6df1311030bfd3447a2",
@@ -19,7 +24,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-24T10:09:35.811Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.445Z"
   },
   {
     "_id": "6ab6178d2555c67bd9bc7198",
@@ -30,7 +40,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-25T06:41:17.320Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.460Z"
   },
   {
     "_id": "6ab618da2555c67bd9bc7246",
@@ -41,7 +56,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-25T06:46:50.044Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.474Z"
   },
   {
     "_id": "6ab624b7c3c80ae7e778e73f",
@@ -52,7 +72,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-25T07:37:27.071Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.490Z"
   },
   {
     "_id": "6ab65d79c3c80ae7e778f58c",
@@ -63,7 +88,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-25T11:39:37.570Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.504Z"
   },
   {
     "_id": "6ab65da3c3c80ae7e778f599",
@@ -74,7 +104,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-25T11:40:19.009Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.518Z"
   },
   {
     "_id": "6ab4f6df1311030bfd3447a2",
@@ -87,7 +122,11 @@
     "read": false,
     "receiver": "6a926325caf3cb00e6b9a590",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-25T13:48:29.140Z"
+    "updatedAt": "2026-09-26T07:22:04.532Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab4f6c91311030bfd34477c",
@@ -100,7 +139,11 @@
     "read": false,
     "receiver": "6a926325caf3cb00e6b9a590",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-25T13:48:29.140Z"
+    "updatedAt": "2026-09-26T07:22:04.548Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab6178d2555c67bd9bc7198",
@@ -113,7 +156,11 @@
     "read": false,
     "receiver": "6a9120a73cbecf25841b8d87",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-25T13:48:29.140Z"
+    "updatedAt": "2026-09-26T07:22:04.562Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab618da2555c67bd9bc7246",
@@ -126,7 +173,11 @@
     "read": false,
     "receiver": "6a9120a73cbecf25841b8d87",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-25T13:49:11.869Z"
+    "updatedAt": "2026-09-26T07:22:04.576Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab65d79c3c80ae7e778f58c",
@@ -139,7 +190,11 @@
     "read": false,
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T05:40:03.908Z"
+    "updatedAt": "2026-09-26T07:22:04.590Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab624b7c3c80ae7e778e73f",
@@ -152,7 +207,11 @@
     "read": false,
     "receiver": "6ab3ca2d7ee04aa0f057fcf1",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-25T13:48:29.140Z"
+    "updatedAt": "2026-09-26T07:22:04.604Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab65da3c3c80ae7e778f599",
@@ -165,7 +224,11 @@
     "read": false,
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-25T13:48:29.140Z"
+    "updatedAt": "2026-09-26T07:22:04.618Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab749c3c3c80ae7e778f91c",
@@ -176,7 +239,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-26T04:27:47.136Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.632Z"
   },
   {
     "_id": "6ab754e0c3c80ae7e778fad1",
@@ -187,7 +255,12 @@
     "priority": "high",
     "category": "target_assigned",
     "createdAt": "2026-09-26T05:15:12.681Z",
-    "__v": 0
+    "__v": 0,
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "updatedAt": "2026-09-26T07:22:04.645Z"
   },
   {
     "_id": "6ab749c3c3c80ae7e778f91c",
@@ -200,7 +273,11 @@
     "read": false,
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T05:38:14.973Z"
+    "updatedAt": "2026-09-26T07:22:04.658Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
   },
   {
     "_id": "6ab754e0c3c80ae7e778fad1",
@@ -213,6 +290,82 @@
     "read": false,
     "receiver": "6ab64f46c3c80ae7e778f144",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T05:38:14.973Z"
+    "updatedAt": "2026-09-26T07:22:04.672Z",
+    "isRead": true,
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ]
+  },
+  {
+    "_id": "6ab76ac045152c228d463958",
+    "receiver": "6ab3ca2d7ee04aa0f057fcf1",
+    "title": "New Target Assigned",
+    "message": "You have been assigned a target of 2 visits: fvghjk",
+    "read": false,
+    "priority": "high",
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T06:48:32.826Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab76b6345152c228d4639a6",
+    "receiver": "6a9120a73cbecf25841b8d87",
+    "title": "New Target Assigned",
+    "message": "You have been assigned a target of 25 visits: dfghnjm,",
+    "read": false,
+    "priority": "high",
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T06:51:15.288Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab76b6645152c228d4639b0",
+    "receiver": "6a9120a73cbecf25841b8d87",
+    "title": "New Target Assigned",
+    "message": "You have been assigned a target of 2 visits: dxfgchjbmkl",
+    "read": false,
+    "priority": "high",
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T06:51:18.852Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab76b6345152c228d4639a6",
+    "__v": 0,
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T06:51:15.288Z",
+    "id": "6ab76b6345152c228d4639a6",
+    "message": "You have been assigned a target of 25 visits: dfghnjm,",
+    "priority": "high",
+    "read": false,
+    "receiver": "6a9120a73cbecf25841b8d87",
+    "title": "New Target Assigned",
+    "updatedAt": "2026-09-26T07:43:53.136Z"
+  },
+  {
+    "_id": "6ab76ac045152c228d463958",
+    "__v": 0,
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T06:48:32.826Z",
+    "id": "6ab76ac045152c228d463958",
+    "message": "You have been assigned a target of 2 visits: fvghjk",
+    "priority": "high",
+    "read": false,
+    "receiver": "6ab3ca2d7ee04aa0f057fcf1",
+    "title": "New Target Assigned",
+    "updatedAt": "2026-09-26T07:43:53.136Z"
+  },
+  {
+    "_id": "6ab76b6645152c228d4639b0",
+    "__v": 0,
+    "category": "target_assigned",
+    "createdAt": "2026-09-26T06:51:18.852Z",
+    "id": "6ab76b6645152c228d4639b0",
+    "message": "You have been assigned a target of 2 visits: dxfgchjbmkl",
+    "priority": "high",
+    "read": false,
+    "receiver": "6a9120a73cbecf25841b8d87",
+    "title": "New Target Assigned",
+    "updatedAt": "2026-09-26T07:43:53.136Z"
   }
 ]

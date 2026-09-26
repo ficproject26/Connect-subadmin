@@ -10,8 +10,8 @@ import { ShoppingBag, Users, CreditCard, TrendingUp, MapPin, Eye } from 'lucide-
 export function PincodeOrders() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const pincode = user?.pincode || '636001';
-  const areaName = user?.areaName || 'Salem Town Fort';
+  const pincode = user?.pincode || '';
+  const areaName = user?.pincodeName || user?.areaName || user?.pincode || '';
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);

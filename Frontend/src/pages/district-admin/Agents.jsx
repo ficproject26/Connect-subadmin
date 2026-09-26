@@ -76,7 +76,7 @@ export function DistrictAgents({ level = 'district' }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const district = user?.district || 'Salem';
+  const district = user?.district || '-';
 
   // Determine active level from URL pathname
   let activeLevel = level;

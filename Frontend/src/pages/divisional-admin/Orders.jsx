@@ -9,8 +9,8 @@ import { ShoppingBag, Users, CreditCard, TrendingUp, MapPin, Eye } from 'lucide-
 
 export function DivisionalOrders() {
   const { user } = useAuth();
-  const divisionName = user?.division || 'Salem North';
-  const districtName = user?.district || 'Salem';
+  const divisionName = user?.division || '';
+  const districtName = user?.district || '';
   const { isDark } = useTheme();
 
   const [orders, setOrders] = useState([]);
@@ -55,12 +55,12 @@ export function DivisionalOrders() {
     const normalOrders = total - membershipOrders;
 
     // Calculate Highest Ordering Pincode in this Division
-    let peakLocation = total > 0 ? '636001' : '-';
+    let peakLocation = '-';
     let peakCount = 0;
     if (total > 0) {
       const pinCounts = orders.reduce((acc, o) => {
-        const pin = String(o.pincode || '636001');
-        acc[pin] = (acc[pin] || 0) + 1;
+        const pin = String(o.pincode || '');
+        if (pin) acc[pin] = (acc[pin] || 0) + 1;
         return acc;
       }, {});
 

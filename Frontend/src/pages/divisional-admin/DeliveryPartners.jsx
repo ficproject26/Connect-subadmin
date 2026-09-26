@@ -16,8 +16,8 @@ import {
 
 export function DivisionalDeliveryPartners() {
   const { user } = useAuth();
-  const divisionName = user?.division || 'Salem North';
-  const districtName = user?.district || 'Salem';
+  const divisionName = user?.division || '';
+  const districtName = user?.district || '';
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 

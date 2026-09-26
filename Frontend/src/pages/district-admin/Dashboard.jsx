@@ -269,7 +269,7 @@ export function DistrictAdminDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Assigned Divisions in {user?.district || 'Salem'}
+                Assigned Divisions in {user?.district ? `${user.district} District` : 'District'}
               </h3>
               <p className="text-xs text-slate-500">Flow: District &rarr; Division &rarr; Pincode</p>
             </div>
@@ -322,7 +322,7 @@ export function DistrictAdminDashboard() {
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
               Membership Tier Share
             </span>
-            <p className="text-[11px] text-slate-500">Cardholders in {user?.district || 'Salem'}</p>
+            <p className="text-[11px] text-slate-500">Cardholders in {user?.district ? `${user.district} District` : 'District'}</p>
           </div>
 
           <div className="relative w-36 h-36 mx-auto my-3 flex items-center justify-center">

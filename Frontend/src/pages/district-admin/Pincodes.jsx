@@ -52,8 +52,8 @@ export function DistrictPincodes() {
       pincode: row.pincode,
       area: row.areaName || row.area || 'Assigned Zone',
       division: row.division || row.divisionName || '-',
-      district: row.district || user?.district || 'Salem',
-      state: user?.state || 'Tamil Nadu',
+      district: row.district || user?.district || '-',
+      state: user?.state || '-',
       totalCustomers: row.customerCount || row.customers || 0,
       population: row.population || '45,000+',
       status: row.status || 'Active',
@@ -61,7 +61,7 @@ export function DistrictPincodes() {
       qualification: row.qualification || 'Bachelor of Science / Management',
       experience: row.experience || '4+ Years Field Operations',
       specialization: row.specialization || 'Hyperlocal Territory & Courier Logistics',
-      address: row.address || `Pincode Hyperlocal Hub ${row.pincode}, ${row.areaName || 'Zone'}, ${row.division || ''} Division, ${user?.district || 'Salem'}`
+      address: row.address || `Pincode Hyperlocal Hub ${row.pincode}, ${row.areaName || 'Zone'}, ${row.division || ''} Division, ${user?.district || ''}`
     };
   };
 
@@ -197,9 +197,9 @@ export function DistrictPincodes() {
     },
     {
       header: 'DISTRICT & DIVISION',
-      accessor: (row) => `${row.district || row.districtName || user?.district || 'Salem'} ${row.division || row.divisionName || ''}`,
+      accessor: (row) => `${row.district || row.districtName || user?.district || '-'} ${row.division || row.divisionName || ''}`,
       render: (row) => {
-        const district = row.district || row.districtName || user?.district || 'Salem';
+        const district = row.district || row.districtName || user?.district || '-';
         const division = row.division || row.divisionName || '';
         return (
           <div className={`text-xs ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -310,7 +310,7 @@ export function DistrictPincodes() {
           </div>
           <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             {divisionFilter ? (
-              <span>Filtered by Division: <strong className="text-blue-600 font-bold">{divisionFilter}</strong> in {user?.district || 'Salem'} District. Click View Details or row to inspect Admin & Pincode information.</span>
+              <span>Filtered by Division: <strong className="text-blue-600 font-bold">{divisionFilter}</strong> in {user?.district ? `${user.district} District` : 'District'}. Click View Details or row to inspect Admin & Pincode information.</span>
             ) : (
               <span>All registered pincode service zones and appointed local administrators across the District. Click View Details or row to open full details.</span>
             )}
@@ -520,9 +520,9 @@ export function DistrictPincodes() {
                       PIN: {selectedPincode.pincode} — {selectedPincode.areaName || selectedPincode.area || 'Zone Hub'}
                     </h4>
                     <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                      <span>State: <strong className="text-slate-800 dark:text-slate-200">{selectedPincode.state || user?.state || 'Tamil Nadu'}</strong></span>
+                      <span>State: <strong className="text-slate-800 dark:text-slate-200">{selectedPincode.state || user?.state || '-'}</strong></span>
                       <span className="mx-2">•</span>
-                      <span>District: <strong className="text-slate-800 dark:text-slate-200">{selectedPincode.district || user?.district || 'Salem'}</strong></span>
+                      <span>District: <strong className="text-slate-800 dark:text-slate-200">{selectedPincode.district || user?.district || '-'}</strong></span>
                       <span className="mx-2">•</span>
                       <span>Division: <strong className="text-slate-800 dark:text-slate-200">{selectedPincode.division || selectedPincode.divisionName}</strong></span>
                     </div>

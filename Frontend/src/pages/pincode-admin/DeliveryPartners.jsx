@@ -16,8 +16,8 @@ import {
 
 export function PincodeDeliveryPartners() {
   const { user } = useAuth();
-  const pincode = user?.pincode || '636001';
-  const districtName = user?.district || 'Salem';
+  const pincode = user?.pincode || '';
+  const districtName = user?.district || '';
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 

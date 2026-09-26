@@ -96,7 +96,7 @@ export function DistrictTechnicians() {
             <span>PIN: {row.pincode}</span>
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium pl-4.5 mt-0.5">
-            {row.district ? `${row.district}${row.division ? `, ${row.division}` : ''}` : `${user?.district || 'Salem'} District`}
+            {row.district ? `${row.district}${row.division ? `, ${row.division}` : ''}` : (user?.district ? `${user.district} District` : '-')}
           </div>
         </div>
       )
@@ -135,7 +135,7 @@ export function DistrictTechnicians() {
       <div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">District Technicians Roster</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Field service specialists assigned within {user?.district || 'Salem'} District divisions.
+          Field service specialists assigned within {user?.district ? `${user.district} District` : 'assigned district'} divisions.
         </p>
       </div>
 

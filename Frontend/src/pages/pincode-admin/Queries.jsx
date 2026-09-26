@@ -19,7 +19,7 @@ const INITIAL_PINCODE_QUERIES = [];
 export function PincodeQueries() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const pincode = user?.pincode || '636001';
+  const pincode = user?.pincode || '';
 
   const [queries] = useState(INITIAL_PINCODE_QUERIES);
   const [loading, setLoading] = useState(false);
@@ -119,7 +119,7 @@ export function PincodeQueries() {
           Pincode Support Queries & Grievances
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          Local merchant inquiries, customer privilege escalations, and delivery fleet tickets for PIN: {pincode}.
+          Local merchant inquiries, customer privilege escalations, and delivery fleet tickets for PIN: {pincode || '-'}.
         </p>
       </div>
 

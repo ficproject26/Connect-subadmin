@@ -32,7 +32,7 @@ export function ResumeModal({ application, isOpen, onClose }) {
   const appliedDate = application.applicationDate || application.createdAt || '2026-03-05 10:30 AM';
   const email = application.customerEmail || `${candidateName.toLowerCase().replace(/\s+/g, '.')}@gmail.com`;
   const phone = application.customerPhone || '+91 98401 23456';
-  const location = `${application.district}, ${application.division || 'Salem North'} (PIN: ${application.pincode})`;
+  const location = [application.district, application.division, application.pincode ? `PIN: ${application.pincode}` : ''].filter(Boolean).join(', ') || '-';
   const experience = application.experience || '4+ Years of Professional Field Experience';
   const education = application.education || 'Diploma / Degree in Specialized Technical Field';
   const skills = application.skills || [
@@ -269,7 +269,7 @@ Verification: Verified Candidate Application
                   <span className="font-mono text-slate-500 font-normal">2022 — Present</span>
                 </div>
                 <div className="text-[11px] font-semibold text-blue-700 mb-1">
-                  Salem Regional Field Services • Tamil Nadu
+                  Regional Field Technical Services
                 </div>
                 <ul className="list-disc list-outside pl-4 space-y-1 text-xs text-slate-700 leading-relaxed">
                   <li>Supervised and executed 500+ client service appointments with a 99.2% customer approval score.</li>

@@ -44,8 +44,8 @@ export function StateDivisionDetails() {
         const res = await dataService.getDivisions();
         if (res.success && res.divisions) {
           const list = res.divisions.map(div => {
-            const state = div.stateName || user?.state || 'Tamil Nadu';
-            const district = div.districtName || user?.district || 'Salem';
+            const state = div.stateName || div.state || user?.state || '-';
+            const district = div.districtName || div.district || user?.district || '-';
             const name = div.name;
             const registeredPins = Array.isArray(div.pincodes) && div.pincodes.length > 0 ? div.pincodes : [];
             const pinCount = div.pincodesCount !== undefined ? div.pincodesCount : registeredPins.length;

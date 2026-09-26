@@ -106,10 +106,10 @@ export function DistrictKYC() {
         <div className="text-xs">
           <div className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1 truncate max-w-[220px]" title={row.address}>
             <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            <span className="truncate">{row.address || 'Salem District'}</span>
+            <span className="truncate">{row.address || (user?.district ? `${user.district} District` : 'District')}</span>
           </div>
           <div className="font-mono text-emerald-600 dark:text-emerald-400 text-[11px] font-bold pl-4.5 mt-0.5 whitespace-nowrap">
-            PIN: {row.pincode || '636001'}
+            PIN: {row.pincode || '-'}
           </div>
         </div>
       )
@@ -161,7 +161,7 @@ export function DistrictKYC() {
       <div>
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">District KYC Compliance Desk</h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Vendor identity verification clearance and compliance roster for {user?.district || 'Salem'} District.
+          Vendor identity verification clearance and compliance roster for {user?.district ? `${user.district} District` : 'assigned district'}.
         </p>
       </div>
 

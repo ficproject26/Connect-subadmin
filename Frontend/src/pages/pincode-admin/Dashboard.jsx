@@ -28,9 +28,9 @@ export function PincodeAdminDashboard() {
   const { isDark } = useTheme();
   const navigate = useNavigate();
 
-  const pincode = user?.pincode || '636001';
-  const areaName = user?.areaName || 'Salem Town Fort';
-  const districtName = user?.district || 'Salem';
+  const pincode = user?.pincode || '';
+  const areaName = user?.areaName || (pincode ? `PIN ${pincode}` : 'Hyperlocal Hub');
+  const districtName = user?.district || '-';
 
   const [summaryData, setSummaryData] = useState(null);
   const [vendors, setVendors] = useState([]);

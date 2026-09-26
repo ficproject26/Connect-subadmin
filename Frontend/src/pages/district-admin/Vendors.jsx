@@ -28,7 +28,7 @@ import { useTheme } from '../../context/ThemeContext';
 export function DistrictVendors() {
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const districtName = user?.district || 'Salem';
+  const districtName = user?.district || '';
 
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);

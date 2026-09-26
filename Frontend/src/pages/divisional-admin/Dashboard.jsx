@@ -28,8 +28,8 @@ export function DivisionalAdminDashboard() {
   const { isDark } = useTheme();
   const navigate = useNavigate();
 
-  const divisionName = user?.division || 'Salem North';
-  const districtName = user?.district || 'Salem';
+  const divisionName = user?.division || '';
+  const districtName = user?.district || '';
 
   const [summaryData, setSummaryData] = useState(null);
   const [pincodes, setPincodes] = useState([]);

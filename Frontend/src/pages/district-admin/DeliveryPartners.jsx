@@ -16,7 +16,7 @@ import {
 
 export function DistrictDeliveryPartners() {
   const { user } = useAuth();
-  const districtName = user?.district || 'Salem';
+  const districtName = user?.district || '';
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 

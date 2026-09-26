@@ -1,22 +1,32 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { authService } from '../services/authService';
-import { getRoleDashboardPath } from '../utils/permissions';
 import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(authService.getCurrentUser());
-  const [token, setToken] = useState(authService.getToken());
+  // Initialize synchronously from localStorage so isAuthenticated is correct on first render.
+  const [user, setUser] = useState(() => authService.getCurrentUser());
+  const [token, setToken] = useState(() => authService.getToken());
   const [loading, setLoading] = useState(true);
   const [demoAdmins, setDemoAdmins] = useState([]);
 
+  // Track whether initAuth has already run to prevent duplicate calls.
+  const initRanRef = useRef(false);
+
   useEffect(() => {
+    // Only run once on mount, NOT on every token change.
+    // Running on token changes caused a second /auth/me call immediately after
+    // login which could 401 and wipe the token before navigate() fired.
+    if (initRanRef.current) return;
+    initRanRef.current = true;
+
     let isMounted = true;
 
     async function initAuth() {
+      const storedToken = authService.getToken();
       try {
-        if (token) {
+        if (storedToken) {
           const res = await authService.getMe();
           if (isMounted && res.success && res.user) {
             setUser(res.user);
@@ -24,21 +34,32 @@ export function AuthProvider({ children }) {
           }
         }
       } catch (err) {
-        // Only log out if it is an actual authentication failure (401), not a network/startup glitch
-        if (err?.status === 401 || err?.message?.toLowerCase().includes('unauthorized') || err?.message?.toLowerCase().includes('invalid token')) {
-          console.warn('Session expired or invalid, logging out.');
+        // Only clear session on definitive 401 (invalid/expired token).
+        // Do NOT clear on network errors (ECONNREFUSED, timeout, 503) — backend
+        // may still be starting up and the token is valid.
+        const is401 =
+          err?.status === 401 ||
+          (err?.message || '').toLowerCase().includes('unauthorized') ||
+          (err?.message || '').toLowerCase().includes('invalid token') ||
+          (err?.message || '').toLowerCase().includes('token expired');
+
+        if (is401) {
+          console.warn('Session expired or invalid on startup, logging out.');
           authService.logout();
           if (isMounted) {
             setUser(null);
             setToken(null);
           }
         } else {
-          console.warn('Backend server unreachable during initAuth, preserving session:', err?.message || err);
+          // Backend unreachable — keep session alive, user can still use the app
+          // if they were previously authenticated.
+          console.warn(
+            'Backend unreachable during startup auth check, preserving session:',
+            err?.message || err
+          );
         }
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     }
 
@@ -51,8 +72,6 @@ export function AuthProvider({ children }) {
       } catch (e) {
         if (isMounted && retries > 0) {
           setTimeout(() => loadDemoAdmins(retries - 1), 1200);
-        } else {
-          console.error('Could not load demo admins', e);
         }
       }
     }
@@ -63,20 +82,27 @@ export function AuthProvider({ children }) {
     return () => {
       isMounted = false;
     };
-  }, [token]);
+  }, []); // ← empty deps: runs only on mount
 
+  /**
+   * Login: calls authService, then atomically updates React state.
+   * After this resolves, isAuthenticated is guaranteed to be true,
+   * so navigate() in Login.jsx will succeed without a redirect loop.
+   */
   const login = async (email, password) => {
     const res = await authService.login(email, password);
-    if (res.success) {
-      setUser(res.user);
+    if (res.success && res.token && res.user) {
+      // authService.login() already persisted token + user to localStorage.
+      // Now sync React state so isAuthenticated flips to true before we navigate.
       setToken(res.token);
+      setUser(res.user);
       return res;
     }
     throw new Error(res.message || 'Login failed');
   };
 
+  /** Demo / 1-click quick login */
   const loginAsRole = async (email) => {
-    // Quick demo 1-click login
     return await login(email, 'admin123');
   };
 
@@ -84,20 +110,25 @@ export function AuthProvider({ children }) {
     authService.logout();
     setUser(null);
     setToken(null);
+    // Use window.location to ensure a full context reset after logout.
     window.location.href = '/login';
   };
 
+  const isAuthenticated = !!token && !!user;
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      loading,
-      login,
-      loginAsRole,
-      logout,
-      demoAdmins,
-      isAuthenticated: !!token && !!user
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        loginAsRole,
+        logout,
+        demoAdmins,
+        isAuthenticated,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

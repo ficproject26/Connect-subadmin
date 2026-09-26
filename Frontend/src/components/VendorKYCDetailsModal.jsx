@@ -51,14 +51,14 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
   const phone = vendor.phone || '+91 94431 00000';
   const email = vendor.email || 'vendor@company.com';
 
-  const fullAddress = vendor.fullAddress || vendor.address || 'Commercial Center, Main Bazaar';
-  const pincode = vendor.pincode || '636001';
+  const fullAddress = vendor.fullAddress || vendor.address || '-';
+  const pincode = vendor.pincode || '';
 
   // Resolve hierarchy & team based on pincode
-  const resolved = resolvePincodeHierarchy(pincode);
-  const state = vendor.state || resolved.state;
-  const district = vendor.district || resolved.district;
-  const division = vendor.division || resolved.division;
+  const resolved = pincode ? resolvePincodeHierarchy(pincode) : {};
+  const state = vendor.state || resolved?.state || '-';
+  const district = vendor.district || resolved?.district || '-';
+  const division = vendor.division || resolved?.division || '-';
 
   const assignedTeam = vendor.assignedTeam || {
     pincodeAdmin: resolved.pincodeAdmin,

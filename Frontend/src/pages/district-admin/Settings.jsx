@@ -40,7 +40,7 @@ export function DistrictSettings() {
               <input
                 type="text"
                 disabled
-                defaultValue={user?.district || 'Salem'}
+                defaultValue={user?.district || ''}
                 className="w-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-500 font-semibold cursor-not-allowed"
               />
             </div>
@@ -57,7 +57,7 @@ export function DistrictSettings() {
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" defaultChecked className="w-4 h-4 text-blue-600 rounded" />
               <span className="text-slate-700 dark:text-slate-300 font-medium">
-                Notify when new technicians are onboarded in {user?.district || 'Salem'}
+                Notify when new technicians are onboarded in {user?.district ? `${user.district} District` : 'district'}
               </span>
             </label>
             <label className="flex items-center gap-3 cursor-pointer">

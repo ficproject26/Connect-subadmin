@@ -32,10 +32,10 @@ export function VendorSubscriptions() {
   const { isDark } = useTheme();
 
   const role = user?.role || 'State Admin';
-  const stateName = user?.state || 'Tamil Nadu';
-  const districtName = user?.district || 'Salem';
-  const divisionName = user?.division || 'Salem North';
-  const pincode = user?.pincode || '636001';
+  const stateName = user?.state || '';
+  const districtName = user?.district || '';
+  const divisionName = user?.division || '';
+  const pincode = user?.pincode || '';
 
   const [subscriptions, setSubscriptions] = useState(SEED_SUBSCRIPTIONS);
   const [selectedSub, setSelectedSub] = useState(null);

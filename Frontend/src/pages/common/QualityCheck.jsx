@@ -338,18 +338,18 @@ export function QualityCheck() {
     if (role === 'District Admin') {
       return {
         title: 'District Quality Check Desk',
-        subtitle: `Vendor product quality compliance and disciplinary review for District: ${user?.district || 'Salem'}.`
+        subtitle: `Vendor product quality compliance and disciplinary review for District: ${user?.district || '-'}.`
       };
     }
     if (role === 'Divisional Admin') {
       return {
         title: 'Divisional Quality Check Desk',
-        subtitle: `Vendor product quality compliance and disciplinary review for Division: ${user?.division || 'Salem North'}.`
+        subtitle: `Vendor product quality compliance and disciplinary review for Division: ${user?.division || '-'}.`
       };
     }
     return {
       title: 'Pincode Quality Check Desk',
-      subtitle: `Vendor product quality compliance and disciplinary review for PIN: ${user?.pincode || '636001'}.`
+      subtitle: `Vendor product quality compliance and disciplinary review for PIN: ${user?.pincode || '-'}.`
     };
   };
 
