@@ -160,15 +160,6 @@ export function PincodeAgents() {
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Ground Agents{pincode ? ` (PIN: ${pincode})` : ''}</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">Field sales, customer acquisition, and vendor onboarding.</p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setShowOnboardModal(true)}
-          className="px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New Vendor Onboarding</span>
-        </button>
       </div>
 
       {/* Visibility Rule Notice */}

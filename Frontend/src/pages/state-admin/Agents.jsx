@@ -412,17 +412,6 @@ export function StateAgents({ level = 'state' }) {
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">{config.title}</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{config.subtitle}</p>
         </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setShowOnboardModal(true)}
-            className="px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Initiate Vendor Onboarding</span>
-          </button>
-        </div>
       </div>
 
 

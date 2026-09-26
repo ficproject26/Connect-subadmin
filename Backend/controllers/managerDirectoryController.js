@@ -19,10 +19,13 @@ const formatRoleTitle = (role) => {
 // Check if an admin and a manager share the same state
 const matchesState = (admin, manager) => {
   if (!admin || !manager) return false;
-  if (admin.state && manager.state && admin.state.trim().toLowerCase() === manager.state.trim().toLowerCase()) return true;
-  if (admin.stateId && manager.stateId && String(admin.stateId).toLowerCase() === String(manager.stateId).toLowerCase()) return true;
-  if ((admin.state === 'Tamil Nadu' || admin.stateId === 'state_tn' || admin.stateId === 'ST-TAM') && 
-      (manager.stateId === 'state_tn' || manager.stateId === 'ST-TAM' || manager.state === 'Tamil Nadu')) return true;
+  const adminState = (admin.state || '').trim().toLowerCase();
+  if (!adminState || adminState === 'all india') return true;
+  const mgrState = (manager.state || manager.assignedState || '').trim().toLowerCase();
+  if (adminState && mgrState && adminState === mgrState) return true;
+  const adminStateId = String(admin.stateId || '').trim().toLowerCase();
+  const mgrStateId = String(manager.stateId || manager.assignedStateId || '').trim().toLowerCase();
+  if (adminStateId && mgrStateId && adminStateId === mgrStateId) return true;
   return false;
 };
 
@@ -31,10 +34,13 @@ const matchesDistrict = (admin, manager) => {
   if (!admin || !manager) return false;
   if (!matchesState(admin, manager)) return false;
 
-  if (admin.district && manager.district && admin.district.trim().toLowerCase() === manager.district.trim().toLowerCase()) return true;
-  if (admin.districtId && manager.districtId && String(admin.districtId).toLowerCase() === String(manager.districtId).toLowerCase()) return true;
-  if ((admin.district?.toLowerCase() === 'salem' || admin.districtId === 'dist_salem' || admin.districtId === 'DST-SALEM') && 
-      (manager.districtId === 'dist_salem' || manager.districtId === 'DST-SALEM' || manager.district?.toLowerCase() === 'salem')) return true;
+  const adminDist = (admin.district || '').trim().toLowerCase();
+  if (!adminDist || adminDist === 'all districts') return true;
+  const mgrDist = (manager.district || manager.assignedDistrict || '').trim().toLowerCase();
+  if (adminDist && mgrDist && adminDist === mgrDist) return true;
+  const adminDistId = String(admin.districtId || '').trim().toLowerCase();
+  const mgrDistId = String(manager.districtId || manager.assignedDistrictId || '').trim().toLowerCase();
+  if (adminDistId && mgrDistId && adminDistId === mgrDistId) return true;
   return false;
 };
 
@@ -43,17 +49,28 @@ const matchesDivision = (admin, manager) => {
   if (!admin || !manager) return false;
   if (!matchesDistrict(admin, manager)) return false;
 
-  if (admin.division && manager.division && admin.division.trim().toLowerCase() === manager.division.trim().toLowerCase()) return true;
-  if (admin.divisionId && manager.divisionId && String(admin.divisionId).toLowerCase() === String(manager.divisionId).toLowerCase()) return true;
+  const adminDiv = (admin.division || '').trim().toLowerCase();
+  if (!adminDiv || adminDiv === 'all divisions') return true;
+  const mgrDiv = (manager.division || manager.assignedDivision || '').trim().toLowerCase();
+  if (adminDiv && mgrDiv && adminDiv === mgrDiv) return true;
+  const adminDivId = String(admin.divisionId || '').trim().toLowerCase();
+  const mgrDivId = String(manager.divisionId || manager.assignedDivisionId || '').trim().toLowerCase();
+  if (adminDivId && mgrDivId && adminDivId === mgrDivId) return true;
   return false;
 };
 
 // Check if an admin and a manager share the same pincode
 const matchesPincode = (admin, manager) => {
   if (!admin || !manager) return false;
-  if (admin.pincodeId && manager.pincodeId && String(admin.pincodeId).toLowerCase() === String(manager.pincodeId).toLowerCase()) return true;
-  if (admin.pincode && manager.pincode && String(admin.pincode).trim() === String(manager.pincode).trim()) return true;
-  if (admin.pincode && manager.pincodeId && manager.pincodeId === `pin_${String(admin.pincode).trim()}`) return true;
+  if (!matchesDivision(admin, manager)) return false;
+
+  const adminPin = String(admin.pincode || '').trim();
+  if (!adminPin || adminPin === 'all') return true;
+  const mgrPin = String(manager.pincode || manager.assignedPincode || '').trim();
+  if (adminPin && mgrPin && adminPin === mgrPin) return true;
+  const adminPinId = String(admin.pincodeId || '').trim().toLowerCase();
+  const mgrPinId = String(manager.pincodeId || manager.assignedPincodeId || '').trim().toLowerCase();
+  if (adminPinId && mgrPinId && adminPinId === mgrPinId) return true;
   return false;
 };
 
@@ -570,37 +587,35 @@ const addManager = async (req, res) => {
     const isDivisionalAdmin = (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && !adminRoleLower.includes('manager');
     const isPincodeAdmin = adminRoleLower.includes('pincode') && !adminRoleLower.includes('manager');
 
-    // Strict Rule:
-    // State Admin only adds State Manager
-    // District Admin only adds District Manager
-    // Division Admin only adds Division Manager
-    // Pincode Admin only adds Pincode Manager
-    let mgrRole = role;
-    if (isStateAdmin) {
-      if (role && role !== 'state_manager') {
-        return res.status(403).json({ success: false, message: 'State Admin can only add State Managers.' });
-      }
+    // Role Authorization:
+    // - Super Admin: can add any manager role
+    // - State Admin: can add state_manager, district_manager, division_manager, pincode_manager within their assigned state
+    // - District Admin: can add district_manager, division_manager, pincode_manager within their assigned district
+    // - Divisional Admin: can add division_manager, pincode_manager within their assigned division
+    // - Pincode Admin: can add pincode_manager within their assigned pincode
+    const validRoles = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'];
+    let mgrRole = role || 'state_manager';
+    if (!validRoles.includes(mgrRole)) {
       mgrRole = 'state_manager';
+    }
+
+    if (isStateAdmin) {
+      // State Admin can add any manager tier within their state
     } else if (isDistrictAdmin) {
-      if (role && role !== 'district_manager') {
-        return res.status(403).json({ success: false, message: 'District Admin can only add District Managers.' });
+      if (mgrRole === 'state_manager') {
+        return res.status(403).json({ success: false, message: 'District Admin cannot add State Managers.' });
       }
-      mgrRole = 'district_manager';
     } else if (isDivisionalAdmin) {
-      if (role && role !== 'division_manager') {
-        return res.status(403).json({ success: false, message: 'Division Admin can only add Division Managers.' });
+      if (mgrRole === 'state_manager' || mgrRole === 'district_manager') {
+        return res.status(403).json({ success: false, message: 'Division Admin can only add Division or Pincode Managers.' });
       }
-      mgrRole = 'division_manager';
     } else if (isPincodeAdmin) {
-      if (role && role !== 'pincode_manager') {
+      if (mgrRole !== 'pincode_manager') {
         return res.status(403).json({ success: false, message: 'Pincode Admin can only add Pincode Managers.' });
       }
-      mgrRole = 'pincode_manager';
     } else if (!isSuperAdmin) {
       return res.status(403).json({ success: false, message: 'Unauthorized: Only administrators can add managers.' });
     }
-
-    if (!mgrRole) mgrRole = 'state_manager';
 
     if (!mgrName) return res.status(400).json({ success: false, message: 'Manager name is required.' });
     if (!mgrEmail) return res.status(400).json({ success: false, message: 'Email address is required.' });
@@ -610,40 +625,159 @@ const addManager = async (req, res) => {
     const allUsers = Array.from(db.users);
     const existing = allUsers.find(u => 
       (u.email && u.email.toLowerCase() === mgrEmail) ||
-      (u.mobile && u.mobile === mgrMobile) ||
-      (loginId && u.loginId && u.loginId.toLowerCase() === loginId.toLowerCase())
+      (u.mobile && String(u.mobile).trim() === String(mgrMobile).trim()) ||
+      (u.phone && String(u.phone).trim() === String(mgrMobile).trim()) ||
+      (loginId && u.loginId && u.loginId.toLowerCase() === loginId.trim().toLowerCase())
     );
     if (existing) {
       return res.status(400).json({ success: false, message: 'A user with this email or mobile number already exists.' });
     }
 
-    // Auto-align location to administrator jurisdiction
-    let state = assignedState || homeState || req.user.state || 'Tamil Nadu';
-    let district = assignedDistrict || homeDistrict || req.user.district || null;
-    let division = assignedDivision || req.user.division || null;
-    let pincode = assignedPincode || homePincode || null;
+    // Auto-align location to administrator jurisdiction and role requirements
+    let state = (assignedState || homeState || req.user.state || 'Tamil Nadu').trim();
+    let stateId = req.body.assignedStateId || req.body.stateId || null;
+    let district = (assignedDistrict || homeDistrict || '').trim() || null;
+    let districtId = req.body.assignedDistrictId || req.body.districtId || null;
+    let division = (assignedDivision || '').trim() || null;
+    let divisionId = req.body.assignedDivisionId || req.body.divisionId || null;
+    let pincode = (assignedPincode || homePincode || '').trim() || null;
+    let pincodeId = req.body.assignedPincodeId || req.body.pincodeId || null;
 
-    if (isStateAdmin) {
-      state = req.user.state || 'Tamil Nadu';
+    if (isStateAdmin && req.user.state && req.user.state.toLowerCase() !== 'all india') {
+      state = req.user.state;
+      stateId = req.user.stateId || stateId;
     } else if (isDistrictAdmin) {
-      state = req.user.state || 'Tamil Nadu';
+      state = req.user.state || state;
+      stateId = req.user.stateId || stateId;
       district = req.user.district || district;
+      districtId = req.user.districtId || districtId;
     } else if (isDivisionalAdmin) {
-      state = req.user.state || 'Tamil Nadu';
+      state = req.user.state || state;
+      stateId = req.user.stateId || stateId;
       district = req.user.district || district;
+      districtId = req.user.districtId || districtId;
       division = req.user.division || division;
+      divisionId = req.user.divisionId || divisionId;
     } else if (isPincodeAdmin) {
-      state = req.user.state || 'Tamil Nadu';
+      state = req.user.state || state;
+      stateId = req.user.stateId || stateId;
       district = req.user.district || district;
+      districtId = req.user.districtId || districtId;
       division = req.user.division || division;
+      divisionId = req.user.divisionId || divisionId;
       pincode = req.user.pincode || pincode;
+      pincodeId = req.user.pincodeId || pincodeId;
     }
 
-    // Resolve IDs
-    const stateObj = (await db.states.findOne({ name: state })) || { _id: 'state_tn', name: state || 'Tamil Nadu' };
-    const districtObj = district ? ((await db.districts.findOne({ name: district })) || { _id: `dist_${district.toLowerCase()}`, name: district }) : null;
-    const divisionObj = division ? ((await db.divisions.findOne({ name: division })) || { _id: `div_${division.toLowerCase().replace(/\s+/g, '_')}`, name: division }) : null;
-    const pincodeObj = pincode ? ((await db.pincodes.findOne({ code: pincode })) || { _id: `pin_${pincode}`, code: pincode }) : null;
+    // Role-specific territory validation (compatible parent-child relationships)
+    if (mgrRole === 'state_manager') {
+      if (!state) return res.status(400).json({ success: false, message: 'State is required for State Manager.' });
+      district = null;
+      districtId = null;
+      division = null;
+      divisionId = null;
+      pincode = null;
+      pincodeId = null;
+    } else if (mgrRole === 'district_manager') {
+      if (!state) return res.status(400).json({ success: false, message: 'State is required.' });
+      if (!district) return res.status(400).json({ success: false, message: 'District is required for District Manager.' });
+      division = null;
+      divisionId = null;
+      pincode = null;
+      pincodeId = null;
+    } else if (mgrRole === 'division_manager') {
+      if (!state) return res.status(400).json({ success: false, message: 'State is required.' });
+      if (!district) return res.status(400).json({ success: false, message: 'District is required.' });
+      if (!division) return res.status(400).json({ success: false, message: 'Division is required for Divisional Manager.' });
+      pincode = null;
+      pincodeId = null;
+    } else if (mgrRole === 'pincode_manager') {
+      if (!state) return res.status(400).json({ success: false, message: 'State is required.' });
+      if (!district) return res.status(400).json({ success: false, message: 'District is required.' });
+      if (!division) return res.status(400).json({ success: false, message: 'Division is required.' });
+      if (!pincode) return res.status(400).json({ success: false, message: 'Pincode is required for Pincode Manager.' });
+    }
+
+    // Resolve territory objects and IDs from database
+    let stateDoc = null;
+    if (stateId) {
+      stateDoc = Array.from(db.states || []).find(s => String(s._id || s.id || s.stateId) === String(stateId));
+      if (stateDoc) state = stateDoc.name;
+    }
+    if (!stateDoc && state) {
+      stateDoc = Array.from(db.states || []).find(s => s.name?.toLowerCase() === state.toLowerCase());
+      if (stateDoc) stateId = String(stateDoc._id || stateDoc.id || stateDoc.stateId);
+    }
+    if (!stateId && state) {
+      stateId = `state_${state.toLowerCase().replace(/\s+/g, '_')}`;
+    }
+
+    let distDoc = null;
+    if (districtId) {
+      distDoc = Array.from(db.districts || []).find(d => String(d._id || d.id || d.districtId) === String(districtId));
+      if (distDoc) district = distDoc.name;
+    }
+    if (!distDoc && district) {
+      distDoc = Array.from(db.districts || []).find(d => 
+        d.name?.toLowerCase() === district.toLowerCase() &&
+        (!stateId || !d.stateId || String(d.stateId) === String(stateId))
+      );
+      if (distDoc) districtId = String(distDoc._id || distDoc.id || distDoc.districtId);
+    }
+    if (!districtId && district) {
+      districtId = `dist_${district.toLowerCase().replace(/\s+/g, '_')}`;
+    }
+
+    // Role + Territory parent-child compatibility validation
+    if (mgrRole === 'district_manager' || mgrRole === 'division_manager' || mgrRole === 'pincode_manager') {
+      if (distDoc && stateId && distDoc.stateId && String(distDoc.stateId) !== String(stateId)) {
+        return res.status(400).json({ success: false, message: `District "${district}" does not belong to the selected State.` });
+      }
+    }
+
+    let divDoc = null;
+    if (divisionId) {
+      divDoc = Array.from(db.divisions || []).find(v => String(v._id || v.id || v.divisionId) === String(divisionId));
+      if (divDoc) division = divDoc.name;
+    }
+    if (!divDoc && division) {
+      divDoc = Array.from(db.divisions || []).find(v => 
+        v.name?.toLowerCase() === division.toLowerCase() &&
+        (!districtId || !v.districtId || String(v.districtId) === String(districtId))
+      );
+      if (divDoc) divisionId = String(divDoc._id || divDoc.id || divDoc.divisionId);
+    }
+    if (!divisionId && division) {
+      divisionId = `div_${division.toLowerCase().replace(/\s+/g, '_')}`;
+    }
+
+    if (mgrRole === 'division_manager' || mgrRole === 'pincode_manager') {
+      if (divDoc && districtId && divDoc.districtId && String(divDoc.districtId) !== String(districtId)) {
+        return res.status(400).json({ success: false, message: `Division "${division}" does not belong to the selected District.` });
+      }
+    }
+
+    let pinDoc = null;
+    if (pincodeId) {
+      pinDoc = Array.from(db.pincodes || []).find(p => String(p._id || p.id || p.pincodeId) === String(pincodeId));
+      if (pinDoc) pincode = String(pinDoc.code || pinDoc.pincode);
+    }
+    if (!pinDoc && pincode) {
+      pinDoc = Array.from(db.pincodes || []).find(p => 
+        String(p.code || p.pincode).trim() === String(pincode).trim() &&
+        (!divisionId || !p.divisionId || String(p.divisionId) === String(divisionId))
+      );
+      if (pinDoc) pincodeId = String(pinDoc._id || pinDoc.id || pinDoc.pincodeId);
+    }
+    if (!pincodeId && pincode) {
+      pincodeId = `pin_${pincode}`;
+    }
+
+    if (mgrRole === 'pincode_manager') {
+      if (pinDoc && divisionId && pinDoc.divisionId && String(pinDoc.divisionId) !== String(divisionId)) {
+        return res.status(400).json({ success: false, message: `Pincode "${pincode}" does not belong to the selected Division.` });
+      }
+    }
 
     const mgrPassword = password || req.body.password || 'Password@123';
     const passwordHash = await bcrypt.hash(mgrPassword, 10);
@@ -680,13 +814,21 @@ const addManager = async (req, res) => {
       adminApprovedAt: now,
       kycStatus: 'Verified',
       state,
-      stateId: stateObj?._id || 'state_tn',
+      stateId: stateId || null,
+      assignedState: state,
+      assignedStateId: stateId || null,
       district: district || null,
-      districtId: districtObj?._id || null,
+      districtId: districtId || null,
+      assignedDistrict: district || null,
+      assignedDistrictId: districtId || null,
       division: division || null,
-      divisionId: divisionObj?._id || null,
+      divisionId: divisionId || null,
+      assignedDivision: division || null,
+      assignedDivisionId: divisionId || null,
       pincode: pincode || null,
-      pincodeId: pincodeObj?._id || null,
+      pincodeId: pincodeId || null,
+      assignedPincode: pincode || null,
+      assignedPincodeId: pincodeId || null,
       targetJurisdiction,
       targetAdminRole: req.user.role,
       targetAdminId: req.user.id || req.user._id,

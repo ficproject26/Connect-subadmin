@@ -94,6 +94,7 @@ export function DistrictDivisions() {
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState('');
   const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [allDistrictDivisions, setAllDistrictDivisions] = useState([]);
   const [customDivMode, setCustomDivMode] = useState(false);
   const [territoryVersion, setTerritoryVersion] = useState(0);

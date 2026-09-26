@@ -35,6 +35,11 @@ import {
   KeyRound,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Globe,
+  GitFork,
+  Send,
+  List as ListIcon,
   Upload,
   X
 } from 'lucide-react';
@@ -59,9 +64,13 @@ const EMPTY_MGR_FORM = {
   profilePhotoPreview: '',
   role: 'state_manager',
   assignedState: '',
+  assignedStateId: '',
   assignedDistrict: '',
+  assignedDistrictId: '',
   assignedDivision: '',
+  assignedDivisionId: '',
   assignedPincode: '',
+  assignedPincodeId: '',
   doorStreet: '',
   area: '',
   city: '',
@@ -195,18 +204,66 @@ export function StateManagers({ level }) {
 
   const config = LEVEL_CONFIGS[activeLevel] || LEVEL_CONFIGS.state;
 
+  const [viewTab, setViewTab] = useState('hierarchy'); // 'hierarchy' | 'list' | 'requests'
+  const [allManagers, setAllManagers] = useState([]);
+  const [territoryTree, setTerritoryTree] = useState([]);
+  const [territoryLoading, setTerritoryLoading] = useState(false);
+  const [expandedStates, setExpandedStates] = useState({});
+  const [expandedDistricts, setExpandedDistricts] = useState({});
+  const [expandedDivisions, setExpandedDivisions] = useState({});
+  const [expandedPincodes, setExpandedPincodes] = useState({});
+
+  const loadTerritoryTree = async () => {
+    setTerritoryLoading(true);
+    try {
+      let tree = [];
+      const res = await dataService.getTerritoryHierarchy();
+      if (res?.success && Array.isArray(res.hierarchy) && res.hierarchy.length > 0) {
+        tree = res.hierarchy;
+      } else {
+        const alt = await dataService.getHierarchy();
+        if (alt?.success && Array.isArray(alt.hierarchy || alt.states)) {
+          tree = alt.hierarchy || alt.states || [];
+        }
+      }
+      setTerritoryTree(tree);
+      if (tree.length > 0) {
+        const initial = {};
+        tree.forEach(s => {
+          initial[s.id || s._id || s.name] = true;
+        });
+        setExpandedStates(initial);
+      }
+    } catch (e) {
+      console.error('Failed to load territory tree:', e);
+    } finally {
+      setTerritoryLoading(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await dataService.getManagers({ level: activeLevel });
-      if (res.success && Array.isArray(res.subordinates || res.data)) {
+      const [res, allRes] = await Promise.all([
+        dataService.getManagers({ level: activeLevel }),
+        dataService.getManagers()
+      ]);
+
+      if (res?.success && Array.isArray(res.subordinates || res.data)) {
         setManagers(res.subordinates || res.data || []);
       } else {
         setManagers([]);
       }
+
+      if (allRes?.success && Array.isArray(allRes.subordinates || allRes.data)) {
+        setAllManagers(allRes.subordinates || allRes.data || []);
+      } else {
+        setAllManagers([]);
+      }
     } catch (err) {
       console.error('Failed to load managers directory:', err);
       setManagers([]);
+      setAllManagers([]);
     } finally {
       setLoading(false);
     }
@@ -214,6 +271,7 @@ export function StateManagers({ level }) {
 
   useEffect(() => {
     loadData();
+    loadTerritoryTree();
   }, [activeLevel]);
 
   // Filtered managers based on status tab
@@ -317,16 +375,25 @@ export function StateManagers({ level }) {
     designatedRole === 'division_manager' ? 'Division Manager' :
     'Pincode Manager';
 
-  const openAddManager = () => {
+  const openAddManager = (prefill = {}) => {
+    const roleToUse = prefill.role || designatedRole;
+    const stateToUse = prefill.assignedState || effectiveUser?.state || user?.state || (territoryTree[0]?.name || 'Tamil Nadu');
+    const matchedState = territoryTree.find(s => s.name?.toLowerCase() === stateToUse.toLowerCase());
+    const stateIdToUse = prefill.assignedStateId || (matchedState ? String(matchedState.id || matchedState._id) : '');
+
     setForm({
       ...EMPTY_MGR_FORM,
-      role: designatedRole,
-      assignedState: effectiveUser?.state || user?.state || 'Tamil Nadu',
-      assignedDistrict: isStateAdmin ? '' : (effectiveUser?.district || user?.district || ''),
-      assignedDivision: (isStateAdmin || isDistrictAdmin) ? '' : (effectiveUser?.division || user?.division || ''),
-      assignedPincode: isPincodeAdmin ? (effectiveUser?.pincode || user?.pincode || '') : '',
-      state: effectiveUser?.state || user?.state || 'Tamil Nadu',
-      district: effectiveUser?.district || user?.district || '',
+      role: roleToUse,
+      assignedState: stateToUse,
+      assignedStateId: stateIdToUse,
+      assignedDistrict: prefill.assignedDistrict || (isStateAdmin ? '' : (effectiveUser?.district || user?.district || '')),
+      assignedDistrictId: prefill.assignedDistrictId || '',
+      assignedDivision: prefill.assignedDivision || ((isStateAdmin || isDistrictAdmin) ? '' : (effectiveUser?.division || user?.division || '')),
+      assignedDivisionId: prefill.assignedDivisionId || '',
+      assignedPincode: prefill.assignedPincode || (isPincodeAdmin ? (effectiveUser?.pincode || user?.pincode || '') : ''),
+      assignedPincodeId: prefill.assignedPincodeId || '',
+      state: stateToUse,
+      district: prefill.assignedDistrict || effectiveUser?.district || user?.district || '',
       status: 'active'
     });
     setCurrentStep(1);
@@ -380,17 +447,25 @@ export function StateManagers({ level }) {
         mobile: form.mobile.trim(),
         role: form.role,
         assignedState: form.assignedState || user?.state || 'Tamil Nadu',
+        assignedStateId: form.assignedStateId || '',
+        stateId: form.assignedStateId || '',
         assignedDistrict: form.assignedDistrict || user?.district || '',
+        assignedDistrictId: form.assignedDistrictId || '',
+        districtId: form.assignedDistrictId || '',
         assignedDivision: form.assignedDivision || user?.division || '',
+        assignedDivisionId: form.assignedDivisionId || '',
+        divisionId: form.assignedDivisionId || '',
         assignedPincode: form.assignedPincode || user?.pincode || '',
+        assignedPincodeId: form.assignedPincodeId || '',
+        pincodeId: form.assignedPincodeId || '',
         dob: form.dob,
         gender: form.gender,
         doorStreet: form.doorStreet,
         area: form.area,
         city: form.city,
-        state: form.state || user?.state || 'Tamil Nadu',
-        district: form.district || user?.district || '',
-        pincode: form.pincode,
+        state: form.state || form.assignedState || user?.state || 'Tamil Nadu',
+        district: form.district || form.assignedDistrict || user?.district || '',
+        pincode: form.pincode || form.assignedPincode || '',
         aadharNumber: form.aadharNumber,
         panNumber: form.panNumber,
         accountHolderName: form.accountHolderName || form.fullName.trim(),
@@ -407,6 +482,7 @@ export function StateManagers({ level }) {
       if (res.success) {
         setAddSuccess(res.message || 'Manager registered successfully!');
         loadData();
+        loadTerritoryTree();
         setTimeout(() => {
           setShowAddModal(false);
           setAddSuccess('');
@@ -490,12 +566,84 @@ export function StateManagers({ level }) {
       : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
   }`;
 
+  // Dynamic cascading territory options derived from territoryTree
+  const dynamicStates = useMemo(() => {
+    if (territoryTree && territoryTree.length > 0) {
+      return territoryTree.map(s => ({
+        id: String(s.id || s._id || s.stateId || s.name),
+        name: s.name
+      }));
+    }
+    return ALL_INDIAN_STATES.map(s => ({ id: s, name: s }));
+  }, [territoryTree]);
 
-  const availableDistricts = registeredDistrictList;
-  const availableDivisions = (form.assignedState && form.assignedDistrict) ? getDivisionsForDistrict(form.assignedState, form.assignedDistrict) : [];
-  const availablePincodes = (form.assignedState && form.assignedDistrict && form.assignedDivision)
-    ? getPincodesForDivision(form.assignedState, form.assignedDistrict, form.assignedDivision)
-    : [];
+  const selectedStateObj = useMemo(() => {
+    if (!form.assignedState && !form.assignedStateId) return null;
+    return territoryTree.find(s => 
+      (form.assignedStateId && String(s.id || s._id) === String(form.assignedStateId)) ||
+      (form.assignedState && s.name?.toLowerCase() === form.assignedState.toLowerCase())
+    ) || null;
+  }, [territoryTree, form.assignedState, form.assignedStateId]);
+
+  const dynamicDistricts = useMemo(() => {
+    if (selectedStateObj && Array.isArray(selectedStateObj.districts) && selectedStateObj.districts.length > 0) {
+      return selectedStateObj.districts.map(d => ({
+        id: String(d.id || d._id || d.districtId || d.name),
+        name: d.name,
+        stateId: d.stateId
+      }));
+    }
+    return registeredDistrictList.map(d => ({ id: d, name: d }));
+  }, [selectedStateObj, registeredDistrictList]);
+
+  const selectedDistrictObj = useMemo(() => {
+    if (!selectedStateObj || (!form.assignedDistrict && !form.assignedDistrictId)) return null;
+    return (selectedStateObj.districts || []).find(d =>
+      (form.assignedDistrictId && String(d.id || d._id) === String(form.assignedDistrictId)) ||
+      (form.assignedDistrict && d.name?.toLowerCase() === form.assignedDistrict.toLowerCase())
+    ) || null;
+  }, [selectedStateObj, form.assignedDistrict, form.assignedDistrictId]);
+
+  const dynamicDivisions = useMemo(() => {
+    if (selectedDistrictObj && Array.isArray(selectedDistrictObj.divisions) && selectedDistrictObj.divisions.length > 0) {
+      return selectedDistrictObj.divisions.map(v => ({
+        id: String(v.id || v._id || v.divisionId || v.name),
+        name: v.name,
+        districtId: v.districtId
+      }));
+    }
+    return form.assignedState && form.assignedDistrict ? getDivisionsForDistrict(form.assignedState, form.assignedDistrict).map(d => ({ id: d, name: d })) : [];
+  }, [selectedDistrictObj, form.assignedState, form.assignedDistrict]);
+
+  const selectedDivisionObj = useMemo(() => {
+    if (!selectedDistrictObj || (!form.assignedDivision && !form.assignedDivisionId)) return null;
+    return (selectedDistrictObj.divisions || []).find(v =>
+      (form.assignedDivisionId && String(v.id || v._id) === String(form.assignedDivisionId)) ||
+      (form.assignedDivision && v.name?.toLowerCase() === form.assignedDivision.toLowerCase())
+    ) || null;
+  }, [selectedDistrictObj, form.assignedDivision, form.assignedDivisionId]);
+
+  const dynamicPincodes = useMemo(() => {
+    if (selectedDivisionObj) {
+      if (Array.isArray(selectedDivisionObj.rawPincodes) && selectedDivisionObj.rawPincodes.length > 0) {
+        return selectedDivisionObj.rawPincodes.map(p => ({
+          id: String(p.id || p._id || p.code),
+          code: String(p.code || p.pincode),
+          name: p.name || p.area || String(p.code || p.pincode)
+        }));
+      }
+      if (Array.isArray(selectedDivisionObj.pincodes) && selectedDivisionObj.pincodes.length > 0) {
+        return selectedDivisionObj.pincodes.map(pin => ({
+          id: String(pin),
+          code: String(pin),
+          name: String(pin)
+        }));
+      }
+    }
+    return (form.assignedState && form.assignedDistrict && form.assignedDivision)
+      ? getPincodesForDivision(form.assignedState, form.assignedDistrict, form.assignedDivision).map(p => ({ id: p, code: p, name: p }))
+      : [];
+  }, [selectedDivisionObj, form.assignedState, form.assignedDistrict, form.assignedDivision]);
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -660,12 +808,25 @@ export function StateManagers({ level }) {
                 {isSuperAdmin ? (
                   <select
                     className={inputCls}
-                    value={form.assignedState}
-                    onChange={(e) => setF({ assignedState: e.target.value, assignedDistrict: '', assignedDivision: '', assignedPincode: '' })}
+                    value={form.assignedStateId || form.assignedState}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const sObj = dynamicStates.find(s => s.id === val || s.name === val);
+                      setF({
+                        assignedState: sObj ? sObj.name : val,
+                        assignedStateId: sObj ? sObj.id : '',
+                        assignedDistrict: '',
+                        assignedDistrictId: '',
+                        assignedDivision: '',
+                        assignedDivisionId: '',
+                        assignedPincode: '',
+                        assignedPincodeId: ''
+                      });
+                    }}
                   >
                     <option value="">Select State</option>
-                    {ALL_INDIAN_STATES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                    {dynamicStates.map((s) => (
+                      <option key={s.id || s.name} value={s.id || s.name}>{s.name}</option>
                     ))}
                   </select>
                 ) : (
@@ -680,35 +841,43 @@ export function StateManagers({ level }) {
 
               {form.role !== 'state_manager' && (
                 <FieldInput label="Assigned District" required={form.role !== 'state_manager'}>
-                  {isSuperAdmin ? (
-                    <select
-                      className={inputCls}
-                      value={form.assignedDistrict}
-                      onChange={(e) => setF({ assignedDistrict: e.target.value, assignedDivision: '', assignedPincode: '' })}
-                    >
-                      <option value="">Select District</option>
-                      {availableDistricts.map((d) => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  ) : (isDistrictAdmin || isDivisionalAdmin || isPincodeAdmin) ? (
+                  {(isDistrictAdmin || isDivisionalAdmin || isPincodeAdmin) ? (
                     <input
                       type="text"
                       disabled
                       className={`${inputCls} opacity-80 cursor-not-allowed bg-slate-100 dark:bg-slate-800 font-semibold`}
                       value={form.assignedDistrict || user?.district || ''}
                     />
-                  ) : (
+                  ) : dynamicDistricts.length > 0 ? (
                     <select
                       className={inputCls}
-                      value={form.assignedDistrict}
-                      onChange={(e) => setF({ assignedDistrict: e.target.value, assignedDivision: '', assignedPincode: '' })}
+                      value={form.assignedDistrictId || form.assignedDistrict}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const dObj = dynamicDistricts.find(d => d.id === val || d.name === val);
+                        setF({
+                          assignedDistrict: dObj ? dObj.name : val,
+                          assignedDistrictId: dObj ? dObj.id : '',
+                          assignedDivision: '',
+                          assignedDivisionId: '',
+                          assignedPincode: '',
+                          assignedPincodeId: ''
+                        });
+                      }}
                     >
                       <option value="">Select District</option>
-                      {availableDistricts.map((d) => (
-                        <option key={d} value={d}>{d}</option>
+                      {dynamicDistricts.map((d) => (
+                        <option key={d.id || d.name} value={d.id || d.name}>{d.name}</option>
                       ))}
                     </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className={inputCls}
+                      placeholder="e.g. Krishnagiri"
+                      value={form.assignedDistrict}
+                      onChange={(e) => setF({ assignedDistrict: e.target.value })}
+                    />
                   )}
                 </FieldInput>
               )}
@@ -722,15 +891,24 @@ export function StateManagers({ level }) {
                       className={`${inputCls} opacity-80 cursor-not-allowed bg-slate-100 dark:bg-slate-800 font-semibold`}
                       value={form.assignedDivision || user?.division || ''}
                     />
-                  ) : availableDivisions.length > 0 ? (
+                  ) : dynamicDivisions.length > 0 ? (
                     <select
                       className={inputCls}
-                      value={form.assignedDivision}
-                      onChange={(e) => setF({ assignedDivision: e.target.value, assignedPincode: '' })}
+                      value={form.assignedDivisionId || form.assignedDivision}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const vObj = dynamicDivisions.find(v => v.id === val || v.name === val);
+                        setF({
+                          assignedDivision: vObj ? vObj.name : val,
+                          assignedDivisionId: vObj ? vObj.id : '',
+                          assignedPincode: '',
+                          assignedPincodeId: ''
+                        });
+                      }}
                     >
                       <option value="">Select Division</option>
-                      {availableDivisions.map((div) => (
-                        <option key={div} value={div}>{div}</option>
+                      {dynamicDivisions.map((div) => (
+                        <option key={div.id || div.name} value={div.id || div.name}>{div.name}</option>
                       ))}
                     </select>
                   ) : (
@@ -754,15 +932,24 @@ export function StateManagers({ level }) {
                       className={`${inputCls} opacity-80 cursor-not-allowed bg-slate-100 dark:bg-slate-800 font-semibold`}
                       value={form.assignedPincode || user?.pincode || ''}
                     />
-                  ) : availablePincodes.length > 0 ? (
+                  ) : dynamicPincodes.length > 0 ? (
                     <select
                       className={inputCls}
-                      value={form.assignedPincode}
-                      onChange={(e) => setF({ assignedPincode: e.target.value })}
+                      value={form.assignedPincodeId || form.assignedPincode}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const pObj = dynamicPincodes.find(p => p.id === val || p.code === val);
+                        setF({
+                          assignedPincode: pObj ? pObj.code : val,
+                          assignedPincodeId: pObj ? pObj.id : ''
+                        });
+                      }}
                     >
                       <option value="">Select 6-digit Pincode</option>
-                      {availablePincodes.map((pin) => (
-                        <option key={pin} value={pin}>{pin}</option>
+                      {dynamicPincodes.map((pin) => (
+                        <option key={pin.id || pin.code} value={pin.id || pin.code}>
+                          {pin.code}{pin.name && pin.name !== pin.code ? ` (${pin.name})` : ''}
+                        </option>
                       ))}
                     </select>
                   ) : (
@@ -1156,26 +1343,148 @@ export function StateManagers({ level }) {
     }
   ];
 
+  const getStateManagers = (state) => {
+    const sId = String(state.id || state._id || '').toLowerCase().trim();
+    const sName = (state.name || '').toLowerCase().trim();
+    return allManagers.filter(m => 
+      m.role === 'state_manager' && (
+        (sId && String(m.stateId || m.assignedStateId || '').toLowerCase().trim() === sId) ||
+        (sName && (
+          (m.stateName || '').toLowerCase().trim() === sName ||
+          (m.state || '').toLowerCase().trim() === sName ||
+          (m.assignedState || '').toLowerCase().trim() === sName
+        ))
+      )
+    );
+  };
+
+  const getDistrictManagers = (district, state) => {
+    const dId = String(district.id || district._id || district.districtId || '').toLowerCase().trim();
+    const dName = (district.name || '').toLowerCase().trim();
+    const sName = (state?.name || '').toLowerCase().trim();
+    return allManagers.filter(m => 
+      m.role === 'district_manager' && (
+        (dId && String(m.districtId || m.assignedDistrictId || '').toLowerCase().trim() === dId) ||
+        (dName && (
+          (m.districtName || '').toLowerCase().trim() === dName ||
+          (m.district || '').toLowerCase().trim() === dName ||
+          (m.assignedDistrict || '').toLowerCase().trim() === dName
+        ))
+      ) && (
+        !sName ||
+        (m.stateName || '').toLowerCase().trim() === sName ||
+        (m.state || '').toLowerCase().trim() === sName ||
+        (m.assignedState || '').toLowerCase().trim() === sName
+      )
+    );
+  };
+
+  const getDivisionManagers = (division, district, state) => {
+    const vId = String(division.id || division._id || division.divisionId || '').toLowerCase().trim();
+    const vName = (division.name || '').toLowerCase().trim();
+    return allManagers.filter(m => 
+      m.role === 'division_manager' && (
+        (vId && String(m.divisionId || m.assignedDivisionId || '').toLowerCase().trim() === vId) ||
+        (vName && (
+          (m.divisionName || '').toLowerCase().trim() === vName ||
+          (m.division || '').toLowerCase().trim() === vName ||
+          (m.assignedDivision || '').toLowerCase().trim() === vName
+        ))
+      )
+    );
+  };
+
+  const getPincodeManagers = (pin, division, district, state) => {
+    const pCode = String(pin.code || pin.pincode || pin || '').trim();
+    const pId = String(pin.id || pin._id || '').trim();
+    return allManagers.filter(m => 
+      m.role === 'pincode_manager' && (
+        (pId && String(m.pincodeId || m.assignedPincodeId || '').trim() === pId) ||
+        (pCode && (
+          String(m.pincodeCode || '').trim() === pCode ||
+          String(m.pincode || '').trim() === pCode ||
+          String(m.assignedPincode || '').trim() === pCode
+        ))
+      )
+    );
+  };
+
+  const toggleState = (key) => setExpandedStates(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleDistrict = (key) => setExpandedDistricts(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleDivision = (key) => setExpandedDivisions(prev => ({ ...prev, [key]: !prev[key] }));
+  const togglePincode = (key) => setExpandedPincodes(prev => ({ ...prev, [key]: !prev[key] }));
+
   return (
     <div className="space-y-6">
-      {/* Header with + Add Manager button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{config.title}</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{config.subtitle}</p>
+      {/* View Switcher Bar & Main Actions matching Image 2 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Switcher Tabs */}
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 w-fit">
+          <button
+            type="button"
+            onClick={() => setViewTab('hierarchy')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+              viewTab === 'hierarchy'
+                ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <GitFork className="w-4 h-4" />
+            <span>Hierarchy</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewTab('list')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+              viewTab === 'list'
+                ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <ListIcon className="w-4 h-4" />
+            <span>List</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewTab('requests')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+              viewTab === 'requests'
+                ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
+                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Requests</span>
+            {pendingCount > 0 && (
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                viewTab === 'requests' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'
+              }`}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
         </div>
 
+        {/* Top Right Request/Add Manager Button */}
         {canAddManager && (
           <button
             type="button"
-            onClick={openAddManager}
+            onClick={() => openAddManager()}
             id="add-manager-header-btn"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold transition shadow-sm cursor-pointer shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold transition shadow-sm cursor-pointer shrink-0 self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Manager</span>
+            <span>+ Request Manager</span>
           </button>
         )}
+      </div>
+
+      {/* Subtitle / Territory Navigation Instructions matching Image 2 */}
+      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <Send className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+        <span>Click any state to expand. Navigate: State (Max 8) → District (Max 2) → Division (Max 2) → Pincode (Max 2)</span>
       </div>
 
       {/* Metric Cards */}
@@ -1185,8 +1494,8 @@ export function StateManagers({ level }) {
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total {config.title}</span>
             <UserCog className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">{totalCount}</div>
-          <div className="text-[10px] text-slate-500 font-medium mt-0.5">Jurisdiction directory</div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">{allManagers.length || totalCount}</div>
+          <div className="text-[10px] text-slate-500 font-medium mt-0.5">Across territory network</div>
         </div>
 
         <div className={`p-3.5 rounded-2xl border shadow-sm transition ${
@@ -1223,11 +1532,11 @@ export function StateManagers({ level }) {
             <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">100%</div>
-          <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">Hierarchical alignment</div>
+          <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">Dynamic DB synchronization</div>
         </div>
       </div>
 
-      {/* Pending Approvals Quick Alert Banner */}
+      {/* Pending Approvals Alert Banner */}
       {pendingCount > 0 && (
         <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 border border-amber-200/80 dark:border-amber-800/60 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -1245,47 +1554,690 @@ export function StateManagers({ level }) {
           </div>
           <button
             type="button"
-            onClick={() => setStatusFilter('pending')}
+            onClick={() => setViewTab('requests')}
             className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:text-amber-100 dark:hover:bg-amber-700 transition self-start sm:self-auto cursor-pointer"
           >
-            Filter Pending Requests
+            Review Pending Requests
           </button>
         </div>
       )}
 
-      {/* Data Table with Filter Options placed after the search bar */}
-      <DataTable
-        title={config.tableTitle}
-        subtitle={config.tableSubtitle}
-        columns={columns}
-        data={filteredManagers}
-        onRowClick={(row) => handleOpenModal(row)}
-        loading={loading}
-        onRefresh={loadData}
-        filterOptions={[
-          { label: `All Managers (${totalCount})`, value: 'all' },
-          { label: `Pending Approvals (${pendingCount})`, value: 'pending' },
-          { label: `Active Managers (${activeCount})`, value: 'active' }
-        ]}
-        activeFilter={statusFilter}
-        onFilterChange={setStatusFilter}
-        searchPlaceholder={`Search ${config.title.toLowerCase()} by name, jurisdiction, or phone...`}
-        exportFileName={config.exportFile}
-        actions={
-          canAddManager ? (
-            <button
-              type="button"
-              onClick={openAddManager}
-              id="add-manager-table-btn"
-              className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
-              title={`Add ${designatedRoleLabel}`}
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span className="whitespace-nowrap">Add Manager</span>
-            </button>
-          ) : null
-        }
-      />
+      {/* VIEW MODE 1: HIERARCHY ACCORDION VIEW */}
+      {viewTab === 'hierarchy' && (
+        <div className="space-y-4">
+          {territoryLoading ? (
+            <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <RefreshCw className="w-6 h-6 text-blue-500 animate-spin mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Loading live territory hierarchy...</p>
+            </div>
+          ) : territoryTree.length === 0 ? (
+            <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No territory records found in database.</p>
+            </div>
+          ) : (
+            territoryTree.map((state) => {
+              const stateKey = String(state.id || state._id || state.name);
+              const isStateExpanded = !!expandedStates[stateKey];
+              const stateMgrs = getStateManagers(state);
+
+              // Calculate active/pending in this state branch
+              const allStateBranchManagers = allManagers.filter(m => {
+                const sName = (state.name || '').toLowerCase().trim();
+                const sId = String(state.id || state._id || '').toLowerCase().trim();
+                return (
+                  (sId && String(m.stateId || m.assignedStateId || '').toLowerCase().trim() === sId) ||
+                  (sName && (
+                    (m.stateName || '').toLowerCase().trim() === sName ||
+                    (m.state || '').toLowerCase().trim() === sName ||
+                    (m.assignedState || '').toLowerCase().trim() === sName
+                  ))
+                );
+              });
+              const stateActiveCount = allStateBranchManagers.filter(m => m.status === 'active').length;
+              const statePendingCount = allStateBranchManagers.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval').length;
+
+              return (
+                <div
+                  key={stateKey}
+                  className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition"
+                >
+                  {/* State Node Header matching Image 2 */}
+                  <div
+                    onClick={() => toggleState(stateKey)}
+                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition border-b border-transparent select-none"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <Globe className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900 dark:text-white">{state.name}</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            STATE LEVEL
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          {stateActiveCount} active · {statePendingCount} pending
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Managers: {stateMgrs.length} / 8
+                      </span>
+                      {canAddManager && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAddManager({
+                              role: 'state_manager',
+                              assignedState: state.name,
+                              assignedStateId: state.id || state._id
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-sm cursor-pointer flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Nominate</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        {isStateExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expanded State Content */}
+                  {isStateExpanded && (
+                    <div className="p-4 pt-0 space-y-4 bg-slate-50/50 dark:bg-slate-950/20 border-t border-slate-100 dark:border-slate-800/60">
+                      {/* State Managers Assigned to this State */}
+                      <div className="pt-3">
+                        <div className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                          State Managers ({stateMgrs.length})
+                        </div>
+                        {stateMgrs.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                            {stateMgrs.map((mgr) => (
+                              <div
+                                key={mgr.id || mgr._id}
+                                className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                                  isDark ? 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800' : 'bg-white border-slate-200 hover:shadow-sm'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/50 flex items-center justify-center font-bold text-xs shrink-0">
+                                    {mgr.name ? mgr.name.charAt(0).toUpperCase() : <UserCog className="w-4 h-4" />}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-xs text-slate-900 dark:text-white">{mgr.name}</span>
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300">
+                                        State Manager
+                                      </span>
+                                      <StatusBadge status={mgr.status || 'Active'} />
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                      <span className="font-mono">{mgr.email}</span>
+                                      <span>·</span>
+                                      <span className="font-mono flex items-center gap-1">
+                                        <Phone className="w-3 h-3 text-slate-400" /> {mgr.mobile || mgr.phone}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenModal(mgr)}
+                                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                                    <span>View Details</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-xl bg-white dark:bg-slate-800/50 border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-400 flex items-center justify-between">
+                            <span>No State Manager assigned yet.</span>
+                            {canAddManager && (
+                              <button
+                                type="button"
+                                onClick={() => openAddManager({
+                                  role: 'state_manager',
+                                  assignedState: state.name,
+                                  assignedStateId: state.id || state._id
+                                })}
+                                className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                              >
+                                + Add State Manager
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Districts Under State */}
+                      <div className="space-y-3 pt-2">
+                        {(state.districts || []).map((district) => {
+                          const distKey = String(district.id || district._id || district.name);
+                          const isDistExpanded = !!expandedDistricts[distKey];
+                          const distMgrs = getDistrictManagers(district, state);
+                          const distActiveCount = distMgrs.filter(m => m.status === 'active').length;
+
+                          return (
+                            <div
+                              key={distKey}
+                              className="rounded-xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 overflow-hidden"
+                            >
+                              {/* District Header matching Image 2 */}
+                              <div
+                                onClick={() => toggleDistrict(distKey)}
+                                className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition select-none"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                    <Building2 className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{district.name}</span>
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                        DISTRICT
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {distActiveCount} active
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                    Managers: {distMgrs.length} / 2
+                                  </span>
+                                  {canAddManager && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openAddManager({
+                                          role: 'district_manager',
+                                          assignedState: state.name,
+                                          assignedStateId: state.id || state._id,
+                                          assignedDistrict: district.name,
+                                          assignedDistrictId: district.id || district._id
+                                        });
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-sm cursor-pointer flex items-center gap-1"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Nominate</span>
+                                    </button>
+                                  )}
+                                  <button type="button" className="p-1 text-slate-400">
+                                    {isDistExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Expanded District Content */}
+                              {isDistExpanded && (
+                                <div className="p-3.5 pt-0 space-y-3 bg-slate-50/60 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800">
+                                  {/* District Managers */}
+                                  <div className="pt-2">
+                                    <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
+                                      District Managers ({distMgrs.length})
+                                    </div>
+                                    {distMgrs.length > 0 ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {distMgrs.map((mgr) => (
+                                          <div
+                                            key={mgr.id || mgr._id}
+                                            className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                                              isDark ? 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800' : 'bg-white border-slate-200 hover:shadow-sm'
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-3">
+                                              <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 flex items-center justify-center font-bold text-xs shrink-0">
+                                                {mgr.name ? mgr.name.charAt(0).toUpperCase() : <UserCog className="w-4 h-4" />}
+                                              </div>
+                                              <div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-bold text-xs text-slate-900 dark:text-white">{mgr.name}</span>
+                                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300">
+                                                    District Manager
+                                                  </span>
+                                                  <StatusBadge status={mgr.status || 'Active'} />
+                                                </div>
+                                                <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                                  <span className="font-mono">{mgr.email}</span>
+                                                  <span>·</span>
+                                                  <span className="font-mono flex items-center gap-1">
+                                                    <Phone className="w-3 h-3 text-slate-400" /> {mgr.mobile || mgr.phone}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 shrink-0">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenModal(mgr)}
+                                                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                              >
+                                                <Eye className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                                                <span>View Details</span>
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-400 flex items-center justify-between">
+                                        <span>No District Manager assigned yet.</span>
+                                        {canAddManager && (
+                                          <button
+                                            type="button"
+                                            onClick={() => openAddManager({
+                                              role: 'district_manager',
+                                              assignedState: state.name,
+                                              assignedStateId: state.id || state._id,
+                                              assignedDistrict: district.name,
+                                              assignedDistrictId: district.id || district._id
+                                            })}
+                                            className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                                          >
+                                            + Add District Manager
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Divisions Under District */}
+                                  <div className="space-y-2.5 pt-1">
+                                    {(district.divisions || []).map((division) => {
+                                      const divKey = String(division.id || division._id || division.name);
+                                      const isDivExpanded = !!expandedDivisions[divKey];
+                                      const divMgrs = getDivisionManagers(division, district, state);
+                                      const divActiveCount = divMgrs.filter(m => m.status === 'active').length;
+
+                                      return (
+                                        <div
+                                          key={divKey}
+                                          className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden"
+                                        >
+                                          {/* Division Header */}
+                                          <div
+                                            onClick={() => toggleDivision(divKey)}
+                                            className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition select-none"
+                                          >
+                                            <div className="flex items-center gap-2.5">
+                                              <div className="w-7 h-7 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                                <Layers className="w-3.5 h-3.5" />
+                                              </div>
+                                              <div>
+                                                <div className="flex items-center gap-1.5">
+                                                  <span className="font-bold text-xs text-slate-900 dark:text-white">{division.name}</span>
+                                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                                    DIVISION
+                                                  </span>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                                                  {divActiveCount} active
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2.5">
+                                              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                                Managers: {divMgrs.length} / 2
+                                              </span>
+                                              {canAddManager && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openAddManager({
+                                                      role: 'division_manager',
+                                                      assignedState: state.name,
+                                                      assignedStateId: state.id || state._id,
+                                                      assignedDistrict: district.name,
+                                                      assignedDistrictId: district.id || district._id,
+                                                      assignedDivision: division.name,
+                                                      assignedDivisionId: division.id || division._id
+                                                    });
+                                                  }}
+                                                  className="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition shadow-sm cursor-pointer flex items-center gap-1"
+                                                >
+                                                  <Plus className="w-3 h-3" />
+                                                  <span>Nominate</span>
+                                                </button>
+                                              )}
+                                              <button type="button" className="p-0.5 text-slate-400">
+                                                {isDivExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                              </button>
+                                            </div>
+                                          </div>
+
+                                          {/* Expanded Division Content */}
+                                          {isDivExpanded && (
+                                            <div className="p-3 pt-0 space-y-2.5 bg-slate-50/40 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800">
+                                              {/* Divisional Managers */}
+                                              <div className="pt-2">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                                                  Divisional Managers ({divMgrs.length})
+                                                </div>
+                                                {divMgrs.length > 0 ? (
+                                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                    {divMgrs.map((mgr) => (
+                                                      <div
+                                                        key={mgr.id || mgr._id}
+                                                        className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                                                          isDark ? 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800' : 'bg-white border-slate-200 hover:shadow-sm'
+                                                        }`}
+                                                      >
+                                                        <div className="flex items-center gap-3">
+                                                          <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 flex items-center justify-center font-bold text-xs shrink-0">
+                                                            {mgr.name ? mgr.name.charAt(0).toUpperCase() : <UserCog className="w-4 h-4" />}
+                                                          </div>
+                                                          <div>
+                                                            <div className="flex items-center gap-2">
+                                                              <span className="font-bold text-xs text-slate-900 dark:text-white">{mgr.name}</span>
+                                                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                                                Divisional Manager
+                                                              </span>
+                                                              <StatusBadge status={mgr.status || 'Active'} />
+                                                            </div>
+                                                            <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                                              <span className="font-mono">{mgr.email}</span>
+                                                              <span>·</span>
+                                                              <span className="font-mono flex items-center gap-1">
+                                                                <Phone className="w-3 h-3 text-slate-400" /> {mgr.mobile || mgr.phone}
+                                                              </span>
+                                                            </div>
+                                                          </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => handleOpenModal(mgr)}
+                                                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                                          >
+                                                            <Eye className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                                                            <span>View Details</span>
+                                                          </button>
+                                                        </div>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <div className="p-2 rounded bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-400 flex items-center justify-between">
+                                                    <span>No Divisional Manager assigned yet.</span>
+                                                    {canAddManager && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => openAddManager({
+                                                          role: 'division_manager',
+                                                          assignedState: state.name,
+                                                          assignedStateId: state.id || state._id,
+                                                          assignedDistrict: district.name,
+                                                          assignedDistrictId: district.id || district._id,
+                                                          assignedDivision: division.name,
+                                                          assignedDivisionId: division.id || division._id
+                                                        })}
+                                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                                                      >
+                                                        + Add Division Manager
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              {/* Pincodes Under Division */}
+                                              <div className="space-y-1.5 pt-1">
+                                                {(division.rawPincodes || (division.pincodes || []).map(p => ({ id: p, code: p, name: p }))).map((pin) => {
+                                                  const pinCode = String(pin.code || pin.pincode || pin);
+                                                  const pinKey = String(pin.id || pin._id || pinCode);
+                                                  const isPinExpanded = !!expandedPincodes[pinKey];
+                                                  const pinMgrs = getPincodeManagers(pin, division, district, state);
+
+                                                  return (
+                                                    <div
+                                                      key={pinKey}
+                                                      className="rounded-md bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 overflow-hidden"
+                                                    >
+                                                      {/* Pincode Header */}
+                                                      <div
+                                                        onClick={() => togglePincode(pinKey)}
+                                                        className="p-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition select-none"
+                                                      >
+                                                        <div className="flex items-center gap-2">
+                                                          <div className="w-6 h-6 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                                            <MapPin className="w-3 h-3" />
+                                                          </div>
+                                                          <div className="flex items-center gap-1.5">
+                                                            <span className="font-bold text-xs text-slate-800 dark:text-slate-200 font-mono">
+                                                              {pinCode}
+                                                            </span>
+                                                            {pin.name && pin.name !== pinCode && (
+                                                              <span className="text-[10px] text-slate-500">
+                                                                ({pin.name})
+                                                              </span>
+                                                            )}
+                                                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                                              PINCODE
+                                                            </span>
+                                                          </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2">
+                                                          <span className="text-[11px] font-semibold text-slate-500">
+                                                            Managers: {pinMgrs.length} / 2
+                                                          </span>
+                                                          {canAddManager && (
+                                                            <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openAddManager({
+                                                                  role: 'pincode_manager',
+                                                                  assignedState: state.name,
+                                                                  assignedStateId: state.id || state._id,
+                                                                  assignedDistrict: district.name,
+                                                                  assignedDistrictId: district.id || district._id,
+                                                                  assignedDivision: division.name,
+                                                                  assignedDivisionId: division.id || division._id,
+                                                                  assignedPincode: pinCode,
+                                                                  assignedPincodeId: pin.id || pin._id
+                                                                });
+                                                              }}
+                                                              className="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold transition shadow-sm cursor-pointer flex items-center gap-0.5"
+                                                            >
+                                                              <Plus className="w-2.5 h-2.5" />
+                                                              <span>Nominate</span>
+                                                            </button>
+                                                          )}
+                                                          <button type="button" className="p-0.5 text-slate-400">
+                                                            {isPinExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                                          </button>
+                                                        </div>
+                                                      </div>
+
+                                                      {/* Expanded Pincode Content */}
+                                                      {isPinExpanded && (
+                                                        <div className="p-2.5 pt-0 space-y-1.5 bg-slate-50/50 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800">
+                                                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 pt-1.5">
+                                                            Pincode Managers ({pinMgrs.length})
+                                                          </div>
+                                                          {pinMgrs.length > 0 ? (
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                              {pinMgrs.map((mgr) => (
+                                                                <div
+                                                                  key={mgr.id || mgr._id}
+                                                                  className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                                                                    isDark ? 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800' : 'bg-white border-slate-200 hover:shadow-sm'
+                                                                  }`}
+                                                                >
+                                                                  <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/50 flex items-center justify-center font-bold text-xs shrink-0">
+                                                                      {mgr.name ? mgr.name.charAt(0).toUpperCase() : <UserCog className="w-4 h-4" />}
+                                                                    </div>
+                                                                    <div>
+                                                                      <div className="flex items-center gap-2">
+                                                                        <span className="font-bold text-xs text-slate-900 dark:text-white">{mgr.name}</span>
+                                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300">
+                                                                          Pincode Manager
+                                                                        </span>
+                                                                        <StatusBadge status={mgr.status || 'Active'} />
+                                                                      </div>
+                                                                      <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                                                        <span className="font-mono">{mgr.email}</span>
+                                                                        <span>·</span>
+                                                                        <span className="font-mono flex items-center gap-1">
+                                                                          <Phone className="w-3 h-3 text-slate-400" /> {mgr.mobile || mgr.phone}
+                                                                        </span>
+                                                                      </div>
+                                                                    </div>
+                                                                  </div>
+
+                                                                  <div className="flex items-center gap-2 shrink-0">
+                                                                    <button
+                                                                      type="button"
+                                                                      onClick={() => handleOpenModal(mgr)}
+                                                                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                                                    >
+                                                                      <Eye className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                                                                      <span>View Details</span>
+                                                                    </button>
+                                                                  </div>
+                                                                </div>
+                                                              ))}
+                                                            </div>
+                                                          ) : (
+                                                            <div className="p-2 rounded bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-400 flex items-center justify-between">
+                                                              <span>No Pincode Manager assigned yet.</span>
+                                                              {canAddManager && (
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => openAddManager({
+                                                                    role: 'pincode_manager',
+                                                                    assignedState: state.name,
+                                                                    assignedStateId: state.id || state._id,
+                                                                    assignedDistrict: district.name,
+                                                                    assignedDistrictId: district.id || district._id,
+                                                                    assignedDivision: division.name,
+                                                                    assignedDivisionId: division.id || division._id,
+                                                                    assignedPincode: pinCode,
+                                                                    assignedPincodeId: pin.id || pin._id
+                                                                  })}
+                                                                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                                                                >
+                                                                  + Add Pincode Manager
+                                                                </button>
+                                                              )}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* VIEW MODE 2: LIST VIEW (DATA TABLE) */}
+      {viewTab === 'list' && (
+        <DataTable
+          title={config.tableTitle}
+          subtitle={config.tableSubtitle}
+          columns={columns}
+          data={filteredManagers}
+          onRowClick={(row) => handleOpenModal(row)}
+          loading={loading}
+          onRefresh={loadData}
+          filterOptions={[
+            { label: `All Managers (${totalCount})`, value: 'all' },
+            { label: `Pending Approvals (${pendingCount})`, value: 'pending' },
+            { label: `Active Managers (${activeCount})`, value: 'active' }
+          ]}
+          activeFilter={statusFilter}
+          onFilterChange={setStatusFilter}
+          searchPlaceholder={`Search ${config.title.toLowerCase()} by name, jurisdiction, or phone...`}
+          exportFileName={config.exportFile}
+          actions={
+            canAddManager ? (
+              <button
+                type="button"
+                onClick={() => openAddManager()}
+                id="add-manager-table-btn"
+                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+                title={`Add ${designatedRoleLabel}`}
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">Add Manager</span>
+              </button>
+            ) : null
+          }
+        />
+      )}
+
+      {/* VIEW MODE 3: REQUESTS VIEW */}
+      {viewTab === 'requests' && (
+        <DataTable
+          title="Manager Approval & Registration Requests"
+          subtitle="Awaiting regional administration verification, authorization, and KYC activation."
+          columns={columns}
+          data={allManagers.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval')}
+          onRowClick={(row) => handleOpenModal(row)}
+          loading={loading}
+          onRefresh={loadData}
+          searchPlaceholder="Search pending manager registrations by name or territory..."
+          exportFileName="pending_manager_requests.csv"
+          actions={
+            canAddManager ? (
+              <button
+                type="button"
+                onClick={() => openAddManager()}
+                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">New Manager Request</span>
+              </button>
+            ) : null
+          }
+        />
+      )}
 
       {/* Manager Registration & KYC Review Modal */}
       <ManagerApprovalModal

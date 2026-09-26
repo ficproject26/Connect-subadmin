@@ -24,6 +24,7 @@ export const dataService = {
 
   // Hierarchy & Geo
   getHierarchy: () => apiRequest('/admin/hierarchy'),
+  getTerritoryHierarchy: () => apiRequest('/territory/hierarchy'),
   getSubordinateAdmins: () => apiRequest('/admin/subordinates'),
   getStates: () => apiRequest('/admin/states'),
   addStateAdmin: (data) => apiRequest('/admin/states', {
