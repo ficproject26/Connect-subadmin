@@ -8,7 +8,15 @@
 const Redis = require('ioredis');
 const EventEmitter = require('events');
 
-const REDIS_URL = process.env.REDIS_URL;
+require('dotenv').config();
+
+const rawRedisUrl = process.env.REDIS_URL || process.env.REDIS_CACHE_URL;
+let REDIS_URL = null;
+if (rawRedisUrl) {
+  const match = rawRedisUrl.match(/(rediss?:\/\/[^\s'"]+)/);
+  REDIS_URL = match ? match[1] : rawRedisUrl.trim();
+}
+
 const REDIS_HOST = process.env.REDIS_HOST || '127.0.0.1';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
@@ -21,11 +29,8 @@ let isRedisAvailable = false;
 let reconnectAttempts = 0;
 const MAX_SILENT_RETRIES = 3;
 
-// Configure Redis client options
-const redisOptions = {
-  host: REDIS_HOST,
-  port: REDIS_PORT,
-  password: REDIS_PASSWORD,
+// Configure base Redis client options
+const baseRedisOptions = {
   retryStrategy(times) {
     reconnectAttempts = times;
     // Exponential backoff with a cap at 10 seconds
@@ -63,12 +68,15 @@ function createRedisInstance(role) {
   let client;
   if (REDIS_URL) {
     client = new Redis(REDIS_URL, {
-      ...redisOptions,
+      ...baseRedisOptions,
       connectionName: `subadmin-${role}`
     });
   } else {
     client = new Redis({
-      ...redisOptions,
+      host: REDIS_HOST,
+      port: REDIS_PORT,
+      password: REDIS_PASSWORD,
+      ...baseRedisOptions,
       connectionName: `subadmin-${role}`
     });
   }
@@ -76,7 +84,9 @@ function createRedisInstance(role) {
   client.on('connect', () => {
     isRedisAvailable = true;
     reconnectAttempts = 0;
-    console.log(`📡 [Redis] Successfully connected to Redis (${role}) at ${REDIS_HOST}:${REDIS_PORT}`);
+    const targetHost = client.options?.host || REDIS_HOST;
+    const targetPort = client.options?.port || REDIS_PORT;
+    console.log(`📡 [Redis] Successfully connected to Redis (${role}) at ${targetHost}:${targetPort}`);
   });
 
   client.on('error', (err) => {
