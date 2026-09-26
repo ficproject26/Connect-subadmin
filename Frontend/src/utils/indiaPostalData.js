@@ -1,27 +1,11 @@
-﻿/**
+/**
  * Dynamic Admin-Managed Territory Hierarchy Data Provider
  * Single Source of Truth: Admin Territory Database
  * State -> District -> Division -> PIN Code
  */
 
-const CACHE_KEY = 'admin_territory_hierarchy_cache';
-
-// Initialize in-memory store from cache if available
-function loadCachedHierarchy() {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = localStorage.getItem(CACHE_KEY);
-      if (raw) {
-        return JSON.parse(raw);
-      }
-    }
-  } catch (e) {
-    console.warn('Could not read territory cache', e);
-  }
-  return {};
-}
-
-export let INDIA_POSTAL_DATA = loadCachedHierarchy();
+// In-memory runtime hierarchy store - populated exclusively from Database API
+export let INDIA_POSTAL_DATA = {};
 
 export function getIndianStates() {
   return Object.keys(INDIA_POSTAL_DATA).sort();
@@ -103,17 +87,14 @@ export async function syncTerritoryFromAdmin() {
         const hierarchy = json.hierarchy || (Array.isArray(json) ? json : null);
         if (hierarchy && Array.isArray(hierarchy)) {
           const built = buildPostalDataFromHierarchy(hierarchy);
-          if (Object.keys(built).length > 0) {
-            INDIA_POSTAL_DATA = built;
-            ALL_INDIAN_STATES = Object.keys(built).sort();
-            if (typeof window !== 'undefined' && window.localStorage) {
-              try {
-                localStorage.setItem(CACHE_KEY, JSON.stringify(built));
+            if (Object.keys(built).length > 0) {
+              INDIA_POSTAL_DATA = built;
+              ALL_INDIAN_STATES = Object.keys(built).sort();
+              if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('territory_updated', { detail: built }));
-              } catch (e) {}
+              }
+              return built;
             }
-            return built;
-          }
         }
       }
     } catch (e) {

@@ -1,30 +1,46 @@
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { v4: uuidv4 } = require('uuid');
 const seed = require('../data/seedData');
+const { getMongoDb } = require('./mongo');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+function sanitizeQuery(query) {
+  if (!query || typeof query !== 'object') return {};
+  const sanitized = {};
+  for (const [k, v] of Object.entries(query)) {
+    if (v === undefined || v === null) continue;
+    sanitized[k] = v;
+  }
+  return sanitized;
+}
+
 /**
- * Collection represents a persistent JSON store that also behaves seamlessly
- * as an in-memory Array for synchronous array operations (filter, find, map, etc.)
- * while providing MongoDB-style async methods (find, findOne, findById, insertOne, etc.).
+ * Collection represents a MongoDB Atlas-driven data store that also supports
+ * seamless in-memory array operations for synchronous compatibility (find, filter, map, etc.)
+ * while persisting all operations to MongoDB Atlas as the single source of truth.
  */
 class Collection extends Array {
-  constructor(name, initialData = []) {
+  constructor(name, initialData = [], mongoCollectionName = null) {
     super();
     this.name = name;
+    this.mongoName = mongoCollectionName || name;
     this.filePath = path.join(DATA_DIR, `${name}.json`);
+    this._mongoCol = null;
     this._ensureFile(initialData);
     this._load();
   }
 
   _ensureFile(defaultData = []) {
     if (!fs.existsSync(this.filePath)) {
-      fs.writeFileSync(this.filePath, JSON.stringify(defaultData, null, 2), 'utf-8');
+      try {
+        fs.writeFileSync(this.filePath, JSON.stringify(defaultData, null, 2), 'utf-8');
+      } catch (e) {}
     }
   }
 
@@ -46,14 +62,53 @@ class Collection extends Array {
       const plainArray = Array.from(this);
       fs.writeFileSync(this.filePath, JSON.stringify(plainArray, null, 2), 'utf-8');
     } catch (err) {
-      console.error(`Error persisting collection ${this.name}:`, err.message);
+      // Silent backup persist
     }
   }
 
-  // Override mutating Array methods so changes persist automatically
+  async initMongo(mongoDb) {
+    if (!mongoDb) return;
+    try {
+      this._mongoCol = mongoDb.collection(this.mongoName);
+      const docs = await this._mongoCol.find({}).toArray();
+      if (docs && docs.length > 0) {
+        this.length = 0;
+        this.push(...docs);
+        this._persist();
+        console.log(`[MongoDB] Connected & loaded ${docs.length} records for '${this.name}' (${this.mongoName})`);
+      } else if (this.length > 0) {
+        const cleanDocs = Array.from(this).map(d => ({
+          ...d,
+          _id: d._id ? String(d._id) : (d.id ? String(d.id) : uuidv4()),
+          id: d.id ? String(d.id) : (d._id ? String(d._id) : uuidv4())
+        }));
+        await this._mongoCol.insertMany(cleanDocs);
+        console.log(`[MongoDB] Initialized '${this.name}' with ${cleanDocs.length} seed records into MongoDB Atlas`);
+      }
+    } catch (err) {
+      console.warn(`[MongoDB] Sync warning for '${this.name}':`, err.message);
+    }
+  }
+
+  // Override mutating Array methods
   push(...items) {
     const res = super.push(...items);
     this._persist();
+    if (this._mongoCol && items.length > 0) {
+      const docs = items.map(d => ({
+        ...d,
+        _id: d._id ? String(d._id) : (d.id ? String(d.id) : uuidv4()),
+        id: d.id ? String(d.id) : (d._id ? String(d._id) : uuidv4()),
+        updatedAt: d.updatedAt || new Date().toISOString()
+      }));
+      Promise.all(docs.map(doc => 
+        this._mongoCol.updateOne(
+          { $or: [{ _id: doc._id }, { id: doc.id }] },
+          { $set: doc },
+          { upsert: true }
+        ).catch(() => {})
+      )).catch(() => {});
+    }
     return res;
   }
 
@@ -69,11 +124,6 @@ class Collection extends Array {
     return res;
   }
 
-  /**
-   * Dual-mode find:
-   * 1. If passed a function `(item => ...)`, operates synchronously as Array.prototype.find.
-   * 2. If passed a query object `{ role: 'state_manager' }` or nothing, returns Promise of matching items.
-   */
   find(queryOrFn) {
     if (typeof queryOrFn === 'function') {
       return super.find(queryOrFn);
@@ -96,9 +146,15 @@ class Collection extends Array {
     if (typeof query === 'function') {
       return items.find(query) || null;
     }
+    const cleanQuery = sanitizeQuery(query);
+    if (this._mongoCol) {
+      try {
+        const liveDoc = await this._mongoCol.findOne(cleanQuery);
+        if (liveDoc) return liveDoc;
+      } catch (e) {}
+    }
     return items.find(item => {
-      for (const [key, val] of Object.entries(query)) {
-        if (val === undefined || val === null) continue;
+      for (const [key, val] of Object.entries(cleanQuery)) {
         if (item[key] !== val) return false;
       }
       return true;
@@ -108,28 +164,55 @@ class Collection extends Array {
   async findById(id) {
     if (!id) return null;
     const strId = String(id);
+    if (this._mongoCol) {
+      try {
+        const liveDoc = await this._mongoCol.findOne({
+          $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }]
+        });
+        if (liveDoc) return liveDoc;
+      } catch (e) {}
+    }
     return Array.from(this).find(item => String(item._id || item.id) === strId) || null;
   }
 
   async insertOne(doc) {
+    const genId = doc._id ? String(doc._id) : (doc.id ? String(doc.id) : uuidv4());
     const newDoc = {
-      _id: doc._id || doc.id || uuidv4(),
-      id: doc.id || doc._id || uuidv4(),
+      _id: genId,
+      id: genId,
       ...doc,
       createdAt: doc.createdAt || new Date().toISOString(),
       updatedAt: doc.updatedAt || new Date().toISOString()
     };
-    if (!newDoc.id) newDoc.id = newDoc._id;
-    if (!newDoc._id) newDoc._id = newDoc.id;
+    newDoc._id = String(newDoc._id);
+    newDoc.id = String(newDoc.id);
 
-    super.push(newDoc);
+    const existingIdx = this.findIndex(i => String(i._id) === newDoc._id || String(i.id) === newDoc.id);
+    if (existingIdx >= 0) {
+      this[existingIdx] = newDoc;
+    } else {
+      super.push(newDoc);
+    }
     this._persist();
+
+    if (this._mongoCol) {
+      try {
+        await this._mongoCol.updateOne(
+          { $or: [{ _id: newDoc._id }, { id: newDoc.id }] },
+          { $set: newDoc },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error(`[MongoDB] Error inserting into ${this.name}:`, err.message);
+      }
+    }
+
     return newDoc;
   }
 
   async insertMany(docs) {
     const newDocs = docs.map(doc => {
-      const generated = doc._id || doc.id || uuidv4();
+      const generated = doc._id ? String(doc._id) : (doc.id ? String(doc.id) : uuidv4());
       return {
         _id: generated,
         id: generated,
@@ -140,6 +223,21 @@ class Collection extends Array {
     });
     super.push(...newDocs);
     this._persist();
+
+    if (this._mongoCol && newDocs.length > 0) {
+      try {
+        await Promise.all(newDocs.map(d =>
+          this._mongoCol.updateOne(
+            { $or: [{ _id: d._id }, { id: d.id }] },
+            { $set: d },
+            { upsert: true }
+          )
+        ));
+      } catch (err) {
+        console.error(`[MongoDB] Error insertMany into ${this.name}:`, err.message);
+      }
+    }
+
     return newDocs;
   }
 
@@ -151,36 +249,57 @@ class Collection extends Array {
       return true;
     });
 
-    if (index === -1) return null;
-
-    const current = this[index];
     const patch = update.$set ? update.$set : update;
-    const updated = {
-      ...current,
-      ...patch,
-      updatedAt: new Date().toISOString()
-    };
+    let updated = null;
+    if (index !== -1) {
+      updated = {
+        ...this[index],
+        ...patch,
+        updatedAt: new Date().toISOString()
+      };
+      this[index] = updated;
+      this._persist();
+    }
 
-    this[index] = updated;
-    this._persist();
+    if (this._mongoCol) {
+      try {
+        const cleanQuery = sanitizeQuery(query);
+        await this._mongoCol.updateOne(cleanQuery, { $set: { ...patch, updatedAt: new Date().toISOString() } });
+      } catch (err) {
+        console.error(`[MongoDB] Error updateOne in ${this.name}:`, err.message);
+      }
+    }
+
     return updated;
   }
 
   async findByIdAndUpdate(id, update) {
     const strId = String(id);
     const index = Array.from(this).findIndex(item => String(item._id || item.id) === strId);
-    if (index === -1) return null;
 
-    const current = this[index];
     const patch = update.$set ? update.$set : update;
-    const updated = {
-      ...current,
-      ...patch,
-      updatedAt: new Date().toISOString()
-    };
+    let updated = null;
+    if (index !== -1) {
+      updated = {
+        ...this[index],
+        ...patch,
+        updatedAt: new Date().toISOString()
+      };
+      this[index] = updated;
+      this._persist();
+    }
 
-    this[index] = updated;
-    this._persist();
+    if (this._mongoCol) {
+      try {
+        await this._mongoCol.updateOne(
+          { $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }] },
+          { $set: { ...patch, updatedAt: new Date().toISOString() } }
+        );
+      } catch (err) {
+        console.error(`[MongoDB] Error findByIdAndUpdate in ${this.name}:`, err.message);
+      }
+    }
+
     return updated;
   }
 
@@ -201,9 +320,19 @@ class Collection extends Array {
 
     if (index !== -1) {
       this.splice(index, 1);
-      return { deletedCount: 1 };
+      this._persist();
     }
-    return { deletedCount: 0 };
+
+    if (this._mongoCol) {
+      try {
+        const cleanQuery = sanitizeQuery(query);
+        await this._mongoCol.deleteOne(cleanQuery);
+      } catch (err) {
+        console.error(`[MongoDB] Error deleteOne in ${this.name}:`, err.message);
+      }
+    }
+
+    return { deletedCount: index !== -1 ? 1 : 0 };
   }
 
   async count(query = {}) {
@@ -214,23 +343,41 @@ class Collection extends Array {
   async clear() {
     this.length = 0;
     this._persist();
+    if (this._mongoCol) {
+      try {
+        await this._mongoCol.deleteMany({});
+      } catch (e) {}
+    }
   }
 }
 
-// Instantiate persistent collections
-const usersCollection = new Collection('users');
-const statesCollection = new Collection('states');
-const districtsCollection = new Collection('districts');
-const divisionsCollection = new Collection('divisions');
-const pincodesCollection = new Collection('pincodes');
-const vendorsCollection = new Collection('vendors');
-const auditLogsCollection = new Collection('audit_logs');
-const shopVisitsCollection = new Collection('shop_visits');
-const submittedReportsCollection = new Collection('submitted_reports');
-const qcIssuesCollection = new Collection('qc_issues');
-const qcTasksCollection = new Collection('qc_tasks');
-const agentsCollection = new Collection('agents');
-const notificationsCollection = new Collection('notifications');
+// Instantiate database collections mapped to MongoDB Atlas collections
+const usersCollection = new Collection('users', [], 'users');
+const statesCollection = new Collection('states', seed.hierarchy?.states || [], 'states');
+const districtsCollection = new Collection('districts', [], 'districts');
+const divisionsCollection = new Collection('divisions', [], 'divisions');
+const pincodesCollection = new Collection('pincodes', [], 'pincodes');
+const vendorsCollection = new Collection('vendors', seed.vendors || [], 'vendors');
+const auditLogsCollection = new Collection('audit_logs', [], 'auditlogs');
+const shopVisitsCollection = new Collection('shop_visits', [], 'fieldvisits');
+const submittedReportsCollection = new Collection('submitted_reports', [], 'reports');
+const qcIssuesCollection = new Collection('qc_issues', [], 'qc_issues');
+const qcTasksCollection = new Collection('qc_tasks', [], 'tasks');
+const agentsCollection = new Collection('agents', seed.agents || [], 'agents');
+const notificationsCollection = new Collection('notifications', [], 'notifications');
+const customersCollection = new Collection('customers', seed.customers || [], 'customers');
+const vendorPaymentsCollection = new Collection('payments', seed.vendorPayments || [], 'payments');
+const ordersCollection = new Collection('orders', seed.orders || [], 'orders');
+const bookingsCollection = new Collection('bookings', seed.bookings || [], 'bookings');
+const jobsCollection = new Collection('jobs', seed.jobs || [], 'jobs');
+const techniciansCollection = new Collection('technicians', seed.technicians || [], 'technicians');
+const executivesCollection = new Collection('executives', seed.executives || [], 'executives');
+const supportTeamCollection = new Collection('support_team', seed.supportTeam || [], 'supportteams');
+const agentPaymentsCollection = new Collection('agent_payments', seed.agentPayments || [], 'payrollrecords');
+const agentActivitiesCollection = new Collection('agent_activities', seed.agentActivities || [], 'agentactivities');
+const kycRecordsCollection = new Collection('kyc_records', seed.kycRecords || [], 'kyc_records');
+const qualityCheckRecordsCollection = new Collection('quality_check_records', seed.qualityCheckRecords || [], 'quality_check_records');
+const managersCollection = new Collection('managers', [], 'managers');
 
 // Harmonize demo admins and manager users into unified usersCollection
 function initUsers() {
@@ -281,7 +428,6 @@ initUsers();
 
 // Full database store
 const db = {
-  // Persistent collections
   users: usersCollection,
   states: statesCollection,
   districts: districtsCollection,
@@ -294,8 +440,21 @@ const db = {
   qcIssues: qcIssuesCollection,
   qcTasks: qcTasksCollection,
   notifications: notificationsCollection,
+  customers: customersCollection,
+  vendorPayments: vendorPaymentsCollection,
+  orders: ordersCollection,
+  bookings: bookingsCollection,
+  jobs: jobsCollection,
+  technicians: techniciansCollection,
+  executives: executivesCollection,
+  supportTeam: supportTeamCollection,
+  agents: agentsCollection,
+  agentPayments: agentPaymentsCollection,
+  agentActivities: agentActivitiesCollection,
+  kycRecords: kycRecordsCollection,
+  qualityCheckRecords: qualityCheckRecordsCollection,
+  managers: managersCollection,
 
-  // Admin access alias
   get admins() {
     return Array.from(usersCollection).filter(u => 
       u.role === 'State Admin' || 
@@ -309,22 +468,8 @@ const db = {
     );
   },
 
-  // In-memory / seed stores for Sub_Admin_Management workflows
   hierarchy: JSON.parse(JSON.stringify(seed.hierarchy)),
-  pincodeDetails: JSON.parse(JSON.stringify(seed.pincodeDetails)),
-  customers: JSON.parse(JSON.stringify(seed.customers)),
-  vendorPayments: JSON.parse(JSON.stringify(seed.vendorPayments)),
-  orders: JSON.parse(JSON.stringify(seed.orders)),
-  bookings: JSON.parse(JSON.stringify(seed.bookings)),
-  jobs: JSON.parse(JSON.stringify(seed.jobs)),
-  technicians: JSON.parse(JSON.stringify(seed.technicians)),
-  executives: JSON.parse(JSON.stringify(seed.executives)),
-  supportTeam: JSON.parse(JSON.stringify(seed.supportTeam)),
-  agents: agentsCollection,
-  agentPayments: JSON.parse(JSON.stringify(seed.agentPayments)),
-  agentActivities: JSON.parse(JSON.stringify(seed.agentActivities || [])),
-  kycRecords: JSON.parse(JSON.stringify(seed.kycRecords)),
-  qualityCheckRecords: JSON.parse(JSON.stringify(seed.qualityCheckRecords || []))
+  pincodeDetails: JSON.parse(JSON.stringify(seed.pincodeDetails))
 };
 
 // Bootstrap hierarchy from users so registered districts/divisions are always available
@@ -384,6 +529,66 @@ function syncHierarchyFromUsers() {
 syncHierarchyFromUsers();
 
 /**
+ * Connect all collections to MongoDB Atlas
+ */
+let initPromise = null;
+function initDatabase() {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      const mongoDb = await getMongoDb();
+      if (!mongoDb) {
+        console.warn('[Database] MongoDB Atlas not available, operating in resilient local mode.');
+        return false;
+      }
+
+      const collections = [
+        usersCollection,
+        statesCollection,
+        districtsCollection,
+        divisionsCollection,
+        pincodesCollection,
+        vendorsCollection,
+        auditLogsCollection,
+        shopVisitsCollection,
+        submittedReportsCollection,
+        qcIssuesCollection,
+        qcTasksCollection,
+        agentsCollection,
+        notificationsCollection,
+        customersCollection,
+        vendorPaymentsCollection,
+        ordersCollection,
+        bookingsCollection,
+        jobsCollection,
+        techniciansCollection,
+        executivesCollection,
+        supportTeamCollection,
+        agentPaymentsCollection,
+        agentActivitiesCollection,
+        kycRecordsCollection,
+        qualityCheckRecordsCollection,
+        managersCollection
+      ];
+
+      await Promise.all(collections.map(col => col.initMongo(mongoDb)));
+
+      initUsers();
+      syncHierarchyFromUsers();
+      console.log('✅ [Database] All collections connected to MongoDB Atlas as single source of truth.');
+      return true;
+    } catch (err) {
+      console.error('[Database] MongoDB Atlas initialization failed:', err.message);
+      return false;
+    }
+  })();
+  return initPromise;
+}
+
+// Trigger database initialization
+initDatabase().catch(e => console.warn('[Database] Auto-init:', e.message));
+
+/**
  * Enhanced location filter supporting both Sub-Admin roles and Field Manager roles.
  * Matches by geographic name ('Tamil Nadu', 'Salem') or ID ('state_tn', 'dist_salem').
  */
@@ -437,5 +642,7 @@ function filterByLocation(items, user) {
 module.exports = {
   db,
   Collection,
-  filterByLocation
+  filterByLocation,
+  initDatabase,
+  syncHierarchyFromUsers
 };

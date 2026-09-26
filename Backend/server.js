@@ -97,17 +97,27 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('UNHANDLED PROMISE REJECTION:', reason);
 });
 
+const { initDatabase } = require('./config/db');
+
 if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`================================================================`);
-    console.log(`🚀 Unified Sub-Admin & Field Manager Backend is running!`);
-    console.log(`🌐 Local URL:   http://localhost:${PORT}`);
-    console.log(`📱 Network URL: http://192.168.100.236:${PORT}`);
-    console.log(`⚡ Health Check: http://192.168.100.236:${PORT}/api/health`);
-    console.log(`📁 Uploads:      http://192.168.100.236:${PORT}/uploads`);
-    console.log(`================================================================`);
+  initDatabase().then(() => {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log('================================================================');
+      console.log('?? Unified Sub-Admin & Field Manager Backend is running!');
+      console.log('?? Local URL:   http://localhost:' + PORT);
+      console.log('?? Network URL: http://192.168.100.236:' + PORT);
+      console.log('? Health Check: http://192.168.100.236:' + PORT + '/api/health');
+      console.log('?? Uploads:      http://192.168.100.236:' + PORT + '/uploads');
+      console.log('================================================================');
+    });
+  }).catch(err => {
+    console.error('Failed to initialize database:', err);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log('?? Backend running in fallback mode on port ' + PORT);
+    });
   });
 }
 
 // Unified API Server - Clean Production Ready Data Store
 module.exports = app;
+

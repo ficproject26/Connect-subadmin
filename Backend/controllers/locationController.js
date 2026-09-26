@@ -1,12 +1,12 @@
-﻿const { db } = require('../config/db');
+const { db } = require('../config/db');
 
 // Helper to fetch live from Admin Master Territory API
 async function fetchAdminTerritory(path, params = {}) {
   const queryStr = new URLSearchParams(params).toString();
   const endpoints = [
-    http://127.0.0.1:8004/api/territory/,
-    http://localhost:8004/api/territory/,
-    https://api.ficapp.in/api/territory/
+    'http://127.0.0.1:8004/api/territory/',
+    'http://localhost:8004/api/territory/',
+    'https://api.ficapp.in/api/territory/'
   ];
 
   for (const url of endpoints) {
