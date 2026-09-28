@@ -291,21 +291,12 @@ export function DivisionalVendors() {
 
   return (
     <div className="space-y-6">
-      {/* Top Header with Title and "Register Vendor" Button */}
+      {/* Top Header with Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">Division Vendors Network</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">Merchant partners and commercial supply points under {divisionName} division jurisdiction.</p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setShowRegisterModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-600/20 transition cursor-pointer self-start sm:self-auto shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Register New Vendor</span>
-        </button>
       </div>
 
       {/* 4 KPI Cards in a single row */}

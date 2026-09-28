@@ -1466,19 +1466,6 @@ export function StateManagers({ level }) {
             )}
           </button>
         </div>
-
-        {/* Top Right Request/Add Manager Button */}
-        {canAddManager && (
-          <button
-            type="button"
-            onClick={() => openAddManager()}
-            id="add-manager-header-btn"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold transition shadow-sm cursor-pointer shrink-0 self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Request Manager</span>
-          </button>
-        )}
       </div>
 
       {/* Subtitle / Territory Navigation Instructions matching Image 2 */}
