@@ -1416,58 +1416,6 @@ export function StateManagers({ level }) {
 
   return (
     <div className="space-y-6">
-      {/* View Switcher Bar & Main Actions matching Image 2 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        {/* Switcher Tabs */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 w-fit">
-          <button
-            type="button"
-            onClick={() => setViewTab('hierarchy')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-              viewTab === 'hierarchy'
-                ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <GitFork className="w-4 h-4" />
-            <span>Hierarchy</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setViewTab('list')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-              viewTab === 'list'
-                ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <ListIcon className="w-4 h-4" />
-            <span>List</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setViewTab('requests')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-              viewTab === 'requests'
-                ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/30'
-                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Requests</span>
-            {pendingCount > 0 && (
-              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                viewTab === 'requests' ? 'bg-white text-amber-600' : 'bg-amber-500 text-white'
-              }`}>
-                {pendingCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
       {/* Subtitle / Territory Navigation Instructions matching Image 2 */}
       <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
         <Send className="w-3.5 h-3.5 text-blue-500 shrink-0" />
@@ -2183,18 +2131,27 @@ export function StateManagers({ level }) {
           searchPlaceholder={`Search ${config.title.toLowerCase()} by name, jurisdiction, or phone...`}
           exportFileName={config.exportFile}
           actions={
-            canAddManager ? (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => openAddManager()}
-                id="add-manager-table-btn"
-                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
-                title={`Add ${designatedRoleLabel}`}
+                onClick={() => setViewTab('hierarchy')}
+                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
               >
-                <Plus className="w-3.5 h-3.5 shrink-0" />
-                <span className="whitespace-nowrap">Add Manager</span>
+                <span>← Back to Hierarchy</span>
               </button>
-            ) : null
+              {canAddManager && (
+                <button
+                  type="button"
+                  onClick={() => openAddManager()}
+                  id="add-manager-table-btn"
+                  className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+                  title={`Add ${designatedRoleLabel}`}
+                >
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">Add Manager</span>
+                </button>
+              )}
+            </div>
           }
         />
       )}
@@ -2212,16 +2169,25 @@ export function StateManagers({ level }) {
           searchPlaceholder="Search pending manager registrations by name or territory..."
           exportFileName="pending_manager_requests.csv"
           actions={
-            canAddManager ? (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => openAddManager()}
-                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+                onClick={() => setViewTab('hierarchy')}
+                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
               >
-                <Plus className="w-3.5 h-3.5 shrink-0" />
-                <span className="whitespace-nowrap">New Manager Request</span>
+                <span>← Back to Hierarchy</span>
               </button>
-            ) : null
+              {canAddManager && (
+                <button
+                  type="button"
+                  onClick={() => openAddManager()}
+                  className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">New Manager Request</span>
+                </button>
+              )}
+            </div>
           }
         />
       )}
