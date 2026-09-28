@@ -35,7 +35,8 @@ import {
   CircleHelp,
   Receipt,
   ClipboardCheck,
-  Bell
+  Bell,
+  X
 } from 'lucide-react';
 
 export function Sidebar({ isOpen, setIsOpen }) {
@@ -408,6 +409,14 @@ export function Sidebar({ isOpen, setIsOpen }) {
               </span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="lg:hidden p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            title="Close navigation"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Navigation Sections */}

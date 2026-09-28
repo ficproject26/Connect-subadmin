@@ -42,7 +42,7 @@ export function DashboardLayout() {
           </div>
         )}
 
-        <main className="flex-1 p-4 sm:p-5 lg:p-6 max-w-[1440px] w-full mx-auto space-y-6">
+        <main className="flex-1 p-3.5 sm:p-5 lg:p-6 xl:p-8 w-full max-w-full 2xl:max-w-[1700px] mx-auto space-y-5 sm:space-y-6 box-border min-w-0">
           <Outlet />
         </main>
 
