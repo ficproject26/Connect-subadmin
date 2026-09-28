@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const vendorController = require('../controllers/vendorController');
+const vendorSubscriptionController = require('../controllers/vendorSubscriptionController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { validateVendorCreationScope } = require('../middleware/scopeMiddleware');
 
@@ -8,6 +9,10 @@ router.use(authMiddleware);
 
 // List vendors
 router.get('/', vendorController.getVendors);
+
+// Vendor Subscriptions (must be before /:id)
+router.get('/subscriptions', vendorSubscriptionController.getVendorSubscriptions);
+router.post('/subscriptions/:id/record-payment', vendorSubscriptionController.recordSubscriptionPayment);
 
 // Create vendor (supports both Sub-Admin and Field Manager)
 router.post('/', validateVendorCreationScope, vendorController.createVendor);

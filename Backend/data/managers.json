@@ -15,7 +15,8 @@
     "createdAt": "2026-09-25T13:45:23.296Z",
     "updatedAt": "2026-09-25T13:45:23.297Z",
     "assignedState": "Tamil Nadu",
-    "phone": "9999999999"
+    "phone": "9999999999",
+    "id": "user_admin"
   },
   {
     "_id": "user_state_1",
@@ -34,7 +35,8 @@
     "createdAt": "2026-09-25T13:45:23.297Z",
     "updatedAt": "2026-09-25T13:45:23.297Z",
     "assignedState": "Tamil Nadu",
-    "phone": "9888800001"
+    "phone": "9888800001",
+    "id": "user_state_1"
   },
   {
     "_id": "user_state_ka",
@@ -53,7 +55,8 @@
     "createdAt": "2026-09-25T13:45:23.297Z",
     "updatedAt": "2026-09-25T13:45:23.297Z",
     "assignedState": "Karnataka",
-    "phone": "9888800005"
+    "phone": "9888800005",
+    "id": "user_state_ka"
   },
   {
     "_id": "user_dist_1",
@@ -73,7 +76,8 @@
     "updatedAt": "2026-09-25T13:45:23.297Z",
     "assignedDistrict": "Krishnagiri",
     "assignedState": "Tamil Nadu",
-    "phone": "9888800002"
+    "phone": "9888800002",
+    "id": "user_dist_1"
   },
   {
     "_id": "user_div_1",
@@ -94,7 +98,8 @@
     "assignedDistrict": "Krishnagiri",
     "assignedDivision": "Central",
     "assignedState": "Tamil Nadu",
-    "phone": "9888800003"
+    "phone": "9888800003",
+    "id": "user_div_1"
   },
   {
     "_id": "user_pin_1",
@@ -116,6 +121,7 @@
     "assignedDivision": "Central",
     "assignedPincode": "635109",
     "assignedState": "Tamil Nadu",
-    "phone": "9888800004"
+    "phone": "9888800004",
+    "id": "user_pin_1"
   }
 ]

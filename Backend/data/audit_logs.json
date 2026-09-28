@@ -10090,5 +10090,31 @@
     "targetUserRole": "division_manager",
     "timestamp": "2026-09-28T10:51:59.925Z",
     "updatedAt": "2026-09-28T10:52:00.301Z"
+  },
+  {
+    "_id": "d861e43a-5167-4222-a34b-8f1dee2e3473",
+    "action": "VENDOR_UPDATED",
+    "createdAt": "2026-09-28T12:25:29.187Z",
+    "details": "Vendor 'Balu' profile details updated.",
+    "id": "d861e43a-5167-4222-a34b-8f1dee2e3473",
+    "ip": "65.2.151.184",
+    "recordId": "ven_311361",
+    "updatedAt": "2026-09-28T12:25:29.187Z",
+    "userId": "usr_mgr_1790580930154_8uge",
+    "userName": "Surya",
+    "userRole": "State Admin"
+  },
+  {
+    "_id": "47cb2a84-1c81-414c-9008-ae1c5585f634",
+    "action": "VENDOR_PINCODE_ACCEPTED",
+    "createdAt": "2026-09-28T13:55:29.870Z",
+    "details": "Pincode Admin approved vendor. Forwarded for KYC audit.",
+    "id": "47cb2a84-1c81-414c-9008-ae1c5585f634",
+    "ip": "127.0.0.1",
+    "recordId": "6ab6591ec3c80ae7e778f48b",
+    "updatedAt": "2026-09-28T13:55:29.870Z",
+    "userId": "ADM-PIN-608A42",
+    "userName": "Maran",
+    "userRole": "Pincode Admin"
   }
 ]

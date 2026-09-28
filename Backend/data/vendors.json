@@ -985,8 +985,18 @@
     "status": "Approved",
     "subCategory": "General",
     "totalOrdersDelivered": 0,
-    "updatedAt": "2026-09-28T09:55:11.508Z",
+    "updatedAt": "2026-09-28T12:25:29.150Z",
     "website": "",
-    "isActive": true
+    "isActive": true,
+    "businessImagePreviews": [],
+    "confirmPassword": "",
+    "declaration": true,
+    "districtName": "Salem",
+    "divisionName": "Salem North",
+    "logoPreview": null,
+    "password": "",
+    "pincodeArea": "5/37,2nd cross,Anna Nagar,hosur ",
+    "pincodeCode": "635126",
+    "stateName": "Tamil Nadu"
   }
 ]

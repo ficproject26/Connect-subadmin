@@ -456,6 +456,8 @@ const managersCollection = new Collection('managers', [], 'managers');
 const cardholdersCollection = new Collection('cardholders', [], 'cardholders');
 const membershipOrdersCollection = new Collection('membership_orders', [], 'membership_orders');
 const deliveryPartnersCollection = new Collection('delivery_partners', seed.deliveryPartners || [], 'delivery_partners');
+const subscriptionsCollection = new Collection('subscriptions', [], 'subscriptions');
+const subscriptionPaymentsCollection = new Collection('subscription_payments', [], 'subscriptionpayments');
 
 // Harmonize demo admins and manager users into unified usersCollection
 function initUsers() {
@@ -535,6 +537,8 @@ const db = {
   cardholders: cardholdersCollection,
   membershipOrders: membershipOrdersCollection,
   deliveryPartners: deliveryPartnersCollection,
+  subscriptions: subscriptionsCollection,
+  subscriptionPayments: subscriptionPaymentsCollection,
 
   get admins() {
     return Array.from(usersCollection).filter(u => 
@@ -680,7 +684,9 @@ function initDatabase() {
         managersCollection,
         cardholdersCollection,
         membershipOrdersCollection,
-        deliveryPartnersCollection
+        deliveryPartnersCollection,
+        subscriptionsCollection,
+        subscriptionPaymentsCollection
       ];
 
       await Promise.all(collections.map(col => col.initMongo(mongoDb)));

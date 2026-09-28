@@ -11,9 +11,9 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "usr_mgr_1790580930154_8uge"
+      "6ab4c2ec5df0d82cb7a09cac"
     ],
-    "updatedAt": "2026-09-28T07:52:23.455Z"
+    "updatedAt": "2026-09-28T13:55:34.607Z"
   },
   {
     "_id": "6ab4f6df1311030bfd3447a2",
@@ -554,5 +554,43 @@
     "title": "New Vendor Onboarded: Balu",
     "type": "vendor_onboarding",
     "updatedAt": "2026-09-28T09:55:11.650Z"
+  },
+  {
+    "_id": "NOTIF-1790603729917-YBVD",
+    "actionUrl": "/state-admin/vendors",
+    "category": "vendor",
+    "createdAt": "2026-09-28T13:55:29.917Z",
+    "entityId": "6ab6591ec3c80ae7e778f48b",
+    "entityType": "vendor",
+    "id": "NOTIF-1790603729917-YBVD",
+    "isRead": false,
+    "message": "Pincode Admin Maran approved merchant 'y'. Sent for central KYC review.",
+    "metadata": {
+      "vendorId": "6ab6591ec3c80ae7e778f48b",
+      "vendorName": "y",
+      "action": "Accept",
+      "reason": null,
+      "verifiedBy": "Maran",
+      "pincode": "636112"
+    },
+    "priority": "normal",
+    "readBy": [],
+    "scope": {
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem Urban Division",
+      "pincode": "636112",
+      "targetUserId": null,
+      "targetRoles": [
+        "State Admin",
+        "District Admin",
+        "Division Admin",
+        "Pincode Admin",
+        "Manager"
+      ]
+    },
+    "title": "Vendor Approved: y",
+    "type": "vendor_status",
+    "updatedAt": "2026-09-28T13:55:29.917Z"
   }
 ]

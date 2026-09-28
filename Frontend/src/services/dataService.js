@@ -308,6 +308,20 @@ export const dataService = {
   // Managers scoped to admin's hierarchy
   getQCTaskManagers: () => apiRequest('/qc-tasks/managers'),
 
+  // Vendor Subscriptions (territory-scoped)
+  getVendorSubscriptions: (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    return apiRequest(`/vendors/subscriptions${qs ? `?${qs}` : ''}`);
+  },
+  recordVendorSubscriptionPayment: (id, data) => apiRequest(`/vendors/subscriptions/${id}/record-payment`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+
   // Real-Time Event Subscription Helpers
   subscribeRealtime: (entity, callback) => realtimeClient.subscribe(entity, callback)
 };
