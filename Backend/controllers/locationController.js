@@ -153,6 +153,72 @@ async function buildCompleteHierarchy(scopeUser = null) {
     }
   }
 
+  // Prune unassigned geographic data: only branches with assigned users/admins/managers must be present
+  const assignedUsers = Array.from(db.users || []).filter(u => u.status !== 'inactive');
+
+  const hasAssignmentInState = (s) => {
+    const sName = (s.name || '').trim().toLowerCase();
+    const sId = String(s.id || s._id || s.stateId || '').trim().toLowerCase();
+    return assignedUsers.some(u => 
+      (sId && String(u.stateId || '').toLowerCase() === sId) ||
+      (sName && (u.state || '').trim().toLowerCase() === sName)
+    );
+  };
+
+  const hasAssignmentInDist = (d) => {
+    const dName = (d.name || '').trim().toLowerCase();
+    const dId = String(d.id || d._id || d.districtId || '').trim().toLowerCase();
+    return assignedUsers.some(u => 
+      (dId && String(u.districtId || '').toLowerCase() === dId) ||
+      (dName && (u.district || '').trim().toLowerCase() === dName)
+    );
+  };
+
+  const hasAssignmentInDiv = (v) => {
+    const vName = (v.name || '').trim().toLowerCase();
+    const vId = String(v.id || v._id || v.divisionId || '').trim().toLowerCase();
+    return assignedUsers.some(u => 
+      (vId && String(u.divisionId || '').toLowerCase() === vId) ||
+      (vName && (u.division || '').trim().toLowerCase() === vName)
+    );
+  };
+
+  const hasAssignmentInPin = (p) => {
+    const pCode = String(p.code || p.pincode || p).trim();
+    const pId = String(p.id || p._id || '').trim().toLowerCase();
+    return assignedUsers.some(u => 
+      (pId && String(u.pincodeId || '').toLowerCase() === pId) ||
+      (pCode && String(u.pincode || '').trim() === pCode)
+    );
+  };
+
+  fullHierarchy = fullHierarchy.map(s => {
+    const prunedDistricts = (s.districts || []).map(d => {
+      const prunedDivisions = (d.divisions || []).map(v => {
+        const prunedPins = (v.rawPincodes || []).filter(p => hasAssignmentInPin(p));
+        const prunedPinCodes = prunedPins.map(p => p.code);
+        const divHasAssign = hasAssignmentInDiv(v) || prunedPins.length > 0;
+        return divHasAssign ? {
+          ...v,
+          pincodes: prunedPinCodes,
+          rawPincodes: prunedPins
+        } : null;
+      }).filter(Boolean);
+
+      const distHasAssign = hasAssignmentInDist(d) || prunedDivisions.length > 0;
+      return distHasAssign ? {
+        ...d,
+        divisions: prunedDivisions
+      } : null;
+    }).filter(Boolean);
+
+    const stateHasAssign = hasAssignmentInState(s) || prunedDistricts.length > 0;
+    return stateHasAssign ? {
+      ...s,
+      districts: prunedDistricts
+    } : null;
+  }).filter(Boolean);
+
   return fullHierarchy;
 }
 

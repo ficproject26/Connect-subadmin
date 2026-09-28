@@ -61,28 +61,36 @@ export function StateDivisions() {
   };
 
   const districtFilter = searchParams.get('district');
+  const stateFilter = searchParams.get('state');
 
   const loadData = async () => {
     setLoading(true);
     try {
+      const params = {};
+      if (districtFilter) params.district = districtFilter;
+      if (stateFilter) params.state = stateFilter;
+
       const [res, pinRes] = await Promise.all([
-        dataService.getDivisions(),
-        dataService.getPincodes().catch(() => ({ success: false }))
+        dataService.getDivisions(params),
+        dataService.getPincodes(params).catch(() => ({ success: false }))
       ]);
       if (res.success) {
         let list = res.divisions || [];
         if (districtFilter) {
-          list = list.filter(d => d.districtName?.toLowerCase() === districtFilter.toLowerCase());
+          list = list.filter(d => (d.districtName || d.district || '').toLowerCase() === districtFilter.toLowerCase());
         }
         // Only show divisions with registered admins
         list = list.filter(d => d.adminName && d.adminName.toLowerCase() !== 'unassigned' && d.adminName.trim() !== '-' && d.adminName.trim() !== '');
         setDivisions(list);
+      } else {
+        setDivisions([]);
       }
       if (pinRes.success && pinRes.pincodes) {
         setAllPincodes(pinRes.pincodes);
       }
     } catch (e) {
       console.error(e);
+      setDivisions([]);
     } finally {
       setLoading(false);
     }
@@ -90,7 +98,7 @@ export function StateDivisions() {
 
   useEffect(() => {
     loadData();
-  }, [districtFilter]);
+  }, [districtFilter, stateFilter]);
 
   const handleToggleStatus = async (row) => {
     const currentStatus = row.status || 'Active';
@@ -206,7 +214,10 @@ export function StateDivisions() {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/state-admin/pincodes?division=${encodeURIComponent(row.name)}`);
+              const sName = row.stateName || row.state || stateFilter || 'Tamil Nadu';
+              const dName = row.districtName || row.district || districtFilter || '';
+              const divName = row.name || row.divisionName || '';
+              navigate(`/state-admin/pincodes?state=${encodeURIComponent(sName)}&district=${encodeURIComponent(dName)}&division=${encodeURIComponent(divName)}`);
             }}
             className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
               isDark

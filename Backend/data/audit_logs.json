@@ -9488,5 +9488,517 @@
     "userEmail": "admin@example.com",
     "userId": "6a8d22c11bc647d92ae36337",
     "userRole": "super-admin"
+  },
+  {
+    "_id": "43f156bc-9058-4a4c-9b6a-7e2a920f2b27",
+    "action": "Task Created",
+    "createdAt": "2026-09-26T09:51:19.335Z",
+    "details": "Created task TSK-100003 for Milk & Milk Store",
+    "id": "43f156bc-9058-4a4c-9b6a-7e2a920f2b27",
+    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
+    "recordType": "task",
+    "timestamp": "2026-09-26T09:51:19.335Z",
+    "updatedAt": "2026-09-26T09:51:19.335Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "57bbd4b4-e91f-4d80-8395-5f7270aae2e0",
+    "action": "Task In Progress",
+    "createdAt": "2026-09-26T09:51:19.678Z",
+    "details": "Task TSK-100003 status changed to In Progress",
+    "id": "57bbd4b4-e91f-4d80-8395-5f7270aae2e0",
+    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
+    "recordType": "task",
+    "timestamp": "2026-09-26T09:51:19.678Z",
+    "updatedAt": "2026-09-26T09:51:19.678Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "955b0821-1885-480f-b63e-f373d9b904d2",
+    "action": "Task Completed",
+    "createdAt": "2026-09-26T09:51:20.036Z",
+    "details": "Task TSK-100003 status changed to Completed",
+    "id": "955b0821-1885-480f-b63e-f373d9b904d2",
+    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
+    "recordType": "task",
+    "timestamp": "2026-09-26T09:51:20.036Z",
+    "updatedAt": "2026-09-26T09:51:20.036Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "26648969-bc9f-46a7-9b12-ce83f12daa74",
+    "action": "Vendor Updated",
+    "createdAt": "2026-09-26T09:51:21.967Z",
+    "id": "26648969-bc9f-46a7-9b12-ce83f12daa74",
+    "module": "Vendors",
+    "newValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "previousValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "recordId": "6ab76e3445152c228d463a87",
+    "timestamp": "2026-09-26T09:51:21.967Z",
+    "updatedAt": "2026-09-26T09:51:21.967Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "6ab79741f4290a225c17040e",
+    "userId": null,
+    "userEmail": "test@example.com",
+    "userRole": "guest",
+    "action": "login_failed",
+    "ipAddress": "205.254.163.153",
+    "userAgent": "node",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "failed",
+    "details": "Login attempt failed - Account not found",
+    "timestamp": "2026-09-26T09:58:25.473Z",
+    "__v": 0
+  },
+  {
+    "_id": "bf86bd79-d0b8-4934-abc9-cd36bca7c5da",
+    "action": "Task Created",
+    "createdAt": "2026-09-26T10:15:27.659Z",
+    "details": "Created task TSK-100004 for Milk & Milk Store",
+    "id": "bf86bd79-d0b8-4934-abc9-cd36bca7c5da",
+    "recordId": "5364b421-35cc-4e43-89ae-e81d6a396a98",
+    "recordType": "task",
+    "timestamp": "2026-09-26T10:15:27.659Z",
+    "updatedAt": "2026-09-26T10:15:27.659Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "7350d3f5-8315-47f6-bc58-920a20aaac90",
+    "action": "Task In Progress",
+    "createdAt": "2026-09-26T10:15:27.970Z",
+    "details": "Task TSK-100004 status changed to In Progress",
+    "id": "7350d3f5-8315-47f6-bc58-920a20aaac90",
+    "recordId": "5364b421-35cc-4e43-89ae-e81d6a396a98",
+    "recordType": "task",
+    "timestamp": "2026-09-26T10:15:27.970Z",
+    "updatedAt": "2026-09-26T10:15:27.970Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "e2346c3d-9133-483c-90cc-96eb2111ee3a",
+    "action": "Task Completed",
+    "createdAt": "2026-09-26T10:15:28.317Z",
+    "details": "Task TSK-100004 status changed to Completed",
+    "id": "e2346c3d-9133-483c-90cc-96eb2111ee3a",
+    "recordId": "5364b421-35cc-4e43-89ae-e81d6a396a98",
+    "recordType": "task",
+    "timestamp": "2026-09-26T10:15:28.317Z",
+    "updatedAt": "2026-09-26T10:15:28.317Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "e2f8b7dd-a5f0-45f7-b6c8-5b523ff6b641",
+    "action": "Vendor Updated",
+    "createdAt": "2026-09-26T10:15:30.129Z",
+    "id": "e2f8b7dd-a5f0-45f7-b6c8-5b523ff6b641",
+    "module": "Vendors",
+    "newValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "previousValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "recordId": "6ab76e3445152c228d463a87",
+    "timestamp": "2026-09-26T10:15:30.129Z",
+    "updatedAt": "2026-09-26T10:15:30.129Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "3bf14c14-57b3-4b2d-8762-f551210e67bb",
+    "action": "Task Created",
+    "createdAt": "2026-09-26T10:17:28.133Z",
+    "details": "Created task TSK-100005 for Milk & Milk Store",
+    "id": "3bf14c14-57b3-4b2d-8762-f551210e67bb",
+    "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
+    "recordType": "task",
+    "timestamp": "2026-09-26T10:17:28.133Z",
+    "updatedAt": "2026-09-26T10:17:28.133Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "049c715c-2f2f-4ca1-8641-df625cb50590",
+    "action": "Task In Progress",
+    "createdAt": "2026-09-26T10:17:28.446Z",
+    "details": "Task TSK-100005 status changed to In Progress",
+    "id": "049c715c-2f2f-4ca1-8641-df625cb50590",
+    "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
+    "recordType": "task",
+    "timestamp": "2026-09-26T10:17:28.445Z",
+    "updatedAt": "2026-09-26T10:17:28.446Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "2cab805c-503f-4029-85fa-eea0e0ca5594",
+    "action": "Task Completed",
+    "createdAt": "2026-09-26T10:17:29.028Z",
+    "details": "Task TSK-100005 status changed to Completed",
+    "id": "2cab805c-503f-4029-85fa-eea0e0ca5594",
+    "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
+    "recordType": "task",
+    "timestamp": "2026-09-26T10:17:29.028Z",
+    "updatedAt": "2026-09-26T10:17:29.028Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "f25850c9-47f0-40bb-8400-b07f42ed13c3",
+    "action": "Vendor Updated",
+    "createdAt": "2026-09-26T10:17:30.815Z",
+    "id": "f25850c9-47f0-40bb-8400-b07f42ed13c3",
+    "module": "Vendors",
+    "newValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "previousValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "recordId": "6ab76e3445152c228d463a87",
+    "timestamp": "2026-09-26T10:17:30.815Z",
+    "updatedAt": "2026-09-26T10:17:30.815Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "6ab79f3bedd905577aa1de95",
+    "userId": "6ab4c2ec5df0d82cb7a09cac",
+    "userEmail": "dhanushiyasri1924@gmail.com",
+    "userRole": "admin",
+    "action": "login_failed",
+    "ipAddress": "::ffff:127.0.0.1",
+    "userAgent": "curl/8.18.0",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "failed",
+    "details": "Failed password attempt 1/10",
+    "timestamp": "2026-09-26T10:32:27.495Z",
+    "__v": 0
+  },
+  {
+    "_id": "24af082a-b86b-4637-8fb5-cbfcfb31e27c",
+    "action": "MANAGER_CREATED",
+    "adminId": "6ab4c2ec5df0d82cb7a09cac",
+    "adminName": "Dhanu",
+    "adminRole": "State Admin",
+    "createdAt": "2026-09-26T10:57:08.653Z",
+    "details": "State Agent Manager (Level 1) \"Sharmila\" registered and activated by State Admin \"Dhanu\".",
+    "id": "24af082a-b86b-4637-8fb5-cbfcfb31e27c",
+    "ip": "127.0.0.1",
+    "targetUserId": "usr_mgr_1790420228476_myyf",
+    "targetUserName": "Sharmila",
+    "targetUserRole": "state_manager",
+    "timestamp": "2026-09-26T10:57:08.476Z",
+    "updatedAt": "2026-09-26T10:57:08.653Z"
+  },
+  {
+    "_id": "c79c95d1-3b76-4c6c-8669-54ea23cb77af",
+    "action": "MANAGER_CREATED",
+    "adminId": "ADM-355A7792",
+    "adminName": "Ananya",
+    "adminRole": "District Admin",
+    "createdAt": "2026-09-26T11:08:15.682Z",
+    "details": "District Agent Manager (Level 2) \"Anand\" registered and activated by District Admin \"Ananya\".",
+    "id": "c79c95d1-3b76-4c6c-8669-54ea23cb77af",
+    "ip": "127.0.0.1",
+    "targetUserId": "usr_mgr_1790420895505_iarp",
+    "targetUserName": "Anand",
+    "targetUserRole": "district_manager",
+    "timestamp": "2026-09-26T11:08:15.505Z",
+    "updatedAt": "2026-09-26T11:08:15.682Z"
+  },
+  {
+    "_id": "6ab7aaabedd905577aa1de97",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "205.254.163.153",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-26T11:21:15.214Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7c340edd905577aa1de9b",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "205.254.163.153",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-26T13:06:08.978Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7c356edd905577aa1de9d",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "106.51.198.7",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-26T13:06:30.224Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab7c69bedd905577aa1de9f",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "106.51.198.7",
+    "userAgent": "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-26T13:20:27.048Z",
+    "__v": 0
+  },
+  {
+    "_id": "d24b8189-f7dd-45be-9dea-3fc4dbebbb1f",
+    "action": "Task Created",
+    "createdAt": "2026-09-26T14:17:22.231Z",
+    "details": "Created task TSK-100006 for Milk & Milk Store",
+    "id": "d24b8189-f7dd-45be-9dea-3fc4dbebbb1f",
+    "recordId": "65d3185e-a6df-427b-a565-c00481726817",
+    "recordType": "task",
+    "timestamp": "2026-09-26T14:17:22.231Z",
+    "updatedAt": "2026-09-26T14:17:22.231Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "2c42ce0a-d6ed-460b-bca0-d00577284190",
+    "action": "Task Completed",
+    "createdAt": "2026-09-26T14:17:22.241Z",
+    "details": "Task TSK-100006 status changed to Completed",
+    "id": "2c42ce0a-d6ed-460b-bca0-d00577284190",
+    "recordId": "65d3185e-a6df-427b-a565-c00481726817",
+    "recordType": "task",
+    "timestamp": "2026-09-26T14:17:22.241Z",
+    "updatedAt": "2026-09-26T14:17:22.241Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "71fda426-899d-4069-aadf-759c6023c495",
+    "action": "Task In Progress",
+    "createdAt": "2026-09-26T14:17:22.236Z",
+    "details": "Task TSK-100006 status changed to In Progress",
+    "id": "71fda426-899d-4069-aadf-759c6023c495",
+    "recordId": "65d3185e-a6df-427b-a565-c00481726817",
+    "recordType": "task",
+    "timestamp": "2026-09-26T14:17:22.236Z",
+    "updatedAt": "2026-09-26T14:17:22.236Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "4ecdc9dd-8801-4840-a2c1-06a830f0708d",
+    "action": "Vendor Updated",
+    "createdAt": "2026-09-26T14:17:22.866Z",
+    "id": "4ecdc9dd-8801-4840-a2c1-06a830f0708d",
+    "module": "Vendors",
+    "newValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "previousValue": {
+      "name": "harshini",
+      "businessName": "harshini",
+      "category": "Services"
+    },
+    "recordId": "6ab76e3445152c228d463a87",
+    "timestamp": "2026-09-26T14:17:22.866Z",
+    "updatedAt": "2026-09-26T14:17:22.866Z",
+    "userId": "user_state_1",
+    "userName": "Ramesh Kumar (TN State Manager)",
+    "userRole": "state_manager"
+  },
+  {
+    "_id": "6ab815d0c9e8d211ad81dccf",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "152.57.21.93",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-26T18:58:24.864Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab9e125bec0ef28c6e813ec",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "106.51.198.7",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-28T03:38:13.533Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab9f146bec0ef28c6e813f5",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "106.51.198.7",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-28T04:47:02.658Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab9f198bec0ef28c6e813fa",
+    "userId": "6a8d22c11bc647d92ae36337",
+    "userEmail": "admin@example.com",
+    "userRole": "super-admin",
+    "action": "login_success",
+    "ipAddress": "205.254.163.153",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "deviceInfo": {
+      "browser": "Unknown Browser",
+      "os": "Unknown OS",
+      "deviceType": "Desktop"
+    },
+    "location": {
+      "city": "Local",
+      "country": "India"
+    },
+    "status": "success",
+    "details": "Successful user authentication",
+    "timestamp": "2026-09-28T04:48:24.523Z",
+    "__v": 0
   }
 ]

@@ -78,6 +78,10 @@ export function DistrictAgents({ level = 'district' }) {
 
   const district = user?.district || '-';
 
+  // Parse hierarchical drill-down query parameter from URL
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const divisionFilterParam = searchParams.get('division') || '';
+
   // Determine active level from URL pathname
   let activeLevel = level;
   if (location.pathname.includes('/agents/pincode')) activeLevel = 'pincode';
@@ -106,7 +110,9 @@ export function DistrictAgents({ level = 'district' }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await dataService.getAgents({ district, level: activeLevel });
+      const params = { district, level: activeLevel };
+      if (divisionFilterParam) params.division = divisionFilterParam;
+      const res = await dataService.getAgents(params);
       if (res.success && res.agents) {
         setAgents(res.agents);
       } else {
@@ -130,7 +136,7 @@ export function DistrictAgents({ level = 'district' }) {
 
   useEffect(() => {
     loadData();
-  }, [activeLevel, district]);
+  }, [activeLevel, district, divisionFilterParam]);
 
   const handleAdvanceStage = async (activityId, notes) => {
     try {
@@ -246,13 +252,44 @@ export function DistrictAgents({ level = 'district' }) {
       accessor: 'id',
       className: 'whitespace-nowrap',
       render: (row) => (
-        <button
-          type="button"
-          onClick={() => setSelectedAgent(row)}
-          className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
-        >
-          <Eye className="w-3 h-3" /> Profile
-        </button>
+        <div className="flex items-center gap-2">
+          {activeLevel === 'district' && (
+            <button
+              type="button"
+              onClick={() => {
+                navigate('/district-admin/agents/divisional');
+              }}
+              className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded"
+              title="Drill down to Divisional Agents"
+            >
+              <span>Divisional Agents</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {activeLevel === 'divisional' && (
+            <button
+              type="button"
+              onClick={() => {
+                const qDivision = row.division || row.assignedArea || row.name || '';
+                navigate(`/district-admin/agents/pincode?division=${encodeURIComponent(qDivision)}`);
+              }}
+              className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 flex items-center gap-1 cursor-pointer bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded"
+              title="Drill down to Pincode Agents"
+            >
+              <span>Pincode Agents</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setSelectedAgent(row)}
+            className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <Eye className="w-3 h-3" /> Profile
+          </button>
+        </div>
       )
     }
   ];
@@ -339,6 +376,31 @@ export function DistrictAgents({ level = 'district' }) {
 
       {/* 4-Tier Agent Hierarchy Banner scoped to District Admin */}
       <AgentHierarchyBanner activeLevel={activeLevel} basePath="/district-admin" />
+
+      {/* Active Hierarchical Parent Filter Breadcrumb */}
+      {divisionFilterParam && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-slate-500 dark:text-slate-400">Scoped Hierarchy:</span>
+            <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 font-semibold text-blue-800 dark:text-blue-200">
+              District: {district}
+            </span>
+            <span className="text-slate-400">/</span>
+            <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 font-semibold text-emerald-800 dark:text-emerald-200">
+              Division: {divisionFilterParam}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              navigate(location.pathname);
+            }}
+            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-3 shrink-0"
+          >
+            Clear Filter
+          </button>
+        </div>
+      )}
 
       {/* Top Metric Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">

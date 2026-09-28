@@ -6,14 +6,16 @@
     "mobile": "9999999999",
     "passwordHash": "$2a$10$EI.xGKxzeZ8xA505IbN3kuWcyye/MW01dt/TEYhOxulD9dXjFBYmS",
     "role": "state_manager",
-    "level": 1,
+    "level": "state",
     "stateId": "6aa10f70ca0932e6eaec1f5c",
     "districtId": null,
     "divisionId": null,
     "pincodeId": null,
-    "status": "approved",
+    "status": "Active",
     "createdAt": "2026-09-25T13:45:23.296Z",
-    "updatedAt": "2026-09-25T13:45:23.297Z"
+    "updatedAt": "2026-09-25T13:45:23.297Z",
+    "assignedState": "Tamil Nadu",
+    "phone": "9999999999"
   },
   {
     "_id": "user_state_1",
@@ -23,14 +25,16 @@
     "mobile": "9888800001",
     "passwordHash": "$2a$10$52UQnoAW8wZaGPo2bIn7zeO8RgO.jByRwK5hNVNPQ7pyaNWKa.OyC",
     "role": "state_manager",
-    "level": 1,
+    "level": "state",
     "stateId": "6aa10f70ca0932e6eaec1f5c",
     "districtId": null,
     "divisionId": null,
     "pincodeId": null,
-    "status": "approved",
+    "status": "Active",
     "createdAt": "2026-09-25T13:45:23.297Z",
-    "updatedAt": "2026-09-25T13:45:23.297Z"
+    "updatedAt": "2026-09-25T13:45:23.297Z",
+    "assignedState": "Tamil Nadu",
+    "phone": "9888800001"
   },
   {
     "_id": "user_state_ka",
@@ -40,14 +44,16 @@
     "mobile": "9888800005",
     "passwordHash": "$2a$10$52UQnoAW8wZaGPo2bIn7zeO8RgO.jByRwK5hNVNPQ7pyaNWKa.OyC",
     "role": "state_manager",
-    "level": 1,
+    "level": "state",
     "stateId": "state_ka",
     "districtId": null,
     "divisionId": null,
     "pincodeId": null,
-    "status": "approved",
+    "status": "Active",
     "createdAt": "2026-09-25T13:45:23.297Z",
-    "updatedAt": "2026-09-25T13:45:23.297Z"
+    "updatedAt": "2026-09-25T13:45:23.297Z",
+    "assignedState": "Karnataka",
+    "phone": "9888800005"
   },
   {
     "_id": "user_dist_1",
@@ -57,14 +63,17 @@
     "mobile": "9888800002",
     "passwordHash": "$2a$10$52UQnoAW8wZaGPo2bIn7zeO8RgO.jByRwK5hNVNPQ7pyaNWKa.OyC",
     "role": "district_manager",
-    "level": 2,
+    "level": "district",
     "stateId": "6aa10f70ca0932e6eaec1f5c",
     "districtId": "6aa10f71ca0932e6eaec1f5d",
     "divisionId": null,
     "pincodeId": null,
-    "status": "approved",
+    "status": "Active",
     "createdAt": "2026-09-25T13:45:23.297Z",
-    "updatedAt": "2026-09-25T13:45:23.297Z"
+    "updatedAt": "2026-09-25T13:45:23.297Z",
+    "assignedDistrict": "Krishnagiri",
+    "assignedState": "Tamil Nadu",
+    "phone": "9888800002"
   },
   {
     "_id": "user_div_1",
@@ -74,14 +83,18 @@
     "mobile": "9888800003",
     "passwordHash": "$2a$10$52UQnoAW8wZaGPo2bIn7zeO8RgO.jByRwK5hNVNPQ7pyaNWKa.OyC",
     "role": "division_manager",
-    "level": 3,
+    "level": "division",
     "stateId": "6aa10f70ca0932e6eaec1f5c",
     "districtId": "6aa10f71ca0932e6eaec1f5d",
     "divisionId": "6aa10f71ca0932e6eaec1f5e",
     "pincodeId": null,
-    "status": "approved",
+    "status": "Active",
     "createdAt": "2026-09-25T13:45:23.297Z",
-    "updatedAt": "2026-09-25T13:45:23.297Z"
+    "updatedAt": "2026-09-25T13:45:23.297Z",
+    "assignedDistrict": "Krishnagiri",
+    "assignedDivision": "Central",
+    "assignedState": "Tamil Nadu",
+    "phone": "9888800003"
   },
   {
     "_id": "user_pin_1",
@@ -91,13 +104,18 @@
     "mobile": "9888800004",
     "passwordHash": "$2a$10$52UQnoAW8wZaGPo2bIn7zeO8RgO.jByRwK5hNVNPQ7pyaNWKa.OyC",
     "role": "pincode_manager",
-    "level": 4,
+    "level": "pincode",
     "stateId": "6aa10f70ca0932e6eaec1f5c",
     "districtId": "6aa10f71ca0932e6eaec1f5d",
     "divisionId": "6aa10f71ca0932e6eaec1f5e",
     "pincodeId": "6a95529c06efe7174b6305c7",
-    "status": "approved",
+    "status": "Active",
     "createdAt": "2026-09-25T13:45:23.297Z",
-    "updatedAt": "2026-09-25T13:45:23.297Z"
+    "updatedAt": "2026-09-25T13:45:23.297Z",
+    "assignedDistrict": "Krishnagiri",
+    "assignedDivision": "Central",
+    "assignedPincode": "635109",
+    "assignedState": "Tamil Nadu",
+    "phone": "9888800004"
   }
 ]

@@ -36,7 +36,10 @@ export const dataService = {
     method: 'PATCH',
     body: JSON.stringify({ status })
   }),
-  getDistricts: () => apiRequest('/admin/districts'),
+  getDistricts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/admin/districts${qs ? `?${qs}` : ''}`);
+  },
   addDistrictAdmin: (data) => apiRequest('/admin/districts', {
     method: 'POST',
     body: JSON.stringify(data)
@@ -45,7 +48,10 @@ export const dataService = {
     method: 'PATCH',
     body: JSON.stringify({ status })
   }),
-  getDivisions: () => apiRequest('/admin/divisions'),
+  getDivisions: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/admin/divisions${qs ? `?${qs}` : ''}`);
+  },
   addDivisionAdmin: (data) => apiRequest('/admin/divisions', {
     method: 'POST',
     body: JSON.stringify(data)

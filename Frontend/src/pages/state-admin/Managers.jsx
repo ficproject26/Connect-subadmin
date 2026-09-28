@@ -204,7 +204,13 @@ export function StateManagers({ level }) {
 
   const config = LEVEL_CONFIGS[activeLevel] || LEVEL_CONFIGS.state;
 
-  const [viewTab, setViewTab] = useState('hierarchy'); // 'hierarchy' | 'list' | 'requests'
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const queryState = searchParams.get('state');
+  const queryDistrict = searchParams.get('district');
+  const queryDivision = searchParams.get('division');
+  const queryPincode = searchParams.get('pincode');
+
+  const [viewTab, setViewTab] = useState('list'); // 'list' | 'hierarchy' | 'requests'
   const [allManagers, setAllManagers] = useState([]);
   const [territoryTree, setTerritoryTree] = useState([]);
   const [territoryLoading, setTerritoryLoading] = useState(false);
@@ -244,19 +250,25 @@ export function StateManagers({ level }) {
   const loadData = async () => {
     setLoading(true);
     try {
+      const qParams = { level: activeLevel };
+      if (queryState) qParams.state = queryState;
+      if (queryDistrict) qParams.district = queryDistrict;
+      if (queryDivision) qParams.division = queryDivision;
+      if (queryPincode) qParams.pincode = queryPincode;
+
       const [res, allRes] = await Promise.all([
-        dataService.getManagers({ level: activeLevel }),
+        dataService.getManagers(qParams),
         dataService.getManagers()
       ]);
 
-      if (res?.success && Array.isArray(res.subordinates || res.data)) {
-        setManagers(res.subordinates || res.data || []);
+      if (res?.success && Array.isArray(res.subordinates || res.data || res.managers)) {
+        setManagers(res.subordinates || res.data || res.managers || []);
       } else {
         setManagers([]);
       }
 
-      if (allRes?.success && Array.isArray(allRes.subordinates || allRes.data)) {
-        setAllManagers(allRes.subordinates || allRes.data || []);
+      if (allRes?.success && Array.isArray(allRes.subordinates || allRes.data || allRes.managers)) {
+        setAllManagers(allRes.subordinates || allRes.data || allRes.managers || []);
       } else {
         setAllManagers([]);
       }
@@ -272,18 +284,31 @@ export function StateManagers({ level }) {
   useEffect(() => {
     loadData();
     loadTerritoryTree();
-  }, [activeLevel]);
+  }, [activeLevel, location.search]);
 
-  // Filtered managers based on status tab
+  // Filtered managers based on status tab and hierarchy query
   const filteredManagers = useMemo(() => {
+    let list = managers;
+    if (queryState) {
+      list = list.filter(m => (m.state || m.assignedState || '').toLowerCase() === queryState.toLowerCase());
+    }
+    if (queryDistrict) {
+      list = list.filter(m => (m.district || m.assignedDistrict || '').toLowerCase() === queryDistrict.toLowerCase());
+    }
+    if (queryDivision) {
+      list = list.filter(m => (m.division || m.assignedDivision || '').toLowerCase() === queryDivision.toLowerCase());
+    }
+    if (queryPincode) {
+      list = list.filter(m => String(m.pincode || m.assignedPincode || '').trim() === String(queryPincode).trim());
+    }
     if (statusFilter === 'pending') {
-      return managers.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval');
+      return list.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval');
     }
     if (statusFilter === 'active') {
-      return managers.filter(m => m.status === 'active');
+      return list.filter(m => m.status === 'active');
     }
-    return managers;
-  }, [managers, statusFilter]);
+    return list;
+  }, [managers, statusFilter, queryState, queryDistrict, queryDivision, queryPincode]);
 
   const totalCount = managers.length;
   const pendingCount = managers.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval').length;
@@ -1337,6 +1362,69 @@ export function StateManagers({ level }) {
                 View Details
               </button>
             )}
+
+            {activeLevel === 'state' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const s = row.state || row.assignedState || queryState || 'Tamil Nadu';
+                  navigate(`/state-admin/managers/district?state=${encodeURIComponent(s)}`);
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
+                    : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                }`}
+                title="View District Managers"
+              >
+                <span>District Managers</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {activeLevel === 'district' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const s = row.state || row.assignedState || queryState || 'Tamil Nadu';
+                  const d = row.district || row.assignedDistrict || '';
+                  navigate(`/state-admin/managers/divisional?state=${encodeURIComponent(s)}&district=${encodeURIComponent(d)}`);
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
+                    : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                }`}
+                title="View Division Managers"
+              >
+                <span>Division Managers</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {activeLevel === 'divisional' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const s = row.state || row.assignedState || queryState || 'Tamil Nadu';
+                  const d = row.district || row.assignedDistrict || queryDistrict || '';
+                  const v = row.division || row.assignedDivision || '';
+                  navigate(`/state-admin/managers/pincode?state=${encodeURIComponent(s)}&district=${encodeURIComponent(d)}&division=${encodeURIComponent(v)}`);
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-blue-400 hover:bg-slate-700'
+                    : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                }`}
+                title="View Pincode Managers"
+              >
+                <span>Pincode Managers</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         );
       }
@@ -1662,7 +1750,26 @@ export function StateManagers({ level }) {
 
                       {/* Districts Under State */}
                       <div className="space-y-3 pt-2">
-                        {(state.districts || []).map((district) => {
+                        {(() => {
+                          const assignedDistricts = (state.districts || []).filter(district => {
+                            const dMgrs = getDistrictManagers(district, state);
+                            if (dMgrs.length > 0) return true;
+                            return (district.divisions || []).some(div => {
+                              if (getDivisionManagers(div, district, state).length > 0) return true;
+                              const rawPins = div.rawPincodes || div.pincodes || [];
+                              return rawPins.some(p => getPincodeManagers(p, div, district, state).length > 0);
+                            });
+                          });
+
+                          if (assignedDistricts.length === 0) {
+                            return (
+                              <div className="p-4 text-center text-xs text-slate-400 italic bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                                No assigned records found.
+                              </div>
+                            );
+                          }
+
+                          return assignedDistricts.map((district) => {
                           const distKey = String(district.id || district._id || district.name);
                           const isDistExpanded = !!expandedDistricts[distKey];
                           const distMgrs = getDistrictManagers(district, state);
@@ -1800,7 +1907,22 @@ export function StateManagers({ level }) {
 
                                   {/* Divisions Under District */}
                                   <div className="space-y-2.5 pt-1">
-                                    {(district.divisions || []).map((division) => {
+                                    {(() => {
+                                      const assignedDivisions = (district.divisions || []).filter(division => {
+                                        if (getDivisionManagers(division, district, state).length > 0) return true;
+                                        const rawPins = division.rawPincodes || division.pincodes || [];
+                                        return rawPins.some(p => getPincodeManagers(p, division, district, state).length > 0);
+                                      });
+
+                                      if (assignedDivisions.length === 0) {
+                                        return (
+                                          <div className="p-3 text-center text-xs text-slate-400 italic bg-white dark:bg-slate-900 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
+                                            No assigned records found.
+                                          </div>
+                                        );
+                                      }
+
+                                      return assignedDivisions.map((division) => {
                                       const divKey = String(division.id || division._id || division.name);
                                       const isDivExpanded = !!expandedDivisions[divKey];
                                       const divMgrs = getDivisionManagers(division, district, state);
@@ -1942,7 +2064,19 @@ export function StateManagers({ level }) {
 
                                               {/* Pincodes Under Division */}
                                               <div className="space-y-1.5 pt-1">
-                                                {(division.rawPincodes || (division.pincodes || []).map(p => ({ id: p, code: p, name: p }))).map((pin) => {
+                                                {(() => {
+                                                  const rawPinList = division.rawPincodes || (division.pincodes || []).map(p => ({ id: p, code: p, name: p }));
+                                                  const assignedPins = rawPinList.filter(pin => getPincodeManagers(pin, division, district, state).length > 0);
+
+                                                  if (assignedPins.length === 0) {
+                                                    return (
+                                                      <div className="p-2.5 text-center text-[11px] text-slate-400 italic bg-white dark:bg-slate-850 rounded-md border border-dashed border-slate-200 dark:border-slate-800">
+                                                        No assigned records found.
+                                                      </div>
+                                                    );
+                                                  }
+
+                                                  return assignedPins.map((pin) => {
                                                   const pinCode = String(pin.code || pin.pincode || pin);
                                                   const pinKey = String(pin.id || pin._id || pinCode);
                                                   const isPinExpanded = !!expandedPincodes[pinKey];
@@ -2088,19 +2222,22 @@ export function StateManagers({ level }) {
                                                       )}
                                                     </div>
                                                   );
-                                                })}
+                                                });
+                                              })()}
                                               </div>
                                             </div>
                                           )}
                                         </div>
                                       );
-                                    })}
+                                    });
+                                  })()}
                                   </div>
                                 </div>
                               )}
                             </div>
                           );
-                        })}
+                        });
+                      })()}
                       </div>
                     </div>
                   )}

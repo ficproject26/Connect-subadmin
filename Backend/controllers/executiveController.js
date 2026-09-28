@@ -120,20 +120,51 @@ function getAgents(req, res) {
   try {
     const rawAgents = Array.from(db.agents);
     let scoped = getHierarchicalScopedAgents(rawAgents, req.user);
-    const { search, status, level, district, division, pincode } = req.query;
+    const { search, status, level, state, district, division, pincode } = req.query;
+
+    const userRole = (req.user?.role || '').toLowerCase();
+    const isSuperAdmin = userRole.includes('super admin') || req.user?.state === 'All India';
+
+    // Security Scoping: State Admin cannot view agents in another state
+    const effectiveState = !isSuperAdmin ? (req.user?.state || 'Tamil Nadu') : (state || null);
+    if (effectiveState && effectiveState.toLowerCase() !== 'all india') {
+      scoped = scoped.filter(a => a.state && a.state.trim().toLowerCase() === effectiveState.trim().toLowerCase());
+    }
 
     if (level) {
       scoped = scoped.filter(a => a.level && a.level.toLowerCase() === level.toLowerCase());
     }
+
     if (district) {
-      scoped = scoped.filter(a => !a.district || a.district.toLowerCase() === district.toLowerCase());
+      scoped = scoped.filter(a => a.district && a.district.trim().toLowerCase() === district.trim().toLowerCase());
     }
+
     if (division) {
-      scoped = scoped.filter(a => !a.division || a.division.toLowerCase() === division.toLowerCase());
+      scoped = scoped.filter(a => a.division && a.division.trim().toLowerCase() === division.trim().toLowerCase());
     }
+
     if (pincode) {
-      scoped = scoped.filter(a => !a.pincode || a.pincode.toString() === pincode.toString());
+      scoped = scoped.filter(a => a.pincode && String(a.pincode).trim() === String(pincode).trim());
     }
+
+    // Never display unassigned agents or records missing level-required territory
+    scoped = scoped.filter(a => {
+      const aLevel = (a.level || '').toLowerCase();
+      if (aLevel === 'state') {
+        return Boolean(a.state && a.state.trim());
+      }
+      if (aLevel === 'district') {
+        return Boolean(a.district && a.district.trim() && a.state && a.state.trim());
+      }
+      if (aLevel === 'divisional') {
+        return Boolean(a.division && a.division.trim() && a.district && a.district.trim());
+      }
+      if (aLevel === 'pincode') {
+        return Boolean(a.pincode && String(a.pincode).trim());
+      }
+      return Boolean(a.state || a.district || a.division || a.pincode);
+    });
+
     if (search) {
       const q = search.toLowerCase();
       scoped = scoped.filter(a =>
@@ -144,6 +175,7 @@ function getAgents(req, res) {
         (a.pincode && a.pincode.includes(q))
       );
     }
+
     if (status) {
       scoped = scoped.filter(a => a.status && a.status.toLowerCase() === status.toLowerCase());
     }

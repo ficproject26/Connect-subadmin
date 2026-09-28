@@ -13,7 +13,7 @@
     "readBy": [
       "6ab4c2ec5df0d82cb7a09cac"
     ],
-    "updatedAt": "2026-09-26T10:49:04.675Z"
+    "updatedAt": "2026-09-28T04:32:46.151Z"
   },
   {
     "_id": "6ab4f6df1311030bfd3447a2",
@@ -343,5 +343,141 @@
       "6a8d22c11bc647d92ae36337"
     ],
     "updatedAt": "2026-09-26T09:44:08.450Z"
+  },
+  {
+    "_id": "NOTIF-1790414127807-0AM4",
+    "actionUrl": "/state-admin/tasks",
+    "category": "task",
+    "createdAt": "2026-09-26T09:15:27.807Z",
+    "entityId": "task_001",
+    "entityType": "task",
+    "id": "NOTIF-1790414127807-0AM4",
+    "isRead": true,
+    "message": "Task 'undefined' updated to 'In Progress' by Super Admin. Note: Rework initiated on field",
+    "metadata": {
+      "taskId": "task_001",
+      "taskNumber": "TSK-100234",
+      "title": null,
+      "oldStatus": "Assigned",
+      "newStatus": "In Progress",
+      "updatedBy": "Super Admin"
+    },
+    "priority": "normal",
+    "readBy": [
+      "6a8d22c11bc647d92ae36337"
+    ],
+    "scope": {
+      "state": null,
+      "district": null,
+      "division": null,
+      "pincode": "560034",
+      "targetUserId": "user_pin_1",
+      "targetRoles": [
+        "State Admin",
+        "District Admin",
+        "Division Admin",
+        "Pincode Admin",
+        "Manager"
+      ]
+    },
+    "title": "Task Update: TSK-100234 is In Progress",
+    "type": "task_update",
+    "updatedAt": "2026-09-26T09:44:08.508Z"
+  },
+  {
+    "_id": "7050b430-187f-448e-b4f0-94a07bf4c8ba",
+    "createdAt": "2026-09-26T09:51:19.729Z",
+    "id": "7050b430-187f-448e-b4f0-94a07bf4c8ba",
+    "isRead": false,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100003 as In Progress.",
+    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
+    "title": "Task TSK-100003 In Progress",
+    "type": "task_updated",
+    "updatedAt": "2026-09-26T09:51:19.729Z",
+    "userId": "user_state_1"
+  },
+  {
+    "_id": "d49b3a56-4669-4e02-9a00-15ea78c39860",
+    "createdAt": "2026-09-26T09:51:20.086Z",
+    "id": "d49b3a56-4669-4e02-9a00-15ea78c39860",
+    "isRead": false,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100003 as Completed.",
+    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
+    "title": "Task TSK-100003 Completed",
+    "type": "task_updated",
+    "updatedAt": "2026-09-26T09:51:20.086Z",
+    "userId": "user_state_1"
+  },
+  {
+    "_id": "19e18be6-98d1-4edc-a548-46acc9b9a7f5",
+    "id": "19e18be6-98d1-4edc-a548-46acc9b9a7f5",
+    "type": "task_updated",
+    "title": "Task TSK-100004 In Progress",
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100004 as In Progress.",
+    "recordId": "5364b421-35cc-4e43-89ae-e81d6a396a98",
+    "userId": "user_state_1",
+    "isRead": false,
+    "createdAt": "2026-09-26T10:15:28.017Z",
+    "updatedAt": "2026-09-26T10:15:28.017Z"
+  },
+  {
+    "_id": "c18ae4c9-52d8-453e-a61a-0fc0fda780ca",
+    "id": "c18ae4c9-52d8-453e-a61a-0fc0fda780ca",
+    "type": "task_updated",
+    "title": "Task TSK-100004 Completed",
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100004 as Completed.",
+    "recordId": "5364b421-35cc-4e43-89ae-e81d6a396a98",
+    "userId": "user_state_1",
+    "isRead": false,
+    "createdAt": "2026-09-26T10:15:28.362Z",
+    "updatedAt": "2026-09-26T10:15:28.362Z"
+  },
+  {
+    "_id": "b76e5ac2-5091-441c-adde-2071678ae90c",
+    "id": "b76e5ac2-5091-441c-adde-2071678ae90c",
+    "type": "task_updated",
+    "title": "Task TSK-100005 In Progress",
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100005 as In Progress.",
+    "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
+    "userId": "user_state_1",
+    "isRead": false,
+    "createdAt": "2026-09-26T10:17:28.488Z",
+    "updatedAt": "2026-09-26T10:17:28.489Z"
+  },
+  {
+    "_id": "90a463e2-a108-44b1-ba53-b625361fc0de",
+    "id": "90a463e2-a108-44b1-ba53-b625361fc0de",
+    "type": "task_updated",
+    "title": "Task TSK-100005 Completed",
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100005 as Completed.",
+    "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
+    "userId": "user_state_1",
+    "isRead": false,
+    "createdAt": "2026-09-26T10:17:29.078Z",
+    "updatedAt": "2026-09-26T10:17:29.078Z"
+  },
+  {
+    "_id": "f75e5b76-0878-48b2-900f-4f8061b89721",
+    "createdAt": "2026-09-26T14:17:22.238Z",
+    "id": "f75e5b76-0878-48b2-900f-4f8061b89721",
+    "isRead": false,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100006 as In Progress.",
+    "recordId": "65d3185e-a6df-427b-a565-c00481726817",
+    "title": "Task TSK-100006 In Progress",
+    "type": "task_updated",
+    "updatedAt": "2026-09-26T14:17:22.238Z",
+    "userId": "user_state_1"
+  },
+  {
+    "_id": "4e15b71f-49c7-4bbd-8ed9-aba6bd7f67f5",
+    "createdAt": "2026-09-26T14:17:22.243Z",
+    "id": "4e15b71f-49c7-4bbd-8ed9-aba6bd7f67f5",
+    "isRead": false,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100006 as Completed.",
+    "recordId": "65d3185e-a6df-427b-a565-c00481726817",
+    "title": "Task TSK-100006 Completed",
+    "type": "task_updated",
+    "updatedAt": "2026-09-26T14:17:22.243Z",
+    "userId": "user_state_1"
   }
 ]

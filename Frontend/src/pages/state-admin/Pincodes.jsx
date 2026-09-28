@@ -83,17 +83,24 @@ export function StatePincodes() {
   ];
 
   const divisionFilter = searchParams.get('division');
+  const districtFilter = searchParams.get('district');
+  const stateFilter = searchParams.get('state');
 
   const loadData = async () => {
     setLoading(true);
     try {
+      const params = {};
+      if (stateFilter) params.state = stateFilter;
+      if (districtFilter) params.district = districtFilter;
+      if (divisionFilter) params.division = divisionFilter;
+
       const [res, mgrRes, agentRes] = await Promise.all([
-        dataService.getPincodes(divisionFilter ? { division: divisionFilter } : {}),
+        dataService.getPincodes(params),
         dataService.getManagers().catch(() => ({ subordinates: [] })),
         dataService.getAgents().catch(() => ({ agents: [] }))
       ]);
 
-      let list = (res?.pincodes && res.pincodes.length > 0) ? res.pincodes : FALLBACK_STATE_PINCODES;
+      let list = (res?.pincodes && Array.isArray(res.pincodes)) ? res.pincodes : [];
 
       // Filter only registered pincode administrators
       list = list.filter(p => {
@@ -101,16 +108,20 @@ export function StatePincodes() {
         return name && name !== 'Unassigned' && name !== '-';
       });
 
+      if (districtFilter) {
+        list = list.filter(p => {
+          const pDist = (p.district || p.districtName || '').toLowerCase();
+          return pDist === districtFilter.toLowerCase();
+        });
+      }
+
       if (divisionFilter) {
         const normFilter = divisionFilter.toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
-        const filtered = list.filter(p => {
+        list = list.filter(p => {
           const pDiv = (p.division || p.divisionName || '').toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
           const pDivId = (p.divisionId || '').toLowerCase().replace(/^div-/, '').trim();
           return pDiv === normFilter || pDivId === normFilter || pDiv.includes(normFilter) || normFilter.includes(pDiv);
         });
-        if (filtered.length > 0) {
-          list = filtered;
-        }
       }
 
       const allManagers = mgrRes?.subordinates || mgrRes?.data || mgrRes?.managers || [];
@@ -171,7 +182,7 @@ export function StatePincodes() {
 
   useEffect(() => {
     loadData();
-  }, [divisionFilter]);
+  }, [divisionFilter, districtFilter, stateFilter]);
 
   const columns = [
     {
@@ -304,8 +315,8 @@ export function StatePincodes() {
             </h2>
           </div>
           <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            {divisionFilter ? (
-              <span>Filtered by Division: <strong className="text-blue-600 font-bold">{divisionFilter}</strong>. Click View Details or row to inspect Admin & Pincode information.</span>
+            {divisionFilter || districtFilter ? (
+              <span>Filtered by {districtFilter ? <span>District: <strong className="text-blue-600 font-bold">{districtFilter}</strong> </span> : ''}{divisionFilter ? <span>Division: <strong className="text-blue-600 font-bold">{divisionFilter}</strong></span> : ''}. Click View Details or row to inspect Admin & Pincode information.</span>
             ) : (
               <span>All registered pincode service zones and appointed local administrators across the State. Click View Details or row to open full details.</span>
             )}
@@ -318,18 +329,18 @@ export function StatePincodes() {
             ? 'bg-slate-800/80 border-slate-700 text-slate-400'
             : 'bg-slate-100 border-slate-200 text-slate-600'
         }`}>
-          <span>State</span>
+          <span>{stateFilter || 'State'}</span>
           <span>&rarr;</span>
-          <span>District</span>
+          <span className={districtFilter ? "font-bold" : ""}>{districtFilter || 'Districts'}</span>
           <span>&rarr;</span>
-          <span className="font-bold">{divisionFilter || 'Divisions'}</span>
+          <span className={divisionFilter ? "font-bold" : ""}>{divisionFilter || 'Divisions'}</span>
           <span>&rarr;</span>
           <span className="text-blue-600 font-bold">Pincodes</span>
         </div>
       </div>
 
       <DataTable
-        title={divisionFilter ? `Pincodes in ${divisionFilter} Division` : "State Pincodes Registry"}
+        title={divisionFilter ? `Pincodes in ${divisionFilter} Division` : (districtFilter ? `Pincodes in ${districtFilter}` : "State Pincodes Registry")}
         subtitle="Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin Profile and Pincode Breakdown."
         columns={columns}
         data={pincodes}

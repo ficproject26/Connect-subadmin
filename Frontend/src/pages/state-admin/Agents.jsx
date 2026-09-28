@@ -84,6 +84,13 @@ export function StateAgents({ level = 'state' }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Parse hierarchical drill-down query parameters from URL
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const stateFilterParam = searchParams.get('state') || '';
+  const districtFilterParam = searchParams.get('district') || '';
+  const divisionFilterParam = searchParams.get('division') || '';
+  const pincodeFilterParam = searchParams.get('pincode') || '';
+
   // Determine active level from URL pathname
   let activeLevel = level;
   if (location.pathname.includes('/agents/district')) activeLevel = 'district';
@@ -114,8 +121,14 @@ export function StateAgents({ level = 'state' }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Agents for active level
-      const res = await dataService.getAgents({ level: activeLevel });
+      // 1. Fetch Agents for active level with complete hierarchical scoping
+      const params = { level: activeLevel };
+      if (stateFilterParam) params.state = stateFilterParam;
+      if (districtFilterParam) params.district = districtFilterParam;
+      if (divisionFilterParam) params.division = divisionFilterParam;
+      if (pincodeFilterParam) params.pincode = pincodeFilterParam;
+
+      const res = await dataService.getAgents(params);
       if (res.success && res.agents) {
         setAgents(res.agents);
       } else {
@@ -149,7 +162,7 @@ export function StateAgents({ level = 'state' }) {
 
   useEffect(() => {
     loadData();
-  }, [activeLevel]);
+  }, [activeLevel, stateFilterParam, districtFilterParam, divisionFilterParam, pincodeFilterParam]);
 
   // Handle advancing an activity through the hierarchy
   const handleAdvanceActivity = async (id, notes) => {
@@ -295,13 +308,63 @@ export function StateAgents({ level = 'state' }) {
       header: 'Actions',
       accessor: 'id',
       render: (row) => (
-        <button
-          type="button"
-          onClick={() => setSelectedAgent(row)}
-          className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
-        >
-          <Eye className="w-3 h-3" /> Profile
-        </button>
+        <div className="flex items-center gap-2">
+          {activeLevel === 'state' && (
+            <button
+              type="button"
+              onClick={() => {
+                const qState = row.state || stateFilterParam || 'Tamil Nadu';
+                navigate(`/state-admin/agents/district?state=${encodeURIComponent(qState)}`);
+              }}
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 cursor-pointer bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded"
+              title="Drill down to District Agents"
+            >
+              <span>District Agents</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {activeLevel === 'district' && (
+            <button
+              type="button"
+              onClick={() => {
+                const qState = row.state || stateFilterParam || 'Tamil Nadu';
+                const qDistrict = row.district || row.assignedArea || row.name || '';
+                navigate(`/state-admin/agents/divisional?state=${encodeURIComponent(qState)}&district=${encodeURIComponent(qDistrict)}`);
+              }}
+              className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded"
+              title="Drill down to Divisional Agents"
+            >
+              <span>Divisional Agents</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {activeLevel === 'divisional' && (
+            <button
+              type="button"
+              onClick={() => {
+                const qState = row.state || stateFilterParam || 'Tamil Nadu';
+                const qDistrict = row.district || districtFilterParam || '';
+                const qDivision = row.division || row.assignedArea || row.name || '';
+                navigate(`/state-admin/agents/pincode?state=${encodeURIComponent(qState)}&district=${encodeURIComponent(qDistrict)}&division=${encodeURIComponent(qDivision)}`);
+              }}
+              className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 flex items-center gap-1 cursor-pointer bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded"
+              title="Drill down to Pincode Agents"
+            >
+              <span>Pincode Agents</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setSelectedAgent(row)}
+            className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <Eye className="w-3 h-3" /> Profile
+          </button>
+        </div>
       )
     }
   ];
@@ -413,6 +476,53 @@ export function StateAgents({ level = 'state' }) {
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{config.subtitle}</p>
         </div>
       </div>
+
+      {/* Active Hierarchical Parent Filter Breadcrumb */}
+      {(districtFilterParam || divisionFilterParam || pincodeFilterParam) && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-slate-500 dark:text-slate-400">Scoped Hierarchy:</span>
+            {stateFilterParam && (
+              <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 font-semibold text-blue-800 dark:text-blue-200">
+                State: {stateFilterParam}
+              </span>
+            )}
+            {districtFilterParam && (
+              <>
+                <span className="text-slate-400">/</span>
+                <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 font-semibold text-blue-800 dark:text-blue-200">
+                  District: {districtFilterParam}
+                </span>
+              </>
+            )}
+            {divisionFilterParam && (
+              <>
+                <span className="text-slate-400">/</span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 font-semibold text-emerald-800 dark:text-emerald-200">
+                  Division: {divisionFilterParam}
+                </span>
+              </>
+            )}
+            {pincodeFilterParam && (
+              <>
+                <span className="text-slate-400">/</span>
+                <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 font-semibold text-amber-800 dark:text-amber-200">
+                  PIN: {pincodeFilterParam}
+                </span>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              navigate(location.pathname);
+            }}
+            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-3 shrink-0"
+          >
+            Clear Filter
+          </button>
+        </div>
+      )}
 
 
 

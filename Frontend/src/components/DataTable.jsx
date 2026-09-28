@@ -216,8 +216,8 @@ export function DataTable({
               <tr>
                 <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>No records found</p>
-                    <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Try adjusting your search or filters.</p>
+                    <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>No assigned records found.</p>
+                    <p className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>No onboarded records exist under this territory hierarchy.</p>
                   </div>
                 </td>
               </tr>

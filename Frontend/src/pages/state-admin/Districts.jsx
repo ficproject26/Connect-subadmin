@@ -425,7 +425,10 @@ export function StateDistricts() {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/state-admin/divisions?district=${encodeURIComponent(row.name)}`);
+              const distName = row.name || '';
+              const distId = row.id || row.code || '';
+              const sName = row.state || row.stateName || authUser?.state || 'Tamil Nadu';
+              navigate(`/state-admin/divisions?state=${encodeURIComponent(sName)}&district=${encodeURIComponent(distName)}&districtId=${encodeURIComponent(distId)}`);
             }}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
               isDark

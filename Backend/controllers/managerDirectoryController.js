@@ -318,7 +318,7 @@ const getLowerLevelManagers = async (req, res) => {
     }
 
     // Optional query parameter filtering: level
-    const { level, status, search } = req.query;
+    const { level, status, search, state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = req.query;
     if (level) {
       const levelMap = {
         'state': 'state_manager',
@@ -334,6 +334,82 @@ const getLowerLevelManagers = async (req, res) => {
       rawSubordinates = rawSubordinates.filter(m => m.role === targetRole || String(m.level) === String(level));
       rawPeers = rawPeers.filter(m => m.role === targetRole || String(m.level) === String(level));
     }
+
+    // Optional query parameter filtering: state
+    if (state || stateId) {
+      const matchStateFilter = (m) => {
+        if (stateId && String(m.stateId || m.assignedStateId || '').toLowerCase() === String(stateId).toLowerCase()) return true;
+        if (state && (
+          (m.state && m.state.trim().toLowerCase() === state.trim().toLowerCase()) ||
+          (m.assignedState && m.assignedState.trim().toLowerCase() === state.trim().toLowerCase())
+        )) return true;
+        return false;
+      };
+      rawSubordinates = rawSubordinates.filter(matchStateFilter);
+      rawPeers = rawPeers.filter(matchStateFilter);
+    }
+
+    // Optional query parameter filtering: district
+    if (district || districtId) {
+      const matchDistFilter = (m) => {
+        if (districtId && String(m.districtId || m.assignedDistrictId || '').toLowerCase() === String(districtId).toLowerCase()) return true;
+        if (district && (
+          (m.district && m.district.trim().toLowerCase() === district.trim().toLowerCase()) ||
+          (m.assignedDistrict && m.assignedDistrict.trim().toLowerCase() === district.trim().toLowerCase())
+        )) return true;
+        return false;
+      };
+      rawSubordinates = rawSubordinates.filter(matchDistFilter);
+      rawPeers = rawPeers.filter(matchDistFilter);
+    }
+
+    // Optional query parameter filtering: division
+    if (division || divisionId) {
+      const matchDivFilter = (m) => {
+        if (divisionId && String(m.divisionId || m.assignedDivisionId || '').toLowerCase() === String(divisionId).toLowerCase()) return true;
+        if (division && (
+          (m.division && m.division.trim().toLowerCase() === division.trim().toLowerCase()) ||
+          (m.assignedDivision && m.assignedDivision.trim().toLowerCase() === division.trim().toLowerCase())
+        )) return true;
+        return false;
+      };
+      rawSubordinates = rawSubordinates.filter(matchDivFilter);
+      rawPeers = rawPeers.filter(matchDivFilter);
+    }
+
+    // Optional query parameter filtering: pincode
+    if (pincode || pincodeId) {
+      const matchPinFilter = (m) => {
+        if (pincodeId && String(m.pincodeId || m.assignedPincodeId || '').toLowerCase() === String(pincodeId).toLowerCase()) return true;
+        if (pincode && (
+          String(m.pincode || '').trim() === String(pincode).trim() ||
+          String(m.assignedPincode || '').trim() === String(pincode).trim()
+        )) return true;
+        return false;
+      };
+      rawSubordinates = rawSubordinates.filter(matchPinFilter);
+      rawPeers = rawPeers.filter(matchPinFilter);
+    }
+
+    // Never display unassigned manager records or dummy records
+    const isAssignedManager = (m) => {
+      if (m.role === 'state_manager') {
+        return Boolean(m.state || m.assignedState || m.stateId || m.assignedStateId);
+      }
+      if (m.role === 'district_manager') {
+        return Boolean(m.district || m.assignedDistrict || m.districtId || m.assignedDistrictId);
+      }
+      if (m.role === 'division_manager') {
+        return Boolean(m.division || m.assignedDivision || m.divisionId || m.assignedDivisionId);
+      }
+      if (m.role === 'pincode_manager') {
+        return Boolean(m.pincode || m.assignedPincode || m.pincodeId || m.assignedPincodeId);
+      }
+      return false;
+    };
+
+    rawSubordinates = rawSubordinates.filter(isAssignedManager);
+    rawPeers = rawPeers.filter(isAssignedManager);
 
     // Optional query parameter filtering: status (active, under_review, pending, rejected)
     if (status) {
