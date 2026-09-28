@@ -151,19 +151,98 @@ export function StateDistricts() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [distRes, divRes, pinRes] = await Promise.all([
-        dataService.getDistricts(),
-        dataService.getDivisions().catch(() => ({ success: false })),
-        dataService.getPincodes().catch(() => ({ success: false }))
+      const [distRes, divRes, pinRes, mgrRes, agtRes] = await Promise.all([
+        dataService.getDistricts({ state: authUser?.state }),
+        dataService.getDivisions({ state: authUser?.state }).catch(() => ({ success: false })),
+        dataService.getPincodes({ state: authUser?.state }).catch(() => ({ success: false })),
+        dataService.getManagers().catch(() => ({ success: false })),
+        dataService.getAgents().catch(() => ({ success: false }))
       ]);
-      if (distRes.success && distRes.districts) {
-        setDistricts(distRes.districts);
-      }
-      if (divRes.success && divRes.divisions) {
-        setAllDivisions(divRes.divisions);
-      }
-      if (pinRes.success && pinRes.pincodes) {
-        setAllPincodes(pinRes.pincodes);
+
+      const divisions = divRes?.success && Array.isArray(divRes.divisions) ? divRes.divisions : [];
+      const pincodes = pinRes?.success && Array.isArray(pinRes.pincodes) ? pinRes.pincodes : [];
+      const managers = mgrRes?.success && Array.isArray(mgrRes.managers || mgrRes.all) ? (mgrRes.managers || mgrRes.all) : [];
+      const agents = agtRes?.success && Array.isArray(agtRes.agents) ? agtRes.agents : [];
+
+      if (divisions.length > 0) setAllDivisions(divisions);
+      if (pincodes.length > 0) setAllPincodes(pincodes);
+
+      if (distRes?.success && Array.isArray(distRes.districts)) {
+        // Enforce strict qualifying rule:
+        // DISTRICT SHOULD BE SHOWN ONLY IF:
+        // - District Admin is assigned to that district, OR
+        // - District Agent is assigned to that district, OR
+        // - District Manager is assigned to that district, OR
+        // - There is an onboarded Division Admin/Agent/Manager under that district, OR
+        // - There is an onboarded Pincode Admin/Agent/Manager under that district.
+        // If a district has NO assigned/onboarded person anywhere in its hierarchy, DO NOT SHOW THAT DISTRICT.
+        const userState = (authUser?.state || 'Tamil Nadu').trim().toLowerCase();
+        const userDistrict = (authUser?.district || '').trim().toLowerCase();
+        const userRole = (authUser?.role || '').toLowerCase();
+
+        const qualifyingDistricts = distRes.districts.filter(d => {
+          const dName = (d.name || '').trim().toLowerCase();
+          const dId = String(d.id || d._id || d.districtId || '').toLowerCase();
+          const dState = (d.state || d.stateName || 'Tamil Nadu').trim().toLowerCase();
+
+          // Territory restriction
+          if (userState && userState !== 'all india' && dState !== userState) return false;
+          if (userRole.includes('district') || userRole.includes('division') || userRole.includes('pincode')) {
+            if (userDistrict && dName !== userDistrict && dId !== userDistrict) return false;
+          }
+
+          // 1. District Admin assigned?
+          const hasDistAdmin = Boolean(
+            (d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-') ||
+            (d.adminId && d.adminId !== 'Unassigned') ||
+            Number(d.adminCount || 0) > 0
+          );
+
+          // 2. District Agent assigned?
+          const hasDistAgent = Boolean(
+            Number(d.totalAgents || 0) > 0 ||
+            agents.some(a => {
+              const aDist = (a.district || '').trim().toLowerCase();
+              return aDist === dName || String(a.districtId || '').toLowerCase() === dId;
+            })
+          );
+
+          // 3. District Manager assigned?
+          const hasDistManager = Boolean(
+            Number(d.totalManagers || 0) > 0 ||
+            (Array.isArray(d.managers) && d.managers.length > 0) ||
+            managers.some(m => {
+              const mDist = (m.districtName || m.district || '').trim().toLowerCase();
+              return mDist === dName || String(m.districtId || '').toLowerCase() === dId;
+            })
+          );
+
+          // 4. Division Admin / Agent / Manager under that district?
+          const hasDivPerson = Boolean(
+            Number(d.divisionsCount || 0) > 0 ||
+            divisions.some(div => {
+              const divDist = (div.districtName || div.district || '').trim().toLowerCase();
+              const isUnderDist = divDist === dName || String(div.districtId || '').toLowerCase() === dId;
+              const hasDivAdmin = div.adminName && div.adminName !== 'Unassigned' && div.adminName !== '-';
+              return isUnderDist && (hasDivAdmin || Number(div.adminCount || 0) > 0 || Number(div.totalManagers || 0) > 0 || Number(div.totalAgents || 0) > 0);
+            })
+          );
+
+          // 5. Pincode Admin / Agent / Manager under that district?
+          const hasPinPerson = Boolean(
+            Number(d.pincodesCount || 0) > 0 ||
+            pincodes.some(pin => {
+              const pinDist = (pin.districtName || pin.district || '').trim().toLowerCase();
+              const isUnderDist = pinDist === dName || String(pin.districtId || '').toLowerCase() === dId;
+              const hasPinAdmin = pin.adminName && pin.adminName !== 'Unassigned' && pin.adminName !== '-';
+              return isUnderDist && (hasPinAdmin || Number(pin.adminCount || 0) > 0 || Number(pin.totalManagers || 0) > 0 || Number(pin.totalAgents || 0) > 0);
+            })
+          );
+
+          return hasDistAdmin || hasDistAgent || hasDistManager || hasDivPerson || hasPinPerson;
+        });
+
+        setDistricts(qualifyingDistricts);
       }
     } catch (e) {
       console.error(e);

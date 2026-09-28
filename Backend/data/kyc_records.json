@@ -1,1 +1,28 @@
-[]
+[
+  {
+    "_id": "KYC-ven_311361",
+    "id": "KYC-ven_311361",
+    "vendorId": "ven_311361",
+    "businessName": "Balu",
+    "name": "Balu",
+    "vendorName": "Balu",
+    "phone": "7987654345",
+    "email": "balu@gmail.com",
+    "category": "Food",
+    "address": "5/37,2nd cross,Anna Nagar,hosur ",
+    "state": "Tamil Nadu",
+    "district": "Salem",
+    "division": "Salem North",
+    "pincode": "635126",
+    "status": "Pending Pincode Admin Approval",
+    "type": "Vendor",
+    "submittedDocuments": [
+      "GST Registration Certificate",
+      "Business PAN Card",
+      "Cancelled Cheque / Bank Passbook"
+    ],
+    "submittedDate": "2026-09-28",
+    "verifiedBy": null,
+    "notes": "Onboarded by Murugan. Awaiting Pincode Admin clearance."
+  }
+]

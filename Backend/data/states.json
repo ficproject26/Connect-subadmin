@@ -3,14 +3,15 @@
     "_id": "6aa10f70ca0932e6eaec1f5c",
     "stateId": "ST-TAM-4607",
     "name": "Tamil Nadu",
-    "code": "TAM",
+    "code": "TN",
     "status": "Active",
     "description": "",
     "logo": "",
     "notes": "",
     "createdAt": "2026-09-09T07:49:04.611Z",
-    "updatedAt": "2026-09-09T07:49:04.611Z",
-    "__v": 0
+    "updatedAt": "2026-09-28T10:46:39.434Z",
+    "__v": 0,
+    "updatedBy": "6a8d22c11bc647d92ae36337"
   },
   {
     "_id": "state_ka",

@@ -36,9 +36,23 @@ export const dataService = {
     method: 'PATCH',
     body: JSON.stringify({ status })
   }),
-  getDistricts: (params = {}) => {
+  getDistricts: async (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return apiRequest(`/admin/districts${qs ? `?${qs}` : ''}`);
+    const res = await apiRequest(`/admin/districts${qs ? `?${qs}` : ''}`);
+    if (res && res.success && Array.isArray(res.districts)) {
+      // Exclude districts that have no assigned admin, agent, or manager anywhere in hierarchy
+      const qualifying = res.districts.filter(d => {
+        const hasAdmin = d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-';
+        const hasAdminCount = Number(d.adminCount || 0) > 0;
+        const hasAgents = Number(d.totalAgents || 0) > 0;
+        const hasManagers = Number(d.totalManagers || 0) > 0 || (Array.isArray(d.managers) && d.managers.length > 0);
+        const hasDivisions = Number(d.divisionsCount || 0) > 0;
+        const hasPincodes = Number(d.pincodesCount || 0) > 0;
+        return hasAdmin || hasAdminCount || hasAgents || hasManagers || hasDivisions || hasPincodes;
+      });
+      return { ...res, districts: qualifying, total: qualifying.length };
+    }
+    return res;
   },
   addDistrictAdmin: (data) => apiRequest('/admin/districts', {
     method: 'POST',

@@ -293,6 +293,35 @@ const getDistricts = async (req, res) => {
           districts = districts.filter(d => d.name?.toLowerCase() === user.district.toLowerCase());
         }
       }
+
+      // Filter: Only include districts that have at least one assigned Admin, Agent, or Manager
+      const allUsers = Array.from(db.users || []);
+      const allManagers = Array.from(db.managers || []);
+      const allAgents = Array.from(db.agents || []);
+
+      districts = districts.filter(d => {
+        const dName = (d.name || '').trim().toLowerCase();
+        const dId = String(d._id || d.id || d.districtId || '').toLowerCase();
+
+        const hasUser = allUsers.some(u => {
+          const uDist = (u.district || '').trim().toLowerCase();
+          const isDistMatch = uDist === dName || String(u.districtId || '').toLowerCase() === dId;
+          const r = (u.role || '').toLowerCase();
+          return isDistMatch && (r.includes('admin') || r.includes('agent') || r.includes('manager'));
+        });
+
+        const hasManager = allManagers.some(m => {
+          const mDist = (m.districtName || m.district || '').trim().toLowerCase();
+          return mDist === dName || String(m.districtId || '').toLowerCase() === dId;
+        });
+
+        const hasAgent = allAgents.some(a => {
+          const aDist = (a.district || '').trim().toLowerCase();
+          return aDist === dName || String(a.districtId || '').toLowerCase() === dId;
+        });
+
+        return hasUser || hasManager || hasAgent;
+      });
     }
 
     res.json({ success: true, data: districts, districts });

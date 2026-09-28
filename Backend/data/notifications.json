@@ -11,9 +11,9 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6ab4c2ec5df0d82cb7a09cac"
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-28T04:32:46.151Z"
+    "updatedAt": "2026-09-28T07:52:23.455Z"
   },
   {
     "_id": "6ab4f6df1311030bfd3447a2",
@@ -517,5 +517,42 @@
     "title": "Vendor Approved: Empire",
     "type": "vendor_status",
     "updatedAt": "2026-09-28T07:24:01.699Z"
+  },
+  {
+    "_id": "NOTIF-1790589311649-NBEH",
+    "actionUrl": "/state-admin/vendors",
+    "category": "vendor",
+    "createdAt": "2026-09-28T09:55:11.650Z",
+    "entityId": "ven_311361",
+    "entityType": "vendor",
+    "id": "NOTIF-1790589311649-NBEH",
+    "isRead": false,
+    "message": "Food merchant 'Balu' was onboarded in PIN 635126 (Salem) by Murugan. Awaiting Pincode Admin clearance.",
+    "metadata": {
+      "vendorId": "ven_311361",
+      "vendorName": "Balu",
+      "creatorId": "usr_mgr_1790588690346_2iph",
+      "creatorName": "Murugan",
+      "pincode": "635126",
+      "category": "Food"
+    },
+    "priority": "normal",
+    "readBy": [],
+    "scope": {
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem North",
+      "pincode": "635126",
+      "targetRoles": [
+        "State Admin",
+        "District Admin",
+        "Division Admin",
+        "Pincode Admin",
+        "Manager"
+      ]
+    },
+    "title": "New Vendor Onboarded: Balu",
+    "type": "vendor_onboarding",
+    "updatedAt": "2026-09-28T09:55:11.650Z"
   }
 ]

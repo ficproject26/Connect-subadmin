@@ -317,7 +317,10 @@ function updateStateStatus(req, res) {
 function getDistricts(req, res) {
   try {
     syncHierarchyWithUsers();
-    const allUsers = Array.from(db.users);
+    const allUsers = Array.from(db.users || []);
+    const allAgents = Array.from(db.agents || []);
+    const allManagers = Array.from(db.managers || []);
+
     const userRole = (req.user?.role || '').toLowerCase();
     const isSuperAdmin = userRole.includes('super admin') || req.user?.state === 'All India';
 
@@ -329,21 +332,92 @@ function getDistricts(req, res) {
       targetState = req.user?.state || 'Tamil Nadu';
     }
     const targetStateClean = (targetState || '').trim().toLowerCase();
+    const userDistrictClean = (req.user?.district || '').trim().toLowerCase();
 
-    // Direct database query: find all District Admins actually assigned in target state
-    const assignedDistrictAdmins = allUsers.filter(u => {
-      const r = (u.role || '').toLowerCase();
-      const isDistAdmin = r === 'district admin' || r.includes('district admin');
-      if (!isDistAdmin) return false;
-      if (targetStateClean && targetStateClean !== 'all india' && (u.state || '').trim().toLowerCase() !== targetStateClean) return false;
-      if (userRole.includes('district') || userRole.includes('divisional') || userRole.includes('pincode')) {
-        if (req.user?.district && (u.district || '').trim().toLowerCase() !== (req.user.district || '').trim().toLowerCase()) return false;
+    // Helper to check state match
+    const matchesState = (itemState) => {
+      if (!targetStateClean || targetStateClean === 'all india') return true;
+      return (itemState || '').trim().toLowerCase() === targetStateClean;
+    };
+
+    // Helper to check district user scope
+    const matchesUserScope = (distName) => {
+      if (!userRole.includes('district') && !userRole.includes('divisional') && !userRole.includes('division') && !userRole.includes('pincode')) {
+        return true;
       }
-      return Boolean(u.district && u.district.trim());
+      if (!userDistrictClean) return true;
+      return (distName || '').trim().toLowerCase() === userDistrictClean;
+    };
+
+    // Map: distKey -> { name, state, id, code, meta }
+    const districtMetaMap = new Map();
+
+    // Index known district metadata from hierarchy and db.districts
+    (db.hierarchy?.states || []).forEach(s => {
+      if (matchesState(s.name)) {
+        (s.districts || []).forEach(d => {
+          const k = d.name?.trim().toLowerCase();
+          if (k && !districtMetaMap.has(k)) {
+            districtMetaMap.set(k, { name: d.name.trim(), state: s.name, id: d.id, code: d.code, meta: d });
+          }
+        });
+      }
     });
 
-    // If no assigned District Admins exist, return empty array immediately (no master geo data fallback)
-    if (assignedDistrictAdmins.length === 0) {
+    Array.from(db.districts || []).forEach(d => {
+      const k = d.name?.trim().toLowerCase();
+      if (k && !districtMetaMap.has(k)) {
+        districtMetaMap.set(k, { name: d.name.trim(), state: d.stateName || d.state || targetState || 'Tamil Nadu', id: d._id || d.id, code: d.code, meta: d });
+      }
+    });
+
+    // 1. Gather all potential districts from actual assigned personnel
+    const candidateDistKeys = new Set();
+
+    allUsers.forEach(u => {
+      const uDist = (u.district || '').trim();
+      const uDistKey = uDist.toLowerCase();
+      if (!uDist) return;
+      if (!matchesState(u.state)) return;
+      if (!matchesUserScope(uDist)) return;
+
+      const r = (u.role || '').toLowerCase();
+      const isRelevant = r.includes('admin') || r.includes('agent') || r.includes('manager');
+      if (isRelevant) {
+        candidateDistKeys.add(uDistKey);
+        if (!districtMetaMap.has(uDistKey)) {
+          districtMetaMap.set(uDistKey, { name: uDist, state: u.state || targetState || 'Tamil Nadu', id: u.districtId, code: uDist.slice(0, 3).toUpperCase() });
+        }
+      }
+    });
+
+    allManagers.forEach(m => {
+      const mDist = (m.districtName || m.district || '').trim();
+      const mDistKey = mDist.toLowerCase();
+      if (!mDist) return;
+      if (!matchesState(m.stateName || m.state)) return;
+      if (!matchesUserScope(mDist)) return;
+
+      candidateDistKeys.add(mDistKey);
+      if (!districtMetaMap.has(mDistKey)) {
+        districtMetaMap.set(mDistKey, { name: mDist, state: m.stateName || m.state || targetState || 'Tamil Nadu', id: m.districtId, code: mDist.slice(0, 3).toUpperCase() });
+      }
+    });
+
+    allAgents.forEach(a => {
+      const aDist = (a.district || '').trim();
+      const aDistKey = aDist.toLowerCase();
+      if (!aDist) return;
+      if (!matchesState(a.state)) return;
+      if (!matchesUserScope(aDist)) return;
+
+      candidateDistKeys.add(aDistKey);
+      if (!districtMetaMap.has(aDistKey)) {
+        districtMetaMap.set(aDistKey, { name: aDist, state: a.state || targetState || 'Tamil Nadu', id: a.districtId, code: aDist.slice(0, 3).toUpperCase() });
+      }
+    });
+
+    if (candidateDistKeys.size === 0) {
       return res.json({ success: true, districts: [] });
     }
 
@@ -356,125 +430,190 @@ function getDistricts(req, res) {
     const allExecutives = Array.from(db.executives || []);
     const allKYC = Array.from(db.kycRecords || []);
     const allCustomers = Array.from(db.customers || []);
-    const allAgents = Array.from(db.agents || []);
 
-    // Build unique assigned district map
     const assignedDistrictsMap = new Map();
 
-    assignedDistrictAdmins.forEach(assigned => {
-      const distName = assigned.district.trim();
-      const distKey = distName.toLowerCase();
+    candidateDistKeys.forEach(distKey => {
+      const distInfo = districtMetaMap.get(distKey) || {};
+      const distName = distInfo.name || distKey;
+      const distMeta = distInfo.meta || null;
+      const stateName = distInfo.state || targetState || 'Tamil Nadu';
 
-      if (!assignedDistrictsMap.has(distKey)) {
-        // Find existing meta in db.hierarchy if present
-        let distMeta = null;
-        (db.hierarchy.states || []).forEach(s => {
-          if (!targetStateClean || targetStateClean === 'all india' || s.name.toLowerCase() === targetStateClean) {
-            (s.districts || []).forEach(d => {
-              if (d.name.trim().toLowerCase() === distKey) {
-                distMeta = d;
-              }
-            });
-          }
-        });
-
-        const stateName = assigned.state || distMeta?.stateName || targetState || 'Tamil Nadu';
-
-        const distAdmins = assignedDistrictAdmins.filter(u =>
-          u.district.trim().toLowerCase() === distKey &&
-          (u.state || '').trim().toLowerCase() === stateName.trim().toLowerCase()
-        );
-
-        const distDivAdmins = allUsers.filter(u =>
-          (u.state || '').trim().toLowerCase() === stateName.trim().toLowerCase() &&
+      // District Admins
+      const distAdmins = allUsers.filter(u => {
+        const r = (u.role || '').toLowerCase();
+        const isDistAdmin = r === 'district admin' || r.includes('district admin');
+        return isDistAdmin &&
           (u.district || '').trim().toLowerCase() === distKey &&
-          (u.role === 'Division Admin' || u.role === 'Divisional Admin')
-        );
+          matchesState(u.state);
+      });
 
-        const distPinAdmins = allUsers.filter(u =>
-          (u.state || '').trim().toLowerCase() === stateName.trim().toLowerCase() &&
+      // Division Admins
+      const distDivAdmins = allUsers.filter(u => {
+        const r = (u.role || '').toLowerCase();
+        const isDivAdmin = r === 'division admin' || r === 'divisional admin' || r.includes('division admin') || r.includes('divisional admin');
+        return isDivAdmin &&
           (u.district || '').trim().toLowerCase() === distKey &&
-          u.role === 'Pincode Admin'
-        );
+          matchesState(u.state);
+      });
 
-        const distManagers = allUsers.filter(u =>
-          ((u.district || '').trim().toLowerCase() === distKey || (u.districtId && String(u.districtId).toLowerCase() === String(distMeta?.id || assigned.districtId).toLowerCase())) &&
-          ((u.role || '').toLowerCase().includes('manager') && !(u.role || '').toLowerCase().includes('admin'))
-        );
+      // Pincode Admins
+      const distPinAdmins = allUsers.filter(u => {
+        const r = (u.role || '').toLowerCase();
+        const isPinAdmin = r === 'pincode admin' || r.includes('pincode admin');
+        return isPinAdmin &&
+          (u.district || '').trim().toLowerCase() === distKey &&
+          matchesState(u.state);
+      });
 
-        const managerList = distManagers.map(m => ({
-          id: m.id || m._id,
-          name: m.name,
-          email: m.email,
-          mobile: m.mobile || m.phone,
-          role: m.role,
-          roleTitle: m.role === 'district_manager' ? 'District Manager' : m.role === 'division_manager' ? 'Division Manager' : m.role === 'pincode_manager' ? 'Pincode Manager' : 'State Manager',
-          status: m.status,
-          adminApprovalStatus: m.adminApprovalStatus || (m.status === 'active' ? 'approved' : 'pending'),
-          kycStatus: m.kycStatus || (m.status === 'active' ? 'Verified' : 'pending_verification'),
-          division: m.division || '-',
-          pincode: m.pincode || '-',
-          joinedDate: m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently'
-        }));
+      // Managers (from users and managers collection)
+      const userManagers = allUsers.filter(u => {
+        const r = (u.role || '').toLowerCase();
+        const isMgr = r.includes('manager') && !r.includes('admin');
+        const matchesDist = (u.district || '').trim().toLowerCase() === distKey ||
+          (u.districtId && String(u.districtId).toLowerCase() === String(distInfo.id || distMeta?.id).toLowerCase());
+        return isMgr && matchesDist && matchesState(u.state);
+      });
 
-        const distAgents = allAgents.filter(a => (a.district || '').trim().toLowerCase() === distKey);
-        const distVendors = allVendors.filter(v => (v.district || '').trim().toLowerCase() === distKey);
-        const distOrders = allOrders.filter(o => (o.district || '').trim().toLowerCase() === distKey);
-        const distBookings = allBookings.filter(b => (b.district || '').trim().toLowerCase() === distKey);
-        const distJobs = allJobs.filter(j => (j.district || '').trim().toLowerCase() === distKey);
-        const distTechnicians = allTechnicians.filter(t => (t.district || '').trim().toLowerCase() === distKey);
-        const distExecutives = allExecutives.filter(e => (e.district || '').trim().toLowerCase() === distKey);
-        const distKYC = allKYC.filter(k => (k.district || '').trim().toLowerCase() === distKey && k.status === 'Pending');
-        const distCustomers = allCustomers.filter(c => (c.district || '').trim().toLowerCase() === distKey);
+      const colManagers = allManagers.filter(m => {
+        const mDist = (m.districtName || m.district || '').trim().toLowerCase();
+        const matchesDist = mDist === distKey || (m.districtId && String(m.districtId).toLowerCase() === String(distInfo.id || distMeta?.id).toLowerCase());
+        return matchesDist && matchesState(m.stateName || m.state);
+      });
 
-        const primaryAdmin = distAdmins[0] || assigned;
-        const status = primaryAdmin.status === 'inactive' ? 'Inactive' : (distMeta?.status || 'Active');
+      // De-duplicate managers by id
+      const seenMgrIds = new Set();
+      const combinedManagers = [];
+      [...userManagers, ...colManagers].forEach(m => {
+        const mId = String(m.id || m._id || m.email || '');
+        if (mId && !seenMgrIds.has(mId)) {
+          seenMgrIds.add(mId);
+          combinedManagers.push(m);
+        }
+      });
 
-        assignedDistrictsMap.set(distKey, {
-          id: assigned.districtId || distMeta?.id || `DST-${distName.replace(/\s+/g, '-').toUpperCase()}`,
-          name: distName,
-          code: distMeta?.code || distName.slice(0, 3).toUpperCase(),
-          status,
-          state: stateName,
-          stateName: stateName,
-          divisions: distMeta?.divisions || [],
-          divisionsCount: distDivAdmins.length,
-          pincodesCount: distPinAdmins.length,
-          adminCount: distAdmins.length,
-          limit: maxLimit,
-          isFull: distAdmins.length >= maxLimit,
-          totalManagers: distManagers.length,
-          managers: managerList,
-          totalAgents: distAgents.length,
-          totalVendors: distVendors.length,
-          totalOrders: distOrders.length,
-          totalBookings: distBookings.length,
-          totalJobApplied: distJobs.length,
-          technician: distTechnicians.length,
-          executive: distExecutives.length,
-          pendingKYC: distKYC.length,
-          totalCustomers: distCustomers.length,
-          totalMembershipCards: distCustomers.length,
-          adminId: primaryAdmin._id || primaryAdmin.id || null,
-          adminName: (primaryAdmin.name || '').replace(/\s*\(.*?\)\s*/g, '').trim(),
-          adminEmail: primaryAdmin.email || null,
-          adminPhone: primaryAdmin.phone || primaryAdmin.mobile || null,
-          adminDob: primaryAdmin.dob || null,
-          adminAvatarUrl: primaryAdmin.avatarUrl || null,
-          adminAddress: primaryAdmin.address || null,
-          adminCity: primaryAdmin.city || null,
-          adminPincode: primaryAdmin.pincode || null,
-          adminAadharNumber: primaryAdmin.aadharNumber || null,
-          adminPanNumber: primaryAdmin.panNumber || null,
-          adminAccountHolder: primaryAdmin.accountHolderName || null,
-          adminBankName: primaryAdmin.bankName || null,
-          adminAccountNumber: primaryAdmin.accountNumber || null,
-          adminIfsc: primaryAdmin.ifscCode || null,
-          adminBranch: primaryAdmin.branchName || null,
-          adminLoginId: primaryAdmin.loginId || null,
-          adminCreatedAt: primaryAdmin.createdAt || null,
-        });
+      const managerList = combinedManagers.map(m => ({
+        id: m.id || m._id,
+        name: m.name,
+        email: m.email,
+        mobile: m.mobile || m.phone,
+        role: m.role,
+        roleTitle: m.role === 'district_manager' ? 'District Manager' : m.role === 'division_manager' ? 'Division Manager' : m.role === 'pincode_manager' ? 'Pincode Manager' : 'State Manager',
+        status: m.status,
+        adminApprovalStatus: m.adminApprovalStatus || (m.status === 'active' ? 'approved' : 'pending'),
+        kycStatus: m.kycStatus || (m.status === 'active' ? 'Verified' : 'pending_verification'),
+        division: m.divisionName || m.division || '-',
+        pincode: m.pincodeCode || m.pincode || '-',
+        joinedDate: m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently'
+      }));
+
+      // Agents (from users and agents collection)
+      const userAgents = allUsers.filter(u => {
+        const r = (u.role || '').toLowerCase();
+        const isAgt = r === 'agent' || r.includes('agent');
+        return isAgt && (u.district || '').trim().toLowerCase() === distKey && matchesState(u.state);
+      });
+
+      const colAgents = allAgents.filter(a => {
+        const aDist = (a.district || '').trim().toLowerCase();
+        return aDist === distKey && matchesState(a.state);
+      });
+
+      const seenAgtIds = new Set();
+      const combinedAgents = [];
+      [...userAgents, ...colAgents].forEach(a => {
+        const aId = String(a.id || a._id || a.email || '');
+        if (aId && !seenAgtIds.has(aId)) {
+          seenAgtIds.add(aId);
+          combinedAgents.push(a);
+        }
+      });
+
+      // Strict check: district MUST have at least one assigned Admin, Agent, or Manager
+      const hasQualifyingPerson =
+        distAdmins.length > 0 ||
+        combinedAgents.length > 0 ||
+        combinedManagers.length > 0 ||
+        distDivAdmins.length > 0 ||
+        distPinAdmins.length > 0;
+
+      if (!hasQualifyingPerson) {
+        return; // Exclude empty/unassigned district completely
       }
+
+      // Unique divisions and pincodes that actually have assigned personnel
+      const activeDivisionNames = new Set();
+      distDivAdmins.forEach(u => { if (u.division) activeDivisionNames.add(u.division.trim().toLowerCase()); });
+      combinedManagers.forEach(m => {
+        const d = m.divisionName || m.division;
+        if (d && d !== '-') activeDivisionNames.add(d.trim().toLowerCase());
+      });
+      combinedAgents.forEach(a => { if (a.division) activeDivisionNames.add(a.division.trim().toLowerCase()); });
+
+      const activePincodeCodes = new Set();
+      distPinAdmins.forEach(u => { if (u.pincode) activePincodeCodes.add(String(u.pincode).trim()); });
+      combinedManagers.forEach(m => {
+        const p = m.pincodeCode || m.pincode;
+        if (p && p !== '-') activePincodeCodes.add(String(p).trim());
+      });
+      combinedAgents.forEach(a => { if (a.pincode) activePincodeCodes.add(String(a.pincode).trim()); });
+
+      const distVendors = allVendors.filter(v => (v.district || '').trim().toLowerCase() === distKey);
+      const distOrders = allOrders.filter(o => (o.district || '').trim().toLowerCase() === distKey);
+      const distBookings = allBookings.filter(b => (b.district || '').trim().toLowerCase() === distKey);
+      const distJobs = allJobs.filter(j => (j.district || '').trim().toLowerCase() === distKey);
+      const distTechnicians = allTechnicians.filter(t => (t.district || '').trim().toLowerCase() === distKey);
+      const distExecutives = allExecutives.filter(e => (e.district || '').trim().toLowerCase() === distKey);
+      const distKYC = allKYC.filter(k => (k.district || '').trim().toLowerCase() === distKey && k.status === 'Pending');
+      const distCustomers = allCustomers.filter(c => (c.district || '').trim().toLowerCase() === distKey);
+
+      const primaryAdmin = distAdmins[0] || null;
+      const status = primaryAdmin ? (primaryAdmin.status === 'inactive' ? 'Inactive' : 'Active') : (distMeta?.status || 'Active');
+
+      assignedDistrictsMap.set(distKey, {
+        id: distInfo.id || distMeta?.id || `DST-${distName.replace(/\s+/g, '-').toUpperCase()}`,
+        name: distName,
+        code: distInfo.code || distMeta?.code || distName.slice(0, 3).toUpperCase(),
+        status,
+        state: stateName,
+        stateName: stateName,
+        divisions: distMeta?.divisions || [],
+        divisionsCount: activeDivisionNames.size || distDivAdmins.length,
+        pincodesCount: activePincodeCodes.size || distPinAdmins.length,
+        adminCount: distAdmins.length,
+        limit: maxLimit,
+        isFull: distAdmins.length >= maxLimit,
+        totalManagers: combinedManagers.length,
+        managers: managerList,
+        totalAgents: combinedAgents.length,
+        totalVendors: distVendors.length,
+        totalOrders: distOrders.length,
+        totalBookings: distBookings.length,
+        totalJobApplied: distJobs.length,
+        technician: distTechnicians.length,
+        executive: distExecutives.length,
+        pendingKYC: distKYC.length,
+        totalCustomers: distCustomers.length,
+        totalMembershipCards: distCustomers.length,
+        adminId: primaryAdmin?._id || primaryAdmin?.id || null,
+        adminName: primaryAdmin ? (primaryAdmin.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : 'Unassigned',
+        adminEmail: primaryAdmin?.email || null,
+        adminPhone: primaryAdmin?.phone || primaryAdmin?.mobile || null,
+        adminDob: primaryAdmin?.dob || null,
+        adminAvatarUrl: primaryAdmin?.avatarUrl || null,
+        adminAddress: primaryAdmin?.address || null,
+        adminCity: primaryAdmin?.city || null,
+        adminPincode: primaryAdmin?.pincode || null,
+        adminAadharNumber: primaryAdmin?.aadharNumber || null,
+        adminPanNumber: primaryAdmin?.panNumber || null,
+        adminAccountHolder: primaryAdmin?.accountHolderName || null,
+        adminBankName: primaryAdmin?.bankName || null,
+        adminAccountNumber: primaryAdmin?.accountNumber || null,
+        adminIfsc: primaryAdmin?.ifscCode || null,
+        adminBranch: primaryAdmin?.branchName || null,
+        adminLoginId: primaryAdmin?.loginId || null,
+        adminCreatedAt: primaryAdmin?.createdAt || null,
+      });
     });
 
     const enrichedDistricts = Array.from(assignedDistrictsMap.values());
