@@ -14,9 +14,11 @@ function locationMiddleware(req, res, next) {
   const queryDistrict = req.query.district;
   const queryState = req.query.state;
 
+  const normDivision = (d) => String(d || '').toLowerCase().replace(/\s+division$/i, '').trim();
+
   // Pincode Admin can strictly ONLY query their assigned pincode
   if (role === 'Pincode Admin') {
-    if (queryPincode && queryPincode !== pincode) {
+    if (queryPincode && pincode && String(queryPincode).trim() !== String(pincode).trim()) {
       return res.status(403).json({
         success: false,
         message: `Forbidden: Pincode Admin is restricted to Pincode ${pincode} and cannot query ${queryPincode}.`
@@ -26,13 +28,13 @@ function locationMiddleware(req, res, next) {
 
   // Divisional Admin / Division Admin cannot query a different division or different state/district
   if (role === 'Divisional Admin' || role === 'Division Admin') {
-    if (queryDivision && queryDivision !== division) {
+    if (queryDivision && division && normDivision(queryDivision) !== normDivision(division)) {
       return res.status(403).json({
         success: false,
         message: `Forbidden: Division Admin is restricted to Division ${division} and cannot query ${queryDivision}.`
       });
     }
-    if (queryDistrict && queryDistrict !== district) {
+    if (queryDistrict && district && queryDistrict.trim().toLowerCase() !== district.trim().toLowerCase()) {
       return res.status(403).json({
         success: false,
         message: `Forbidden: Division Admin is restricted to District ${district}.`
@@ -42,7 +44,7 @@ function locationMiddleware(req, res, next) {
 
   // District Admin cannot query a different district
   if (role === 'District Admin') {
-    if (queryDistrict && queryDistrict !== district) {
+    if (queryDistrict && district && queryDistrict.trim().toLowerCase() !== district.trim().toLowerCase()) {
       return res.status(403).json({
         success: false,
         message: `Forbidden: District Admin is restricted to District ${district}.`
@@ -52,7 +54,7 @@ function locationMiddleware(req, res, next) {
 
   // State Admin cannot query a different state
   if (role === 'State Admin') {
-    if (queryState && state && queryState !== state) {
+    if (queryState && state && queryState.trim().toLowerCase() !== state.trim().toLowerCase()) {
       return res.status(403).json({
         success: false,
         message: `Forbidden: State Admin is restricted to State ${state}.`

@@ -76,7 +76,11 @@ export function DistrictAgents({ level = 'district' }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const isDivisionalAdmin = user?.role === 'Divisional Admin' || user?.role === 'Division Admin' || location.pathname.startsWith('/divisional-admin');
+  const basePath = isDivisionalAdmin ? '/divisional-admin' : '/district-admin';
+
   const district = user?.district || '-';
+  const division = user?.division || '';
 
   // Parse hierarchical drill-down query parameter from URL
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -86,9 +90,14 @@ export function DistrictAgents({ level = 'district' }) {
   let activeLevel = level;
   if (location.pathname.includes('/agents/pincode')) activeLevel = 'pincode';
   else if (location.pathname.includes('/agents/divisional')) activeLevel = 'divisional';
-  else if (location.pathname.includes('/agents/district') || location.pathname.endsWith('/agents')) activeLevel = 'district';
+  else if (location.pathname.includes('/agents/district')) activeLevel = isDivisionalAdmin ? 'divisional' : 'district';
+  else if (location.pathname.endsWith('/agents')) activeLevel = isDivisionalAdmin ? 'divisional' : 'district';
 
-  const config = LEVEL_CONFIGS[activeLevel] || LEVEL_CONFIGS.district;
+  if (isDivisionalAdmin && activeLevel === 'district') {
+    activeLevel = 'divisional';
+  }
+
+  const config = LEVEL_CONFIGS[activeLevel] || (isDivisionalAdmin ? LEVEL_CONFIGS.divisional : LEVEL_CONFIGS.district);
 
   // View tabs: 'roster' | 'activities' | 'tree'
   const [activeTab, setActiveTab] = useState('roster');
@@ -110,8 +119,14 @@ export function DistrictAgents({ level = 'district' }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const params = { district, level: activeLevel };
-      if (divisionFilterParam) params.division = divisionFilterParam;
+      const params = { level: activeLevel };
+      if (isDivisionalAdmin) {
+        if (division) params.division = division;
+        if (district && district !== '-') params.district = district;
+      } else {
+        if (district && district !== '-') params.district = district;
+        if (divisionFilterParam) params.division = divisionFilterParam;
+      }
       const res = await dataService.getAgents(params);
       if (res.success && res.agents) {
         setAgents(res.agents);
@@ -119,14 +134,15 @@ export function DistrictAgents({ level = 'district' }) {
         setAgents([]);
       }
 
-      const actRes = await dataService.getAgentActivities({ district });
+      const actParams = isDivisionalAdmin ? { division } : { district: district !== '-' ? district : '' };
+      const actRes = await dataService.getAgentActivities(actParams);
       if (actRes.success && actRes.activities) {
         setActivities(actRes.activities);
       } else {
         setActivities([]);
       }
     } catch (err) {
-      console.error('Error loading district agent data:', err);
+      console.error('Error loading agent data:', err);
       setAgents([]);
       setActivities([]);
     } finally {
@@ -136,7 +152,7 @@ export function DistrictAgents({ level = 'district' }) {
 
   useEffect(() => {
     loadData();
-  }, [activeLevel, district, divisionFilterParam]);
+  }, [activeLevel, district, division, divisionFilterParam]);
 
   const handleAdvanceStage = async (activityId, notes) => {
     try {
@@ -253,11 +269,11 @@ export function DistrictAgents({ level = 'district' }) {
       className: 'whitespace-nowrap',
       render: (row) => (
         <div className="flex items-center gap-2">
-          {activeLevel === 'district' && (
+          {activeLevel === 'district' && !isDivisionalAdmin && (
             <button
               type="button"
               onClick={() => {
-                navigate('/district-admin/agents/divisional');
+                navigate(`${basePath}/agents/divisional`);
               }}
               className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded"
               title="Drill down to Divisional Agents"
@@ -272,7 +288,7 @@ export function DistrictAgents({ level = 'district' }) {
               type="button"
               onClick={() => {
                 const qDivision = row.division || row.assignedArea || row.name || '';
-                navigate(`/district-admin/agents/pincode?division=${encodeURIComponent(qDivision)}`);
+                navigate(`${basePath}/agents/pincode?division=${encodeURIComponent(qDivision)}`);
               }}
               className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 flex items-center gap-1 cursor-pointer bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded"
               title="Drill down to Pincode Agents"
@@ -375,7 +391,7 @@ export function DistrictAgents({ level = 'district' }) {
       </div>
 
       {/* 4-Tier Agent Hierarchy Banner scoped to District Admin */}
-      <AgentHierarchyBanner activeLevel={activeLevel} basePath="/district-admin" />
+      <AgentHierarchyBanner activeLevel={activeLevel} basePath={basePath} />
 
       {/* Active Hierarchical Parent Filter Breadcrumb */}
       {divisionFilterParam && (

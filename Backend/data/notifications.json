@@ -479,5 +479,43 @@
     "type": "task_updated",
     "updatedAt": "2026-09-26T14:17:22.243Z",
     "userId": "user_state_1"
+  },
+  {
+    "_id": "NOTIF-1790580241699-1RHE",
+    "actionUrl": "/state-admin/vendors",
+    "category": "vendor",
+    "createdAt": "2026-09-28T07:24:01.699Z",
+    "entityId": "6ab4bbe57ee04aa0f0580792",
+    "entityType": "vendor",
+    "id": "NOTIF-1790580241699-1RHE",
+    "isRead": false,
+    "message": "Pincode Admin Ragul approved merchant 'Empire'. Sent for central KYC review.",
+    "metadata": {
+      "vendorId": "6ab4bbe57ee04aa0f0580792",
+      "vendorName": "Empire",
+      "action": "Accept",
+      "reason": null,
+      "verifiedBy": "Ragul",
+      "pincode": "635126"
+    },
+    "priority": "normal",
+    "readBy": [],
+    "scope": {
+      "state": "Tamil Nadu",
+      "district": "Krishnagiri",
+      "division": "Hosur Division",
+      "pincode": "635126",
+      "targetUserId": null,
+      "targetRoles": [
+        "State Admin",
+        "District Admin",
+        "Division Admin",
+        "Pincode Admin",
+        "Manager"
+      ]
+    },
+    "title": "Vendor Approved: Empire",
+    "type": "vendor_status",
+    "updatedAt": "2026-09-28T07:24:01.699Z"
   }
 ]

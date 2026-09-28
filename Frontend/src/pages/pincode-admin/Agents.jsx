@@ -31,7 +31,7 @@ export function PincodeAgents() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await dataService.getAgents({ pincode });
+      const res = await dataService.getAgents({ pincode, level: 'pincode' });
       if (res.success && res.agents) setAgents(res.agents);
       else setAgents([]);
 

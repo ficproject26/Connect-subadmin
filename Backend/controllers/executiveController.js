@@ -41,247 +41,508 @@ function updateTicketStatus(req, res) {
   }
 }
 
-// Scoped Agent filtering by hierarchical manager / admin role:
-// - Pincode Manager: ONLY Pincode Agents in their assigned pincode
-// - Division Manager: Division Agent and Pincode Agents in their assigned division
-// - District Manager: District Agent, Division Agent, and Pincode Agents in their assigned district
-// - State Manager: State, District, Division, and Pincode Agents in their assigned state
-// - Super Admin: All Agents
+/**
+ * Get the normalized level of an agent.
+ * db.agents stores the level in the `role` field (values: 'state', 'district', 'division', 'pincode').
+ * The `level` field may be a number (1-4) or undefined.
+ * This function resolves the correct string level from whichever field is populated.
+ */
+function getAgentLevel(agent) {
+  if (!agent) return '';
+  // level may be a number (1=state,2=district,3=division,4=pincode) or a string
+  const lvlRaw = agent.level;
+  if (typeof lvlRaw === 'number') {
+    if (lvlRaw === 1) return 'state';
+    if (lvlRaw === 2) return 'district';
+    if (lvlRaw === 3) return 'division';
+    if (lvlRaw === 4) return 'pincode';
+  }
+  const lvl = (String(lvlRaw || '')).toLowerCase().trim();
+  const rol = (String(agent.role || '')).toLowerCase().trim();
+
+  // Generic non-level role names to skip
+  const GENERIC = new Set(['agent', 'staff', 'manager', 'vendor', 'customer', 'admin', 'super-admin', '']);
+
+  if (lvl && !GENERIC.has(lvl)) return lvl;
+  if (rol && !GENERIC.has(rol)) return rol;
+  return lvl || rol || '';
+}
+
+/**
+ * Normalize a level string for consistent comparison.
+ * Frontend sends: 'state', 'district', 'divisional', 'pincode'
+ * DB agents use:  'state', 'district', 'division', 'pincode' in `role` field
+ */
+function normalizeLevel(level) {
+  if (!level) return '';
+  const l = String(level).toLowerCase().trim();
+  if (l === 'divisional' || l === 'division') return 'division';
+  if (l === 'district') return 'district';
+  if (l === 'state') return 'state';
+  if (l === 'pincode') return 'pincode';
+  return l;
+}
+
+/**
+ * Get the agent's territory as a flat object.
+ * Resolves from top-level fields (state, district, division, pincode)
+ * or from nested territory sub-object.
+ */
+/**
+ * Normalizes division names for comparison by removing trailing 'division' and extra spaces.
+ * E.g., 'Attur Division' and 'Attur' will both normalize to 'attur'.
+ */
+function normalizeDivision(name) {
+  if (!name) return '';
+  return String(name).toLowerCase().replace(/\s+division$/i, '').trim();
+}
+
+function divisionMatches(div1, div2) {
+  if (!div1 || !div2) return false;
+  return normalizeDivision(div1) === normalizeDivision(div2);
+}
+
+/**
+ * Get the agent's territory as a flat object.
+ * Resolves from top-level fields (state, district, division, pincode)
+ * or from nested territory sub-object, with fallback lookup in db.pincodes and db.divisions.
+ */
+function getAgentTerritory(agent) {
+  if (!agent) return { state: '', district: '', division: '', pincode: '' };
+  const t = agent.territory || {};
+  let state = String(agent.state || t.state || '').trim();
+  let district = String(agent.district || t.district || '').trim();
+  let division = String(agent.division || t.division || '').trim();
+  let pincode = String(agent.pincode || t.pincode || '').trim();
+
+  // If pincode is present but state/district/division missing, resolve from db.pincodes
+  if (pincode && (!state || !district || !division) && db.pincodes) {
+    const pinObj = Array.from(db.pincodes || []).find(p => String(p.code || p.pincode) === pincode);
+    if (pinObj) {
+      if (!state && pinObj.state) state = String(pinObj.state).trim();
+      if (!district && pinObj.district) district = String(pinObj.district).trim();
+      if (!division && pinObj.division) division = String(pinObj.division).trim();
+    }
+  }
+
+  // If division is present but state/district missing, resolve from db.divisions
+  if (division && (!state || !district) && db.divisions) {
+    const divObj = Array.from(db.divisions || []).find(d => divisionMatches(d.name, division));
+    if (divObj) {
+      if (!district && divObj.districtName) district = String(divObj.districtName).trim();
+      if (!state && divObj.stateName) state = String(divObj.stateName).trim();
+    }
+  }
+
+  return { state, district, division, pincode };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Core Hierarchical Scoping
+//
+// Visibility rules:
+// Super Admin / admin     → All agents across all territories
+// State Admin             → All agent levels (state/district/division/pincode) within their state
+// District Admin          → district + division + pincode agents within their district (NEVER state agents)
+// Divisional Admin        → division + pincode agents within their division (NEVER district or state agents)
+// Pincode Admin           → ONLY pincode agents in their exact pincode
+// Managers (any level)    → Same as corresponding admin level
+// ─────────────────────────────────────────────────────────────────
 function getHierarchicalScopedAgents(allAgents, user) {
   if (!allAgents || !Array.isArray(allAgents)) return [];
   if (!user) return [];
 
-  const rawRole = user.role || '';
-  const role = rawRole.toLowerCase().replace(/_/g, ' ');
-  const userPincode = user.pincode ? String(user.pincode).trim() : null;
-  const userDivision = user.division ? user.division.trim().toLowerCase() : null;
-  const userDistrict = user.district ? user.district.trim().toLowerCase() : null;
-  const userState = user.state ? user.state.trim().toLowerCase() : null;
+  const rawRole = String(user.role || '');
+  const role = rawRole.toLowerCase().replace(/_/g, ' ').trim();
 
-  // Super Admin / unrestricted admin
-  if (role.includes('super admin') || role === 'admin') {
+  let userPincode = user.pincode ? String(user.pincode).trim() : null;
+  let userDivision = user.division ? String(user.division).trim().toLowerCase() : null;
+  let userDistrict = user.district ? String(user.district).trim().toLowerCase() : null;
+  let userState = user.state ? String(user.state).trim().toLowerCase() : null;
+
+  // If territory fields are missing on user object, check db.users
+  if (user.id || user._id) {
+    const dbUser = Array.from(db.users || []).find(u => String(u._id || u.id) === String(user.id || user._id));
+    if (dbUser) {
+      if (!userPincode && dbUser.pincode) userPincode = String(dbUser.pincode).trim();
+      if (!userDivision && dbUser.division) userDivision = String(dbUser.division).trim().toLowerCase();
+      if (!userDistrict && dbUser.district) userDistrict = String(dbUser.district).trim().toLowerCase();
+      if (!userState && dbUser.state) userState = String(dbUser.state).trim().toLowerCase();
+    }
+  }
+
+  // ── Super Admin / unrestricted admin ───────────────────────────
+  if (role.includes('super admin') || role === 'admin' || role === 'super-admin' || userState === 'all india') {
     return allAgents;
   }
 
-  // 1. Pincode Manager / Pincode Admin: Show ONLY Pincode Agents
+  // ── Pincode Admin / Pincode Manager ────────────────────────────
   if (role.includes('pincode')) {
+    if (!userPincode) return [];
     return allAgents.filter(a => {
-      const aLevel = (a.level || a.role || '').toLowerCase();
-      const isPincodeAgent = aLevel.includes('pincode');
-      const matchesPin = userPincode && a.pincode && String(a.pincode).trim() === userPincode;
-      return isPincodeAgent && matchesPin;
+      const aLevel = normalizeLevel(getAgentLevel(a));
+      if (aLevel !== 'pincode') return false;
+      const t = getAgentTerritory(a);
+      return Boolean(t.pincode && t.pincode === userPincode);
     });
   }
 
-  // 2. Division Manager / Divisional Admin: Show Division Agent and Pincode Agents in this division
+  // ── Division Admin / Divisional Admin / Division Manager ───────
   if (role.includes('division') || role.includes('divisional')) {
+    if (!userDivision) return [];
     return allAgents.filter(a => {
-      const aLevel = (a.level || a.role || '').toLowerCase();
-      const isAllowedLevel = aLevel.includes('division') || aLevel.includes('pincode');
-      if (!isAllowedLevel) return false;
-
-      const matchesDiv = !userDivision || (a.division && a.division.trim().toLowerCase() === userDivision);
-      const matchesDist = !userDistrict || (a.district && a.district.trim().toLowerCase() === userDistrict);
-      const matchesState = !userState || (a.state && a.state.trim().toLowerCase() === userState);
+      const aLevel = normalizeLevel(getAgentLevel(a));
+      // STRICT: Division Admin can ONLY see division and pincode agents
+      if (aLevel !== 'division' && aLevel !== 'pincode') return false;
+      const t = getAgentTerritory(a);
+      const matchesDiv = divisionMatches(t.division, userDivision);
+      const matchesDist = !userDistrict || (t.district && t.district.toLowerCase() === userDistrict);
+      const matchesState = !userState || (t.state && t.state.toLowerCase() === userState);
       return matchesDiv && matchesDist && matchesState;
     });
   }
 
-  // 3. District Manager / District Admin: Show District Agent, Division Agent, and Pincode Agents in this district
+  // ── District Admin / District Manager ─────────────────────────
   if (role.includes('district')) {
+    if (!userDistrict) return [];
     return allAgents.filter(a => {
-      const aLevel = (a.level || a.role || '').toLowerCase();
-      const isAllowedLevel = aLevel.includes('district') || aLevel.includes('division') || aLevel.includes('pincode');
-      if (!isAllowedLevel) return false;
-
-      const matchesDist = !userDistrict || (a.district && a.district.trim().toLowerCase() === userDistrict);
-      const matchesState = !userState || (a.state && a.state.trim().toLowerCase() === userState);
+      const aLevel = normalizeLevel(getAgentLevel(a));
+      // STRICT: District Admin can ONLY see district, division, and pincode agents (NEVER state agents)
+      if (aLevel !== 'district' && aLevel !== 'division' && aLevel !== 'pincode') return false;
+      const t = getAgentTerritory(a);
+      const matchesDist = Boolean(t.district && t.district.toLowerCase() === userDistrict);
+      const matchesState = !userState || (t.state && t.state.toLowerCase() === userState);
       return matchesDist && matchesState;
     });
   }
 
-  // 4. State Manager / State Admin: Show State Agent, District Agent, Division Agent, and Pincode Agents in this state
+  // ── State Admin / State Manager ────────────────────────────────
   if (role.includes('state')) {
+    if (!userState) return [];
     return allAgents.filter(a => {
-      const aLevel = (a.level || a.role || '').toLowerCase();
-      const isAllowedLevel = aLevel.includes('state') || aLevel.includes('district') || aLevel.includes('division') || aLevel.includes('pincode');
-      if (!isAllowedLevel) return false;
+      const t = getAgentTerritory(a);
+      // STRICT: Must belong to the admin's state — reject cross-state agents
+      return Boolean(t.state && t.state.toLowerCase() === userState);
+    });
+  }
 
-      const matchesState = !userState || (a.state && a.state.trim().toLowerCase() === userState);
-      return matchesState;
+  // ── Manager catch-all ──────────────────────────────────────────
+  if (role.includes('manager')) {
+    return allAgents.filter(a => {
+      const t = getAgentTerritory(a);
+      if (userPincode && (!t.pincode || t.pincode !== userPincode)) return false;
+      if (userDivision && (!t.division || !divisionMatches(t.division, userDivision))) return false;
+      if (userDistrict && (!t.district || t.district.toLowerCase() !== userDistrict)) return false;
+      if (userState && (!t.state || t.state.toLowerCase() !== userState)) return false;
+      return true;
     });
   }
 
   return [];
 }
 
-// Agents
+// ─────────────────────────────────────────────────────────────────
+// GET /operations/agents
+// ─────────────────────────────────────────────────────────────────
 function getAgents(req, res) {
   try {
     const rawAgents = Array.from(db.agents);
-    let scoped = getHierarchicalScopedAgents(rawAgents, req.user);
     const { search, status, level, state, district, division, pincode } = req.query;
 
-    const userRole = (req.user?.role || '').toLowerCase();
-    const isSuperAdmin = userRole.includes('super admin') || req.user?.state === 'All India';
+    const userRole = String(req.user?.role || '').toLowerCase().replace(/_/g, ' ').trim();
+    const isSuperAdmin = userRole.includes('super admin') || userRole === 'admin' || userRole === 'super-admin' || req.user?.state === 'All India';
 
-    // Security Scoping: State Admin cannot view agents in another state
-    const effectiveState = !isSuperAdmin ? (req.user?.state || 'Tamil Nadu') : (state || null);
-    if (effectiveState && effectiveState.toLowerCase() !== 'all india') {
-      scoped = scoped.filter(a => a.state && a.state.trim().toLowerCase() === effectiveState.trim().toLowerCase());
+    // Step 1: Hierarchy-based scoping (enforced at data level)
+    let scoped = getHierarchicalScopedAgents(rawAgents, req.user);
+
+    // Step 2: Enforce state boundary — non-super-admin cannot escape their state
+    const effectiveState = isSuperAdmin ? (state || null) : (req.user?.state || null);
+    if (effectiveState && String(effectiveState).toLowerCase() !== 'all india') {
+      scoped = scoped.filter(a => {
+        const t = getAgentTerritory(a);
+        return t.state && t.state.toLowerCase() === effectiveState.toLowerCase();
+      });
     }
 
+    // Step 3: Level filter — map 'divisional' → 'division' for consistent matching
     if (level) {
-      scoped = scoped.filter(a => a.level && a.level.toLowerCase() === level.toLowerCase());
+      const normLevel = normalizeLevel(level);
+      scoped = scoped.filter(a => {
+        const aLevel = normalizeLevel(getAgentLevel(a));
+        return aLevel === normLevel;
+      });
     }
 
+    // Step 4: Optional territory drill-down query params
     if (district) {
-      scoped = scoped.filter(a => a.district && a.district.trim().toLowerCase() === district.trim().toLowerCase());
+      scoped = scoped.filter(a => {
+        const t = getAgentTerritory(a);
+        return t.district && t.district.toLowerCase() === String(district).trim().toLowerCase();
+      });
     }
 
     if (division) {
-      scoped = scoped.filter(a => a.division && a.division.trim().toLowerCase() === division.trim().toLowerCase());
+      scoped = scoped.filter(a => {
+        const t = getAgentTerritory(a);
+        return divisionMatches(t.division, division);
+      });
     }
 
     if (pincode) {
-      scoped = scoped.filter(a => a.pincode && String(a.pincode).trim() === String(pincode).trim());
+      scoped = scoped.filter(a => {
+        const t = getAgentTerritory(a);
+        return t.pincode === String(pincode).trim();
+      });
     }
 
-    // Never display unassigned agents or records missing level-required territory
+    // Step 5: Reject agents missing required territory fields for their level
     scoped = scoped.filter(a => {
-      const aLevel = (a.level || '').toLowerCase();
-      if (aLevel === 'state') {
-        return Boolean(a.state && a.state.trim());
-      }
-      if (aLevel === 'district') {
-        return Boolean(a.district && a.district.trim() && a.state && a.state.trim());
-      }
-      if (aLevel === 'divisional') {
-        return Boolean(a.division && a.division.trim() && a.district && a.district.trim());
-      }
-      if (aLevel === 'pincode') {
-        return Boolean(a.pincode && String(a.pincode).trim());
-      }
-      return Boolean(a.state || a.district || a.division || a.pincode);
+      const aLevel = normalizeLevel(getAgentLevel(a));
+      const t = getAgentTerritory(a);
+      if (aLevel === 'state') return Boolean(t.state);
+      if (aLevel === 'district') return Boolean(t.district && t.state);
+      if (aLevel === 'division') return Boolean(t.division && t.district);
+      if (aLevel === 'pincode') return Boolean(t.pincode);
+      return Boolean(t.state || t.district || t.division || t.pincode);
     });
 
+    // Step 6: Search filter
     if (search) {
-      const q = search.toLowerCase();
-      scoped = scoped.filter(a =>
-        (a.name && a.name.toLowerCase().includes(q)) ||
-        (a.phone && a.phone.includes(q)) ||
-        (a.email && a.email.toLowerCase().includes(q)) ||
-        (a.jurisdiction && a.jurisdiction.toLowerCase().includes(q)) ||
-        (a.pincode && a.pincode.includes(q))
-      );
+      const q = String(search).toLowerCase();
+      scoped = scoped.filter(a => {
+        const t = getAgentTerritory(a);
+        return (
+          (a.name && String(a.name).toLowerCase().includes(q)) ||
+          (a.phone && String(a.phone).includes(q)) ||
+          (a.email && String(a.email).toLowerCase().includes(q)) ||
+          (a.registrationId && String(a.registrationId).toLowerCase().includes(q)) ||
+          (t.pincode && t.pincode.includes(q)) ||
+          (t.district && t.district.toLowerCase().includes(q)) ||
+          (t.division && t.division.toLowerCase().includes(q)) ||
+          (t.state && t.state.toLowerCase().includes(q))
+        );
+      });
     }
 
+    // Step 7: Status filter
     if (status) {
-      scoped = scoped.filter(a => a.status && a.status.toLowerCase() === status.toLowerCase());
+      scoped = scoped.filter(a => a.status && String(a.status).toLowerCase() === String(status).toLowerCase());
     }
 
-    return res.json({ success: true, count: scoped.length, agents: scoped });
+    // Step 8: Format each agent with standard normalized fields
+    const formattedAgents = scoped.map(a => {
+      const normLevel = normalizeLevel(getAgentLevel(a));
+      const terr = getAgentTerritory(a);
+      const rawId = a.id || a._id;
+      const idStr = rawId ? String(rawId) : `agent-${Math.random().toString(36).slice(2, 8)}`;
+
+      let jurisdiction = 'Assigned Territory';
+      let assignedArea = '';
+      if (normLevel === 'pincode' && terr.pincode) {
+        jurisdiction = `PIN ${terr.pincode}`;
+        assignedArea = [terr.division, terr.district, terr.state].filter(Boolean).join(', ');
+      } else if (normLevel === 'division' && terr.division) {
+        jurisdiction = terr.division;
+        assignedArea = [terr.district, terr.state].filter(Boolean).join(', ');
+      } else if (normLevel === 'district' && terr.district) {
+        jurisdiction = `${terr.district} District`;
+        assignedArea = terr.state || '';
+      } else if (normLevel === 'state' && terr.state) {
+        jurisdiction = `${terr.state} State`;
+        assignedArea = 'Apex State Level';
+      } else {
+        jurisdiction = terr.state || 'Assigned Zone';
+        assignedArea = terr.district || '';
+      }
+
+      return {
+        ...a,
+        id: idStr,
+        _id: idStr,
+        level: normLevel,
+        state: terr.state,
+        district: terr.district,
+        division: terr.division,
+        pincode: terr.pincode,
+        jurisdiction,
+        assignedArea,
+        totalReferrals: a.totalReferrals ?? 0,
+        vendorOnboardings: a.vendorOnboardings ?? 0,
+        walletBalance: a.walletBalance ?? 0,
+        totalEarned: a.totalEarned ?? 0,
+        status: a.status || 'approved'
+      };
+    });
+
+    return res.json({ success: true, count: formattedAgents.length, agents: formattedAgents });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch agents', error: error.message });
   }
 }
 
-// Agent Hierarchy Structure: State -> District -> Division -> Pincode
+// ─────────────────────────────────────────────────────────────────
+// GET /operations/agents/hierarchy
+// ─────────────────────────────────────────────────────────────────
 function getAgentHierarchy(req, res) {
   try {
-    const allAgents = db.agents;
-    const stateAgents = allAgents.filter(a => a.level === 'state');
-    const districtAgents = allAgents.filter(a => a.level === 'district');
-    const divisionalAgents = allAgents.filter(a => a.level === 'divisional');
-    const pincodeAgents = allAgents.filter(a => a.level === 'pincode');
+    const rawAgents = Array.from(db.agents);
+    const scopedAgents = getHierarchicalScopedAgents(rawAgents, req.user);
 
-    // Build nested tree structure
-    const tree = stateAgents.map(stateAg => {
-      const relatedDistricts = districtAgents.filter(d => !d.supervisorId || d.supervisorId === stateAg.id || d.state === stateAg.state);
-      return {
-        ...stateAg,
-        children: relatedDistricts.map(distAg => {
-          const relatedDivisions = divisionalAgents.filter(div => !div.supervisorId || div.supervisorId === distAg.id || div.district === distAg.district);
-          return {
-            ...distAg,
-            children: relatedDivisions.map(divAg => {
-              const relatedPincodes = pincodeAgents.filter(pin => !pin.supervisorId || pin.supervisorId === divAg.id || pin.division === divAg.division);
-              return {
-                ...divAg,
-                children: relatedPincodes
-              };
-            })
-          };
-        })
-      };
+    const stateAgents    = scopedAgents.filter(a => normalizeLevel(getAgentLevel(a)) === 'state');
+    const districtAgents = scopedAgents.filter(a => normalizeLevel(getAgentLevel(a)) === 'district');
+    const divisionAgents = scopedAgents.filter(a => normalizeLevel(getAgentLevel(a)) === 'division');
+    const pincodeAgents  = scopedAgents.filter(a => normalizeLevel(getAgentLevel(a)) === 'pincode');
+
+    // Build hierarchy tree rooted at the highest authorized tier for the user
+    let tree = [];
+    if (stateAgents.length > 0) {
+      tree = stateAgents.map(stateAg => {
+        const stT = getAgentTerritory(stateAg);
+        const relatedDistricts = districtAgents.filter(d => {
+          const dT = getAgentTerritory(d);
+          return stT.state && dT.state && dT.state.toLowerCase() === stT.state.toLowerCase();
+        });
+        return {
+          ...stateAg,
+          children: relatedDistricts.map(distAg => {
+            const dT = getAgentTerritory(distAg);
+            const relatedDivisions = divisionAgents.filter(div => {
+              const divT = getAgentTerritory(div);
+              return dT.district && divT.district && divT.district.toLowerCase() === dT.district.toLowerCase();
+            });
+            return {
+              ...distAg,
+              children: relatedDivisions.map(divAg => {
+                const vT = getAgentTerritory(divAg);
+                const relatedPincodes = pincodeAgents.filter(pin => {
+                  const pT = getAgentTerritory(pin);
+                  return divisionMatches(vT.division, pT.division);
+                });
+                return { ...divAg, children: relatedPincodes };
+              })
+            };
+          })
+        };
+      });
+    } else if (districtAgents.length > 0) {
+      // Root at district level for District Admin
+      tree = districtAgents.map(distAg => {
+        const dT = getAgentTerritory(distAg);
+        const relatedDivisions = divisionAgents.filter(div => {
+          const divT = getAgentTerritory(div);
+          return dT.district && divT.district && divT.district.toLowerCase() === dT.district.toLowerCase();
+        });
+        return {
+          ...distAg,
+          children: relatedDivisions.map(divAg => {
+            const vT = getAgentTerritory(divAg);
+            const relatedPincodes = pincodeAgents.filter(pin => {
+              const pT = getAgentTerritory(pin);
+              return divisionMatches(vT.division, pT.division);
+            });
+            return { ...divAg, children: relatedPincodes };
+          })
+        };
+      });
+    } else if (divisionAgents.length > 0) {
+      // Root at division level for Divisional Admin
+      tree = divisionAgents.map(divAg => {
+        const vT = getAgentTerritory(divAg);
+        const relatedPincodes = pincodeAgents.filter(pin => {
+          const pT = getAgentTerritory(pin);
+          return divisionMatches(vT.division, pT.division);
+        });
+        return { ...divAg, children: relatedPincodes };
+      });
+    } else {
+      // Pincode level
+      tree = pincodeAgents.map(pin => ({ ...pin, children: [] }));
+    }
+
+    return res.json({
+      success: true,
+      summary: {
+        totalStateAgents: stateAgents.length,
+        totalDistrictAgents: districtAgents.length,
+        totalDivisionalAgents: divisionAgents.length,
+        totalPincodeAgents: pincodeAgents.length,
+        hierarchyChain: 'State Agent -> District Agent -> Divisional Agent -> Pincode Agent'
+      },
+      tree,
+      allAgents: scopedAgents
     });
-
-    const summary = {
-      totalStateAgents: stateAgents.length,
-      totalDistrictAgents: districtAgents.length,
-      totalDivisionalAgents: divisionalAgents.length,
-      totalPincodeAgents: pincodeAgents.length,
-      hierarchyChain: 'State Agent -> District Agent -> Divisional Agent -> Pincode Agent'
-    };
-
-    return res.json({ success: true, summary, tree, allAgents });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch agent hierarchy', error: error.message });
   }
 }
 
-// Agent Activities & Vendor Onboarding Flow
-// Visibility Rule:
-// - Pincode Agent activity is visible to the Divisional Agent
-// - Divisional Agent activity is visible to the District Agent
-// - District Agent activity is visible to the State Agent
-// - State Agent can view the complete Agent activity across the State
+// ─────────────────────────────────────────────────────────────────
+// GET /operations/agents/activities
+// ─────────────────────────────────────────────────────────────────
 function getAgentActivities(req, res) {
   try {
-    let activities = db.agentActivities || [];
+    let activities = Array.from(db.agentActivities || []);
     const user = req.user;
+    const userRole = String(user?.role || '').toLowerCase().replace(/_/g, ' ').trim();
 
-    // Apply strict hierarchical visibility scoping
-    if (user.role === 'Pincode Admin') {
-      activities = activities.filter(act => act.pincode === user.pincode);
-    } else if (user.role === 'Divisional Admin') {
-      activities = activities.filter(act => act.division === user.division);
-    } else if (user.role === 'District Admin') {
-      activities = activities.filter(act => act.district === user.district);
-    } else if (user.role === 'State Admin' || user.role === 'Super Admin') {
-      // State Admin can view complete Agent activity across the entire state
-      if (user.state) {
-        activities = activities.filter(act => !act.state || act.state === user.state);
+    if (userRole.includes('super admin') || userRole === 'admin' || userRole === 'super-admin' || user?.state === 'All India') {
+      // Super Admin: all activities
+    } else if (userRole.includes('pincode')) {
+      const pin = user?.pincode ? String(user.pincode).trim() : '';
+      if (!pin) activities = [];
+      else activities = activities.filter(act => act.pincode && String(act.pincode).trim() === pin);
+    } else if (userRole.includes('division') || userRole.includes('divisional')) {
+      const div = user?.division ? String(user.division).trim() : '';
+      if (!div) activities = [];
+      else {
+        activities = activities.filter(act => {
+          const matchesDiv = divisionMatches(act.division, div);
+          const matchesDist = !user.district || (act.district && act.district.toLowerCase() === user.district.toLowerCase());
+          const matchesState = !user.state || (act.state && act.state.toLowerCase() === user.state.toLowerCase());
+          return matchesDiv && matchesDist && matchesState;
+        });
       }
+    } else if (userRole.includes('district')) {
+      const dist = user?.district ? String(user.district).trim().toLowerCase() : '';
+      if (!dist) activities = [];
+      else {
+        activities = activities.filter(act => {
+          const matchesDist = act.district && act.district.toLowerCase() === dist;
+          const matchesState = !user.state || (act.state && act.state.toLowerCase() === user.state.toLowerCase());
+          return matchesDist && matchesState;
+        });
+      }
+    } else if (userRole.includes('state')) {
+      const st = user?.state ? String(user.state).trim().toLowerCase() : '';
+      if (!st) activities = [];
+      else {
+        activities = activities.filter(act => act.state && act.state.toLowerCase() === st);
+      }
+    } else if (userRole.includes('manager')) {
+      activities = activities.filter(act => {
+        if (user.pincode && (!act.pincode || String(act.pincode).trim() !== String(user.pincode).trim())) return false;
+        if (user.division && (!act.division || !divisionMatches(act.division, user.division))) return false;
+        if (user.district && (!act.district || act.district.toLowerCase() !== user.district.toLowerCase())) return false;
+        if (user.state && (!act.state || act.state.toLowerCase() !== user.state.toLowerCase())) return false;
+        return true;
+      });
     }
 
     const { stage, status, type, pincode, division, district, search } = req.query;
 
-    if (stage) {
-      activities = activities.filter(a => a.currentStage && a.currentStage.toLowerCase().includes(stage.toLowerCase()));
-    }
-    if (status) {
-      activities = activities.filter(a => a.status && a.status.toLowerCase().includes(status.toLowerCase()));
-    }
-    if (type) {
-      activities = activities.filter(a => a.type && a.type.toLowerCase().includes(type.toLowerCase()));
-    }
-    if (district) {
-      activities = activities.filter(a => a.district && a.district.toLowerCase() === district.toLowerCase());
-    }
-    if (division) {
-      activities = activities.filter(a => a.division && a.division.toLowerCase() === division.toLowerCase());
-    }
-    if (pincode) {
-      activities = activities.filter(a => a.pincode && a.pincode.toString() === pincode.toString());
-    }
+    if (stage) activities = activities.filter(a => a.currentStage && a.currentStage.toLowerCase().includes(stage.toLowerCase()));
+    if (status) activities = activities.filter(a => a.status && a.status.toLowerCase().includes(status.toLowerCase()));
+    if (type) activities = activities.filter(a => a.type && a.type.toLowerCase().includes(type.toLowerCase()));
+    if (district) activities = activities.filter(a => a.district && a.district.toLowerCase() === district.toLowerCase());
+    if (division) activities = activities.filter(a => a.division && a.division.toLowerCase() === division.toLowerCase());
+    if (pincode) activities = activities.filter(a => a.pincode && a.pincode.toString() === pincode.toString());
     if (search) {
       const q = search.toLowerCase();
       activities = activities.filter(a =>
-        a.title.toLowerCase().includes(q) ||
-        (a.vendorDetails && a.vendorDetails.name.toLowerCase().includes(q)) ||
-        (a.pincodeAgent && a.pincodeAgent.name.toLowerCase().includes(q)) ||
-        a.pincode.includes(q)
+        (a.title && a.title.toLowerCase().includes(q)) ||
+        (a.vendorDetails && a.vendorDetails.name && a.vendorDetails.name.toLowerCase().includes(q)) ||
+        (a.pincodeAgent && a.pincodeAgent.name && a.pincodeAgent.name.toLowerCase().includes(q)) ||
+        (a.pincode && String(a.pincode).includes(q))
       );
     }
 
@@ -291,7 +552,9 @@ function getAgentActivities(req, res) {
   }
 }
 
-// Initiate new Activity / Vendor Onboarding by Pincode Agent
+// ─────────────────────────────────────────────────────────────────
+// POST /operations/agents/activities
+// ─────────────────────────────────────────────────────────────────
 function createAgentActivity(req, res) {
   try {
     const {
@@ -311,32 +574,29 @@ function createAgentActivity(req, res) {
       return res.status(400).json({ success: false, message: 'Vendor name is required' });
     }
 
-    // Find assigned pincode agent or default
-    const pincodeAgent = db.agents.find(a => a.level === 'pincode' && a.pincode === pincode) ||
-      db.agents.find(a => a.level === 'pincode') || {
-        id: 'AGT-UNASSIGNED',
-        name: 'Unassigned Pincode Agent',
-        phone: '-',
-        pincode: pincode
-      };
-
-    const divAgent = db.agents.find(a => a.level === 'divisional' && a.division === division) || {
-      id: 'AGT-UNASSIGNED',
-      name: 'Unassigned Divisional Agent',
-      division: division
+    // Find agents by normalized level (uses role field for db.agents records)
+    const pincodeAgent = db.agents.find(a =>
+      normalizeLevel(getAgentLevel(a)) === 'pincode' &&
+      getAgentTerritory(a).pincode === String(pincode)
+    ) || db.agents.find(a => normalizeLevel(getAgentLevel(a)) === 'pincode') || {
+      id: 'AGT-UNASSIGNED', name: 'Unassigned Pincode Agent', phone: '-', pincode
     };
 
-    const distAgent = db.agents.find(a => a.level === 'district' && a.district === district) || {
-      id: 'AGT-UNASSIGNED',
-      name: 'Unassigned District Agent',
-      district: district
-    };
+    const divAgent = db.agents.find(a =>
+      normalizeLevel(getAgentLevel(a)) === 'division' &&
+      getAgentTerritory(a).division.toLowerCase() === division.toLowerCase()
+    ) || { id: 'AGT-UNASSIGNED', name: 'Unassigned Divisional Agent', division };
 
-    const stAgent = db.agents.find(a => a.level === 'state') || {
-      id: 'AGT-UNASSIGNED',
-      name: 'Unassigned State Agent',
-      state: state
-    };
+    const distAgent = db.agents.find(a =>
+      normalizeLevel(getAgentLevel(a)) === 'district' &&
+      getAgentTerritory(a).district.toLowerCase() === district.toLowerCase()
+    ) || { id: 'AGT-UNASSIGNED', name: 'Unassigned District Agent', district };
+
+    const stAgent = db.agents.find(a =>
+      normalizeLevel(getAgentLevel(a)) === 'state' &&
+      getAgentTerritory(a).state.toLowerCase() === state.toLowerCase()
+    ) || db.agents.find(a => normalizeLevel(getAgentLevel(a)) === 'state') ||
+      { id: 'AGT-UNASSIGNED', name: 'Unassigned State Agent', state };
 
     const newId = `ACT-VND-${String((db.agentActivities?.length || 0) + 1).padStart(3, '0')}`;
     const now = new Date();
@@ -348,11 +608,7 @@ function createAgentActivity(req, res) {
       type: 'Vendor Onboarding',
       title: `Vendor Onboarding: ${vendorName}`,
       description: `Field vendor onboarding and KYC paper collection by ${pincodeAgent.name} (PIN: ${pincode}).`,
-      state,
-      district,
-      division,
-      pincode,
-      category,
+      state, district, division, pincode, category,
       vendorDetails: {
         id: `VND-NEW-${Date.now().toString().slice(-4)}`,
         name: vendorName,
@@ -362,61 +618,33 @@ function createAgentActivity(req, res) {
         category
       },
       pincodeAgent: {
-        id: pincodeAgent.id,
+        id: pincodeAgent.id || pincodeAgent._id,
         name: pincodeAgent.name,
         phone: pincodeAgent.phone,
-        pincode: pincodeAgent.pincode || pincode
+        pincode: getAgentTerritory(pincodeAgent).pincode || pincode
       },
       divisionalAgent: {
-        id: divAgent.id,
+        id: divAgent.id || divAgent._id,
         name: divAgent.name,
-        division: divAgent.division || division
+        division: getAgentTerritory(divAgent).division || division
       },
       districtAgent: {
-        id: distAgent.id,
+        id: distAgent.id || distAgent._id,
         name: distAgent.name,
-        district: distAgent.district || district
+        district: getAgentTerritory(distAgent).district || district
       },
       stateAgent: {
-        id: stAgent.id,
+        id: stAgent.id || stAgent._id,
         name: stAgent.name,
-        state: stAgent.state || state
+        state: getAgentTerritory(stAgent).state || state
       },
       currentStage: 'Divisional Agent',
       status: 'Divisional Review',
       flowStages: [
-        {
-          stage: 'Pincode Agent',
-          actor: `${pincodeAgent.name} (PIN ${pincode})`,
-          action: 'Onboarding Initiated',
-          status: 'Completed',
-          timestamp: `${formattedDate} ${formattedTime}`,
-          notes: notes || 'Merchant enrolled on ground, KYC submitted.'
-        },
-        {
-          stage: 'Divisional Agent',
-          actor: `${divAgent.name} (${division})`,
-          action: 'Under Review',
-          status: 'In Progress',
-          timestamp: `${formattedDate} ${formattedTime}`,
-          notes: 'Awaiting divisional cluster verification.'
-        },
-        {
-          stage: 'District Agent',
-          actor: `${distAgent.name} (${district})`,
-          action: 'Pending Divisional Verification',
-          status: 'Queued',
-          timestamp: null,
-          notes: 'Territorial oversight queued.'
-        },
-        {
-          stage: 'State Agent',
-          actor: `${stAgent.name} (${state})`,
-          action: 'Pending District Endorsement',
-          status: 'Queued',
-          timestamp: null,
-          notes: 'State tracking enabled.'
-        }
+        { stage: 'Pincode Agent', actor: `${pincodeAgent.name} (PIN ${pincode})`, action: 'Onboarding Initiated', status: 'Completed', timestamp: `${formattedDate} ${formattedTime}`, notes: notes || 'Merchant enrolled on ground, KYC submitted.' },
+        { stage: 'Divisional Agent', actor: `${divAgent.name} (${division})`, action: 'Under Review', status: 'In Progress', timestamp: `${formattedDate} ${formattedTime}`, notes: 'Awaiting divisional cluster verification.' },
+        { stage: 'District Agent', actor: `${distAgent.name} (${district})`, action: 'Pending Divisional Verification', status: 'Queued', timestamp: null, notes: 'Territorial oversight queued.' },
+        { stage: 'State Agent', actor: `${stAgent.name} (${state})`, action: 'Pending District Endorsement', status: 'Queued', timestamp: null, notes: 'State tracking enabled.' }
       ],
       commissionAmount: 1500,
       createdDate: formattedDate,
@@ -426,24 +654,18 @@ function createAgentActivity(req, res) {
     if (!db.agentActivities) db.agentActivities = [];
     db.agentActivities.unshift(newActivity);
 
-    // Increment agent's onboarding count
-    const foundAgent = db.agents.find(a => a.id === pincodeAgent.id);
-    if (foundAgent) {
-      foundAgent.vendorOnboardings = (foundAgent.vendorOnboardings || 0) + 1;
-    }
+    const foundAgent = db.agents.find(a => String(a.id || a._id) === String(pincodeAgent.id || pincodeAgent._id));
+    if (foundAgent) foundAgent.vendorOnboardings = (foundAgent.vendorOnboardings || 0) + 1;
 
-    return res.status(201).json({
-      success: true,
-      message: 'Vendor onboarding activity created and routed to Divisional Agent',
-      activity: newActivity
-    });
+    return res.status(201).json({ success: true, message: 'Vendor onboarding activity created and routed to Divisional Agent', activity: newActivity });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to create agent activity', error: error.message });
   }
 }
 
-// Advance Activity / Vendor Onboarding stage through hierarchy:
-// Pincode Agent -> Divisional Agent -> District Agent -> State Agent
+// ─────────────────────────────────────────────────────────────────
+// PATCH /operations/agents/activities/:id/advance
+// ─────────────────────────────────────────────────────────────────
 function advanceAgentActivity(req, res) {
   try {
     const { id } = req.params;
@@ -459,31 +681,26 @@ function advanceAgentActivity(req, res) {
     const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     if (activity.currentStage === 'Divisional Agent') {
-      // Advance to District Agent
       activity.currentStage = 'District Agent';
       activity.status = 'District Review';
       activity.flowStages[1].status = 'Completed';
       activity.flowStages[1].action = 'Division Verified';
       activity.flowStages[1].timestamp = `${formattedDate} ${formattedTime}`;
       if (notes) activity.flowStages[1].notes = notes;
-
       activity.flowStages[2].status = 'In Progress';
       activity.flowStages[2].action = 'Under Review';
       activity.flowStages[2].timestamp = `${formattedDate} ${formattedTime}`;
     } else if (activity.currentStage === 'District Agent') {
-      // Advance to State Agent
       activity.currentStage = 'State Agent';
       activity.status = 'State Review';
       activity.flowStages[2].status = 'Completed';
       activity.flowStages[2].action = 'District Endorsed';
       activity.flowStages[2].timestamp = `${formattedDate} ${formattedTime}`;
       if (notes) activity.flowStages[2].notes = notes;
-
       activity.flowStages[3].status = 'In Progress';
       activity.flowStages[3].action = 'Final Verification';
       activity.flowStages[3].timestamp = `${formattedDate} ${formattedTime}`;
     } else if (activity.currentStage === 'State Agent' && activity.status !== 'State Approved') {
-      // Final State Approval & Statewide Activation
       activity.status = 'State Approved';
       activity.completedDate = formattedDate;
       activity.flowStages[3].status = 'Completed';
@@ -491,19 +708,14 @@ function advanceAgentActivity(req, res) {
       activity.flowStages[3].timestamp = `${formattedDate} ${formattedTime}`;
       if (notes) activity.flowStages[3].notes = notes;
 
-      // Credit commission to Pincode agent
-      const pinAgent = db.agents.find(a => a.id === activity.pincodeAgent.id);
+      const pinAgent = db.agents.find(a => String(a.id || a._id) === String(activity.pincodeAgent?.id));
       if (pinAgent) {
         pinAgent.walletBalance = (pinAgent.walletBalance || 0) + (activity.commissionAmount || 1500);
         pinAgent.totalEarned = (pinAgent.totalEarned || 0) + (activity.commissionAmount || 1500);
       }
     }
 
-    return res.json({
-      success: true,
-      message: `Activity advanced to ${activity.currentStage} (${activity.status})`,
-      activity
-    });
+    return res.json({ success: true, message: `Activity advanced to ${activity.currentStage} (${activity.status})`, activity });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to advance activity', error: error.message });
   }

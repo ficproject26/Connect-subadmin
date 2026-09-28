@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { 
   Award, 
   Building2, 
@@ -14,20 +15,28 @@ import {
 } from 'lucide-react';
 
 export function AgentHierarchyBanner({ activeLevel = 'state', basePath = null }) {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const currentBase = basePath || (location.pathname.startsWith('/district-admin') ? '/district-admin' : '/state-admin');
+  const currentBase = basePath || (
+    location.pathname.startsWith('/divisional-admin') ? '/divisional-admin' :
+    location.pathname.startsWith('/district-admin') ? '/district-admin' :
+    location.pathname.startsWith('/pincode-admin') ? '/pincode-admin' :
+    '/state-admin'
+  );
 
-  const levels = [
+  const stateName = user?.state && user.state !== 'All India' ? user.state : 'Statewide';
+
+  const allLevels = [
     {
       id: 'state',
       num: '1',
       title: 'State Agent',
       tier: 'Tier 1 • Apex',
-      scope: 'Statewide (Tamil Nadu)',
+      scope: `${stateName}`,
       desc: 'Complete agent & activity oversight across state',
       icon: Award,
-      path: currentBase === '/district-admin' ? '/district-admin/agents/district' : '/state-admin/agents/state',
+      path: `${currentBase}/agents/state`,
       activeColor: 'from-purple-600 to-indigo-600 text-white shadow-purple-500/20',
       badgeColor: 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300'
     },
@@ -36,7 +45,7 @@ export function AgentHierarchyBanner({ activeLevel = 'state', basePath = null })
       num: '2',
       title: 'District Agent',
       tier: 'Tier 2 • Territory',
-      scope: 'District Level',
+      scope: user?.district ? `${user.district} District` : 'District Level',
       desc: 'Supervises divisions & territorial onboarding',
       icon: Building2,
       path: `${currentBase}/agents/district`,
@@ -48,7 +57,7 @@ export function AgentHierarchyBanner({ activeLevel = 'state', basePath = null })
       num: '3',
       title: 'Divisional Agent',
       tier: 'Tier 3 • Cluster',
-      scope: 'Division Level',
+      scope: user?.division ? `${user.division}` : 'Division Level',
       desc: 'Reviews & verifies pincode ground activities',
       icon: Layers,
       path: `${currentBase}/agents/divisional`,
@@ -60,7 +69,7 @@ export function AgentHierarchyBanner({ activeLevel = 'state', basePath = null })
       num: '4',
       title: 'Pincode Agent',
       tier: 'Tier 4 • Ground',
-      scope: 'Pincode Level',
+      scope: user?.pincode ? `PIN ${user.pincode}` : 'Pincode Level',
       desc: 'Field execution, cards & vendor onboarding',
       icon: MapPin,
       path: `${currentBase}/agents/pincode`,
@@ -68,6 +77,22 @@ export function AgentHierarchyBanner({ activeLevel = 'state', basePath = null })
       badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
     }
   ];
+
+  // Tier filtering based on authorized level:
+  // - State Admin: all 4 tiers
+  // - District Admin: District, Divisional, Pincode (3 tiers, never State)
+  // - Divisional Admin: Divisional, Pincode (2 tiers, never District or State)
+  // - Pincode Admin: Pincode only (1 tier)
+  const isDistrictBase = currentBase === '/district-admin';
+  const isDivisionalBase = currentBase === '/divisional-admin';
+  const isPincodeBase = currentBase === '/pincode-admin';
+
+  const levels = allLevels.filter(lvl => {
+    if (isPincodeBase) return lvl.id === 'pincode';
+    if (isDivisionalBase) return lvl.id === 'divisional' || lvl.id === 'pincode';
+    if (isDistrictBase) return lvl.id !== 'state';
+    return true;
+  });
 
   return (
     <div className="space-y-4">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
@@ -31,13 +32,13 @@ import {
 const LEVEL_CONFIGS = {
   state: {
     title: 'State Agents',
-    subtitle: 'Apex state-level customer onboarding partners, lead coordinators, and network directors across Tamil Nadu.',
+    subtitle: 'Apex state-level customer onboarding partners, lead coordinators, and network directors.',
     breadcrumb: 'State Agents',
     badge: 'State Agent',
     badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/60',
     icon: Award,
     tableTitle: 'State Agent Network Roster',
-    tableSubtitle: 'Master agent network, regional referrals, and commission settlements across all 38 districts',
+    tableSubtitle: 'Master agent network, regional referrals, and commission settlements across assigned territory',
     exportFile: 'state_agents.csv',
     defaultData: []
   },
@@ -80,6 +81,7 @@ const LEVEL_CONFIGS = {
 };
 
 export function StateAgents({ level = 'state' }) {
+  const { user } = useAuth();
   const { isDark } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -123,7 +125,8 @@ export function StateAgents({ level = 'state' }) {
     try {
       // 1. Fetch Agents for active level with complete hierarchical scoping
       const params = { level: activeLevel };
-      if (stateFilterParam) params.state = stateFilterParam;
+      const effectiveState = stateFilterParam || (user?.state && user.state !== 'All India' ? user.state : '');
+      if (effectiveState) params.state = effectiveState;
       if (districtFilterParam) params.district = districtFilterParam;
       if (divisionFilterParam) params.division = divisionFilterParam;
       if (pincodeFilterParam) params.pincode = pincodeFilterParam;
@@ -243,7 +246,7 @@ export function StateAgents({ level = 'state' }) {
       render: (row) => (
         <div>
           <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-            {row.jurisdiction || 'Tamil Nadu'}
+            {row.jurisdiction || row.state || user?.state || 'Assigned Territory'}
           </div>
           <div className="text-[10px] text-slate-500 dark:text-slate-400">
             {row.assignedArea || 'Assigned Zone'}
@@ -313,7 +316,7 @@ export function StateAgents({ level = 'state' }) {
             <button
               type="button"
               onClick={() => {
-                const qState = row.state || stateFilterParam || 'Tamil Nadu';
+                const qState = row.state || stateFilterParam || user?.state || '';
                 navigate(`/state-admin/agents/district?state=${encodeURIComponent(qState)}`);
               }}
               className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 cursor-pointer bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded"
@@ -328,7 +331,7 @@ export function StateAgents({ level = 'state' }) {
             <button
               type="button"
               onClick={() => {
-                const qState = row.state || stateFilterParam || 'Tamil Nadu';
+                const qState = row.state || stateFilterParam || user?.state || '';
                 const qDistrict = row.district || row.assignedArea || row.name || '';
                 navigate(`/state-admin/agents/divisional?state=${encodeURIComponent(qState)}&district=${encodeURIComponent(qDistrict)}`);
               }}
@@ -344,7 +347,7 @@ export function StateAgents({ level = 'state' }) {
             <button
               type="button"
               onClick={() => {
-                const qState = row.state || stateFilterParam || 'Tamil Nadu';
+                const qState = row.state || stateFilterParam || user?.state || '';
                 const qDistrict = row.district || districtFilterParam || '';
                 const qDivision = row.division || row.assignedArea || row.name || '';
                 navigate(`/state-admin/agents/pincode?state=${encodeURIComponent(qState)}&district=${encodeURIComponent(qDistrict)}&division=${encodeURIComponent(qDivision)}`);

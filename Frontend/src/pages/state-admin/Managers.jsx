@@ -41,7 +41,8 @@ import {
   Send,
   List as ListIcon,
   Upload,
-  X
+  X,
+  ArrowRight
 } from 'lucide-react';
 import { ALL_INDIAN_STATES, getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/indiaPostalData';
 

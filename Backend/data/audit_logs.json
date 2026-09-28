@@ -10000,5 +10000,34 @@
     "details": "Successful user authentication",
     "timestamp": "2026-09-28T04:48:24.523Z",
     "__v": 0
+  },
+  {
+    "_id": "125ce20e-47fc-4091-9f61-d7f32c561b7b",
+    "action": "VENDOR_PINCODE_ACCEPTED",
+    "createdAt": "2026-09-28T07:24:01.653Z",
+    "details": "Pincode Admin approved vendor. Forwarded for KYC audit.",
+    "id": "125ce20e-47fc-4091-9f61-d7f32c561b7b",
+    "ip": "127.0.0.1",
+    "recordId": "6ab4bbe57ee04aa0f0580792",
+    "updatedAt": "2026-09-28T07:24:01.653Z",
+    "userId": "ADM-PIN-557374",
+    "userName": "Ragul",
+    "userRole": "Pincode Admin"
+  },
+  {
+    "_id": "9a046d49-a0f0-44b4-bdbd-a18fa6ba7c2d",
+    "action": "MANAGER_CREATED",
+    "adminId": "6ab4c2ec5df0d82cb7a09cac",
+    "adminName": "Dhanu",
+    "adminRole": "State Admin",
+    "createdAt": "2026-09-28T07:35:30.367Z",
+    "details": "State Agent Manager (Level 1) \"Surya\" registered and activated by State Admin \"Dhanu\".",
+    "id": "9a046d49-a0f0-44b4-bdbd-a18fa6ba7c2d",
+    "ip": "127.0.0.1",
+    "targetUserId": "usr_mgr_1790580930154_8uge",
+    "targetUserName": "Surya",
+    "targetUserRole": "state_manager",
+    "timestamp": "2026-09-28T07:35:30.154Z",
+    "updatedAt": "2026-09-28T07:35:30.367Z"
   }
 ]
