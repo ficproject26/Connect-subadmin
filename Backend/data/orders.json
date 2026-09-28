@@ -38,7 +38,12 @@
     ],
     "created_at": "2026-08-26T05:51:04.759Z",
     "customerDisplayId": "FIC-CUST-228288",
-    "customerId": "FIC-CUST-228288"
+    "customerId": "FIC-CUST-228288",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD634957"
   },
   {
     "_id": "6a8e91c37359af863ad38e22",
@@ -79,7 +84,12 @@
     ],
     "created_at": "2026-08-26T07:12:03.434Z",
     "customerDisplayId": "FIC-CUST-228288",
-    "customerId": "FIC-CUST-228288"
+    "customerId": "FIC-CUST-228288",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD525758"
   },
   {
     "_id": "6a91117c55cacfda7cc4873f",
@@ -120,7 +130,12 @@
     ],
     "created_at": "2026-08-28T04:41:32.842Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD830919"
   },
   {
     "_id": "6a917176299c73e36f726ea8",
@@ -161,7 +176,12 @@
     ],
     "created_at": "2026-08-28T11:31:02.521Z",
     "customerDisplayId": "FIC-CUST-194693",
-    "customerId": "FIC-CUST-194693"
+    "customerId": "FIC-CUST-194693",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD470788"
   },
   {
     "_id": "6a9261c591d4d8d960d88feb",
@@ -202,7 +222,12 @@
     ],
     "created_at": "2026-08-29T04:36:21.355Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD822564"
   },
   {
     "_id": "6a92635691d4d8d960d88fed",
@@ -243,7 +268,12 @@
     ],
     "created_at": "2026-08-29T04:43:02.325Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD214952"
   },
   {
     "_id": "6a92646d91d4d8d960d88fef",
@@ -284,7 +314,12 @@
     ],
     "created_at": "2026-08-29T04:47:41.265Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD994700"
   },
   {
     "_id": "6a92656c91d4d8d960d88ff1",
@@ -325,7 +360,12 @@
     ],
     "created_at": "2026-08-29T04:51:56.514Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD588703"
   },
   {
     "_id": "6a927f7d77d9d3b218232533",
@@ -367,7 +407,12 @@
     "created_at": "2026-08-29T06:43:09.597Z",
     "discountApplied": 0,
     "stockReduced": false,
-    "updatedAt": "2026-09-16T07:21:03.347Z"
+    "updatedAt": "2026-09-16T07:21:03.347Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD488564"
   },
   {
     "_id": "6a927f7e77d9d3b218232535",
@@ -406,7 +451,12 @@
         "quantity": 2
       }
     ],
-    "created_at": "2026-08-29T06:43:10.815Z"
+    "created_at": "2026-08-29T06:43:10.815Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD545191"
   },
   {
     "_id": "6a927f8077d9d3b218232537",
@@ -445,7 +495,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-08-29T06:43:12.041Z"
+    "created_at": "2026-08-29T06:43:12.041Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD710270"
   },
   {
     "_id": "6a9283e477d9d3b218232539",
@@ -484,7 +539,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-08-29T07:01:56.745Z"
+    "created_at": "2026-08-29T07:01:56.745Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD681035"
   },
   {
     "_id": "6a92aaf677d9d3b21823253d",
@@ -525,7 +585,12 @@
     ],
     "created_at": "2026-08-29T09:48:38.372Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG288106"
   },
   {
     "_id": "6a92ab3877d9d3b21823253f",
@@ -566,7 +631,12 @@
     ],
     "created_at": "2026-08-29T09:49:44.329Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD880903"
   },
   {
     "_id": "6a92ace077d9d3b218232541",
@@ -607,7 +677,12 @@
     ],
     "created_at": "2026-08-29T09:56:48.067Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD448637"
   },
   {
     "_id": "6a92b0bb77d9d3b218232543",
@@ -648,7 +723,12 @@
     ],
     "created_at": "2026-08-29T10:13:15.328Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD121431"
   },
   {
     "_id": "6a92b0f377d9d3b218232545",
@@ -689,7 +769,12 @@
     ],
     "created_at": "2026-08-29T10:14:11.927Z",
     "customerDisplayId": "FIC-CUST-214155",
-    "customerId": "FIC-CUST-214155"
+    "customerId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG330973"
   },
   {
     "_id": "6a92b3b177d9d3b218232547",
@@ -730,7 +815,12 @@
     ],
     "created_at": "2026-08-29T10:25:53.199Z",
     "customerDisplayId": "FIC-CUST-214155",
-    "customerId": "FIC-CUST-214155"
+    "customerId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG637311"
   },
   {
     "_id": "6a92b47477d9d3b218232549",
@@ -771,7 +861,12 @@
     ],
     "created_at": "2026-08-29T10:29:08.259Z",
     "customerDisplayId": "FIC-CUST-214155",
-    "customerId": "FIC-CUST-214155"
+    "customerId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG885494"
   },
   {
     "_id": "6a92b51777d9d3b21823254b",
@@ -812,7 +907,12 @@
     ],
     "created_at": "2026-08-29T10:31:51.021Z",
     "customerDisplayId": "FIC-CUST-774974",
-    "customerId": "FIC-CUST-774974"
+    "customerId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG365566"
   },
   {
     "_id": "6a92b6f677d9d3b21823254d",
@@ -853,7 +953,12 @@
     ],
     "created_at": "2026-08-29T10:39:50.409Z",
     "customerDisplayId": "FIC-CUST-194693",
-    "customerId": "FIC-CUST-194693"
+    "customerId": "FIC-CUST-194693",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG572091"
   },
   {
     "_id": "6a92b88e77d9d3b21823254f",
@@ -894,7 +999,12 @@
     ],
     "created_at": "2026-08-29T10:46:38.094Z",
     "customerDisplayId": "FIC-CUST-982688",
-    "customerId": "FIC-CUST-982688"
+    "customerId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG452383"
   },
   {
     "_id": "6a92baa977d9d3b218232551",
@@ -935,7 +1045,12 @@
     ],
     "created_at": "2026-08-29T10:55:37.283Z",
     "customerDisplayId": "FIC-CUST-214155",
-    "customerId": "FIC-CUST-214155"
+    "customerId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD872904"
   },
   {
     "_id": "6a92bbd477d9d3b218232553",
@@ -976,7 +1091,12 @@
     ],
     "created_at": "2026-08-29T11:00:36.372Z",
     "customerDisplayId": "FIC-CUST-982688",
-    "customerId": "FIC-CUST-982688"
+    "customerId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG212166"
   },
   {
     "_id": "6a92c608ffb35c02ddb17e99",
@@ -1017,7 +1137,12 @@
     ],
     "created_at": "2026-08-29T11:44:08.129Z",
     "customerDisplayId": "FIC-CUST-443835",
-    "customerId": "FIC-CUST-443835"
+    "customerId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB761744"
   },
   {
     "_id": "6a92d4f5ffb35c02ddb17e9b",
@@ -1056,7 +1181,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-08-29T12:47:49.709Z"
+    "created_at": "2026-08-29T12:47:49.709Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD598140"
   },
   {
     "_id": "6a93d5d46e487b51b428ad8d",
@@ -1099,7 +1229,12 @@
       }
     ],
     "created_at": "2026-08-30T07:03:48.204Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD261022"
   },
   {
     "_id": "6a93da2c6e487b51b428ad8f",
@@ -1142,7 +1277,12 @@
       }
     ],
     "created_at": "2026-08-30T07:22:20.855Z",
-    "customerDisplayId": "FIC-CUST-930348"
+    "customerDisplayId": "FIC-CUST-930348",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG932431"
   },
   {
     "_id": "6a93da6b6e487b51b428ad91",
@@ -1185,7 +1325,12 @@
       }
     ],
     "created_at": "2026-08-30T07:23:23.529Z",
-    "customerDisplayId": "FIC-CUST-930348"
+    "customerDisplayId": "FIC-CUST-930348",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD998764"
   },
   {
     "_id": "6a93e7c9050c516f71235c02",
@@ -1228,7 +1373,12 @@
       }
     ],
     "created_at": "2026-08-30T08:20:25.805Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG124735"
   },
   {
     "_id": "6a93eaa8050c516f71235c04",
@@ -1271,7 +1421,12 @@
       }
     ],
     "created_at": "2026-08-30T08:32:40.831Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG537436"
   },
   {
     "_id": "6a93eae5050c516f71235c06",
@@ -1314,7 +1469,12 @@
       }
     ],
     "created_at": "2026-08-30T08:33:41.770Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD781460"
   },
   {
     "_id": "6a93eb0f050c516f71235c08",
@@ -1357,7 +1517,12 @@
       }
     ],
     "created_at": "2026-08-30T08:34:23.059Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD173527"
   },
   {
     "_id": "6a93ff95050c516f71235c0a",
@@ -1400,7 +1565,12 @@
       }
     ],
     "created_at": "2026-08-30T10:01:57.945Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB939181"
   },
   {
     "_id": "6a94fb9a6554410196666de3",
@@ -1443,7 +1613,12 @@
       }
     ],
     "created_at": "2026-08-31T03:57:14.736Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB971868"
   },
   {
     "_id": "6a9503ab6554410196666de5",
@@ -1486,7 +1661,12 @@
       }
     ],
     "created_at": "2026-08-31T04:31:39.875Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB872241"
   },
   {
     "_id": "6a95040a6554410196666de7",
@@ -1529,7 +1709,12 @@
       }
     ],
     "created_at": "2026-08-31T04:33:14.161Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB915305"
   },
   {
     "_id": "6a9505b36554410196666de9",
@@ -1572,7 +1757,12 @@
       }
     ],
     "created_at": "2026-08-31T04:40:19.934Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG102827"
   },
   {
     "_id": "6a95060b6554410196666deb",
@@ -1615,7 +1805,12 @@
       }
     ],
     "created_at": "2026-08-31T04:41:47.295Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB387564"
   },
   {
     "_id": "6a9507996554410196666ded",
@@ -1658,7 +1853,12 @@
       }
     ],
     "created_at": "2026-08-31T04:48:25.222Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG771941"
   },
   {
     "_id": "6a9508266554410196666def",
@@ -1701,7 +1901,12 @@
       }
     ],
     "created_at": "2026-08-31T04:50:46.114Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG157905"
   },
   {
     "_id": "6a9509356554410196666df1",
@@ -1744,7 +1949,12 @@
       }
     ],
     "created_at": "2026-08-31T04:55:17.694Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD671511"
   },
   {
     "_id": "6a9509b76554410196666df3",
@@ -1787,7 +1997,12 @@
       }
     ],
     "created_at": "2026-08-31T04:57:27.122Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD881299"
   },
   {
     "_id": "6a9509b86554410196666df5",
@@ -1830,7 +2045,12 @@
       }
     ],
     "created_at": "2026-08-31T04:57:28.252Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD801657"
   },
   {
     "_id": "6a950a416554410196666df7",
@@ -1873,7 +2093,12 @@
       }
     ],
     "created_at": "2026-08-31T04:59:45.397Z",
-    "customerDisplayId": "FIC-CUST-443835"
+    "customerDisplayId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD241700"
   },
   {
     "_id": "6a950aab6554410196666df9",
@@ -1916,7 +2141,12 @@
       }
     ],
     "created_at": "2026-08-31T05:01:31.363Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD154921"
   },
   {
     "_id": "6a950acc6554410196666dfb",
@@ -1959,7 +2189,12 @@
       }
     ],
     "created_at": "2026-08-31T05:02:04.727Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD479897"
   },
   {
     "_id": "6a9517086554410196666dfd",
@@ -2002,7 +2237,12 @@
       }
     ],
     "created_at": "2026-08-31T05:54:16.490Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD777156"
   },
   {
     "_id": "6a95173c6554410196666dff",
@@ -2045,7 +2285,12 @@
       }
     ],
     "created_at": "2026-08-31T05:55:08.445Z",
-    "customerDisplayId": "FIC-CUST-443835"
+    "customerDisplayId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB995591"
   },
   {
     "_id": "6a95258a6554410196666e01",
@@ -2088,7 +2333,12 @@
       }
     ],
     "created_at": "2026-08-31T06:56:10.629Z",
-    "customerDisplayId": "FIC-CUST-214155"
+    "customerDisplayId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD293690"
   },
   {
     "_id": "6a9525b66554410196666e03",
@@ -2131,7 +2381,12 @@
       }
     ],
     "created_at": "2026-08-31T06:56:54.045Z",
-    "customerDisplayId": "FIC-CUST-214155"
+    "customerDisplayId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD278716"
   },
   {
     "_id": "6a9527126554410196666e05",
@@ -2174,7 +2429,12 @@
       }
     ],
     "created_at": "2026-08-31T07:02:42.985Z",
-    "customerDisplayId": "FIC-CUST-214155"
+    "customerDisplayId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG905513"
   },
   {
     "_id": "6a9527416554410196666e07",
@@ -2217,7 +2477,12 @@
       }
     ],
     "created_at": "2026-08-31T07:03:29.847Z",
-    "customerDisplayId": "FIC-CUST-443835"
+    "customerDisplayId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG477196"
   },
   {
     "_id": "6a9528536554410196666e09",
@@ -2260,7 +2525,12 @@
       }
     ],
     "created_at": "2026-08-31T07:08:03.254Z",
-    "customerDisplayId": "FIC-CUST-214155"
+    "customerDisplayId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG599732"
   },
   {
     "_id": "6a952c676554410196666e0b",
@@ -2303,7 +2573,12 @@
       }
     ],
     "created_at": "2026-08-31T07:25:27.683Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG912227"
   },
   {
     "_id": "6a952c776554410196666e0d",
@@ -2346,7 +2621,12 @@
       }
     ],
     "created_at": "2026-08-31T07:25:43.175Z",
-    "customerDisplayId": "FIC-CUST-214155"
+    "customerDisplayId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB217059"
   },
   {
     "_id": "6a952dbb6554410196666e0f",
@@ -2389,7 +2669,12 @@
       }
     ],
     "created_at": "2026-08-31T07:31:07.275Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB615414"
   },
   {
     "_id": "6a9552f26554410196666e11",
@@ -2432,7 +2717,12 @@
       }
     ],
     "created_at": "2026-08-31T10:09:54.852Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD674609"
   },
   {
     "_id": "6a9651c66554410196666e13",
@@ -2475,7 +2765,12 @@
       }
     ],
     "created_at": "2026-09-01T04:17:10.794Z",
-    "customerDisplayId": "FIC-CUST-462259"
+    "customerDisplayId": "FIC-CUST-462259",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG977010"
   },
   {
     "_id": "6a96582500e3bd140f47e8c8",
@@ -2518,7 +2813,12 @@
       }
     ],
     "created_at": "2026-09-01T04:44:21.145Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD789292"
   },
   {
     "_id": "6a965b6500e3bd140f47e8ca",
@@ -2561,7 +2861,12 @@
       }
     ],
     "created_at": "2026-09-01T04:58:13.105Z",
-    "customerDisplayId": "FIC-CUST-443835"
+    "customerDisplayId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD124376"
   },
   {
     "_id": "6a965f6b00e3bd140f47e8cc",
@@ -2604,7 +2909,12 @@
       }
     ],
     "created_at": "2026-09-01T05:15:23.808Z",
-    "customerDisplayId": "FIC-CUST-214155"
+    "customerDisplayId": "FIC-CUST-214155",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD700214"
   },
   {
     "_id": "6a96610d00e3bd140f47e8ce",
@@ -2647,7 +2957,12 @@
       }
     ],
     "created_at": "2026-09-01T05:22:21.895Z",
-    "customerDisplayId": "FIC-CUST-212785"
+    "customerDisplayId": "FIC-CUST-212785",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG613933"
   },
   {
     "_id": "6a966aa08b1f31d6dc6e1097",
@@ -2690,7 +3005,12 @@
       }
     ],
     "created_at": "2026-09-01T06:03:12.410Z",
-    "customerDisplayId": "FIC-CUST-228288"
+    "customerDisplayId": "FIC-CUST-228288",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD871995"
   },
   {
     "_id": "6a9683552f96e708bfa19975",
@@ -2733,7 +3053,12 @@
       }
     ],
     "created_at": "2026-09-01T07:48:37.668Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG575276"
   },
   {
     "_id": "6a9683562f96e708bfa19977",
@@ -2776,7 +3101,12 @@
       }
     ],
     "created_at": "2026-09-01T07:48:38.731Z",
-    "customerDisplayId": "FIC-CUST-982688"
+    "customerDisplayId": "FIC-CUST-982688",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD693324"
   },
   {
     "_id": "6a9685462f96e708bfa19979",
@@ -2819,7 +3149,12 @@
       }
     ],
     "created_at": "2026-09-01T07:56:54.095Z",
-    "customerDisplayId": "FIC-CUST-930348"
+    "customerDisplayId": "FIC-CUST-930348",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB730114"
   },
   {
     "_id": "6a969bf82f96e708bfa1997b",
@@ -2862,7 +3197,12 @@
       }
     ],
     "created_at": "2026-09-01T09:33:44.818Z",
-    "customerDisplayId": "FIC-CUST-774974"
+    "customerDisplayId": "FIC-CUST-774974",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB270983"
   },
   {
     "_id": "6a97b34d2f96e708bfa1997d",
@@ -2905,7 +3245,12 @@
       }
     ],
     "created_at": "2026-09-02T05:25:33.029Z",
-    "customerDisplayId": "FIC-CUST-443835"
+    "customerDisplayId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD959943"
   },
   {
     "_id": "6a97b7de2f96e708bfa1997f",
@@ -2948,7 +3293,12 @@
       }
     ],
     "created_at": "2026-09-02T05:45:02.008Z",
-    "customerDisplayId": "FIC-CUST-443835"
+    "customerDisplayId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG936330"
   },
   {
     "_id": "6a97ba582f96e708bfa19981",
@@ -2991,7 +3341,12 @@
       }
     ],
     "created_at": "2026-09-02T05:55:36.591Z",
-    "customerDisplayId": "FIC-CUST-416483"
+    "customerDisplayId": "FIC-CUST-416483",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD636605"
   },
   {
     "_id": "6a97bafd2f96e708bfa19983",
@@ -3034,7 +3389,12 @@
       }
     ],
     "created_at": "2026-09-02T05:58:21.523Z",
-    "customerDisplayId": "FIC-CUST-228288"
+    "customerDisplayId": "FIC-CUST-228288",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD639746"
   },
   {
     "_id": "6a97bd3f2f96e708bfa19985",
@@ -3077,7 +3437,12 @@
       }
     ],
     "created_at": "2026-09-02T06:07:59.824Z",
-    "customerDisplayId": "FIC-CUST-416483"
+    "customerDisplayId": "FIC-CUST-416483",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD786622"
   },
   {
     "_id": "6a996ca387fd4905c27ebcc9",
@@ -3120,7 +3485,12 @@
       }
     ],
     "created_at": "2026-09-03T12:48:35.319Z",
-    "customerDisplayId": "FIC-CUST-443835"
+    "customerDisplayId": "FIC-CUST-443835",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD390026"
   },
   {
     "_id": "6a9aa0f187fd4905c27ebccb",
@@ -3163,7 +3533,12 @@
       }
     ],
     "created_at": "2026-09-04T10:44:01.654Z",
-    "customerDisplayId": "FIC-CUST-194693"
+    "customerDisplayId": "FIC-CUST-194693",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD993549"
   },
   {
     "_id": "6aa0ebde87fd4905c27ebccd",
@@ -3206,7 +3581,12 @@
       }
     ],
     "created_at": "2026-09-09T05:17:18.146Z",
-    "customerDisplayId": "FIC-CUST-228288"
+    "customerDisplayId": "FIC-CUST-228288",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG720791"
   },
   {
     "_id": "6aa0ebdf87fd4905c27ebccf",
@@ -3249,7 +3629,12 @@
       }
     ],
     "created_at": "2026-09-09T05:17:19.172Z",
-    "customerDisplayId": "FIC-CUST-228288"
+    "customerDisplayId": "FIC-CUST-228288",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG600572"
   },
   {
     "_id": "6aaa1b783fbd20c8d7dd8114",
@@ -3292,7 +3677,12 @@
       }
     ],
     "created_at": "2026-09-16T04:30:48.829Z",
-    "customerDisplayId": "FIC-CUST-228288"
+    "customerDisplayId": "FIC-CUST-228288",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD616976"
   },
   {
     "_id": "6aaa20923fbd20c8d7dd8116",
@@ -3339,7 +3729,12 @@
     "deliveryPartnerId": null,
     "discountApplied": 0,
     "stockReduced": false,
-    "updatedAt": "2026-09-19T07:08:32.841Z"
+    "updatedAt": "2026-09-19T07:08:32.841Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD690629"
   },
   {
     "_id": "6aaa293d3fbd20c8d7dd8118",
@@ -3382,7 +3777,12 @@
       }
     ],
     "created_at": "2026-09-16T05:29:33.426Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG483092"
   },
   {
     "_id": "6aaa2d303fbd20c8d7dd811a",
@@ -3425,7 +3825,12 @@
       }
     ],
     "created_at": "2026-09-16T05:46:24.339Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG344263"
   },
   {
     "_id": "6aaa2dff3fbd20c8d7dd811c",
@@ -3468,7 +3873,12 @@
       }
     ],
     "created_at": "2026-09-16T05:49:51.930Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD291660"
   },
   {
     "_id": "6aaa365e3fbd20c8d7dd811e",
@@ -3511,7 +3921,12 @@
       }
     ],
     "created_at": "2026-09-16T06:25:34.495Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD909486"
   },
   {
     "_id": "6aaa3a3c3fbd20c8d7dd8120",
@@ -3554,7 +3969,12 @@
       }
     ],
     "created_at": "2026-09-16T06:42:04.934Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD899355"
   },
   {
     "_id": "6aaa3afc09789fdf58f031ae",
@@ -3597,7 +4017,12 @@
       }
     ],
     "created_at": "2026-09-16T06:45:16.604Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD950273"
   },
   {
     "_id": "6aaa40d009789fdf58f031b0",
@@ -3640,7 +4065,12 @@
       }
     ],
     "created_at": "2026-09-16T07:10:08.594Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD613826"
   },
   {
     "_id": "6aaa424a09789fdf58f031b2",
@@ -3683,7 +4113,12 @@
       }
     ],
     "created_at": "2026-09-16T07:16:26.096Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD146181"
   },
   {
     "_id": "6aaa43b409789fdf58f031b4",
@@ -3726,7 +4161,12 @@
       }
     ],
     "created_at": "2026-09-16T07:22:28.846Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB550718"
   },
   {
     "_id": "6aaa450409789fdf58f031b6",
@@ -3769,7 +4209,12 @@
       }
     ],
     "created_at": "2026-09-16T07:28:04.455Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB719764"
   },
   {
     "_id": "6aaa465c09789fdf58f031b8",
@@ -3812,7 +4257,12 @@
       }
     ],
     "created_at": "2026-09-16T07:33:48.880Z",
-    "customerDisplayId": "FIC-CUST-154981"
+    "customerDisplayId": "FIC-CUST-154981",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB129208"
   },
   {
     "_id": "6aaa48dd09789fdf58f031bb",
@@ -3855,7 +4305,12 @@
       }
     ],
     "created_at": "2026-09-16T07:44:29.330Z",
-    "customerDisplayId": "FIC-CUST-743764"
+    "customerDisplayId": "FIC-CUST-743764",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD268286"
   },
   {
     "_id": "6aaa4cae09789fdf58f031bd",
@@ -3897,7 +4352,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-16T08:00:46.564Z"
+    "created_at": "2026-09-16T08:00:46.564Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG990146"
   },
   {
     "_id": "6aaa4cc209789fdf58f031bf",
@@ -3939,7 +4399,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-16T08:01:06.519Z"
+    "created_at": "2026-09-16T08:01:06.519Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB876215"
   },
   {
     "_id": "6aaa657b09789fdf58f031c2",
@@ -3981,7 +4446,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-16T09:46:35.442Z"
+    "created_at": "2026-09-16T09:46:35.442Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD943859"
   },
   {
     "_id": "6aaa6a6309789fdf58f031c8",
@@ -4023,7 +4493,12 @@
         "quantity": 4
       }
     ],
-    "created_at": "2026-09-16T10:07:31.280Z"
+    "created_at": "2026-09-16T10:07:31.280Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG635469"
   },
   {
     "_id": "6aaa718709789fdf58f031cd",
@@ -4065,7 +4540,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-16T10:37:59.397Z"
+    "created_at": "2026-09-16T10:37:59.397Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB601155"
   },
   {
     "_id": "6aaa8b3a09789fdf58f031d0",
@@ -4107,7 +4587,12 @@
         "quantity": 2
       }
     ],
-    "created_at": "2026-09-16T12:27:38.316Z"
+    "created_at": "2026-09-16T12:27:38.316Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD920696"
   },
   {
     "_id": "6aaa92dd09789fdf58f031d6",
@@ -4149,7 +4634,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-16T13:00:13.653Z"
+    "created_at": "2026-09-16T13:00:13.653Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD495473"
   },
   {
     "_id": "6aab8f4d09789fdf58f031da",
@@ -4191,7 +4681,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-17T06:57:17.589Z"
+    "created_at": "2026-09-17T06:57:17.589Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD759191"
   },
   {
     "_id": "6aab99c409789fdf58f031e0",
@@ -4233,7 +4728,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-17T07:41:56.068Z"
+    "created_at": "2026-09-17T07:41:56.068Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD898748"
   },
   {
     "_id": "6aab9a9a09789fdf58f031e2",
@@ -4275,7 +4775,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-17T07:45:30.601Z"
+    "created_at": "2026-09-17T07:45:30.601Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG930672"
   },
   {
     "_id": "6aabcdef4456a0258b68cc77",
@@ -4317,7 +4822,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-17T11:24:31.193Z"
+    "created_at": "2026-09-17T11:24:31.193Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD997199"
   },
   {
     "_id": "6aabd1b44456a0258b68cc7a",
@@ -4359,7 +4869,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-17T11:40:36.542Z"
+    "created_at": "2026-09-17T11:40:36.542Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD161842"
   },
   {
     "_id": "6aabdce64456a0258b68cc7d",
@@ -4401,7 +4916,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-17T12:28:22.639Z"
+    "created_at": "2026-09-17T12:28:22.639Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG748027"
   },
   {
     "_id": "6aad17574456a0258b68cc84",
@@ -4443,7 +4963,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-18T10:49:59.836Z"
+    "created_at": "2026-09-18T10:49:59.836Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD852080"
   },
   {
     "_id": "6aad17584456a0258b68cc86",
@@ -4485,7 +5010,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-18T10:50:00.985Z"
+    "created_at": "2026-09-18T10:50:00.985Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD318221"
   },
   {
     "_id": "6aad20a04456a0258b68cc88",
@@ -4527,7 +5057,12 @@
         "quantity": 2
       }
     ],
-    "created_at": "2026-09-18T11:29:36.992Z"
+    "created_at": "2026-09-18T11:29:36.992Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG823133"
   },
   {
     "_id": "6aae33f74456a0258b68cc8e",
@@ -4569,7 +5104,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-19T07:04:23.100Z"
+    "created_at": "2026-09-19T07:04:23.100Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB928973"
   },
   {
     "_id": "6ab60856865b162b2fc0bb23",
@@ -4611,7 +5151,12 @@
         "quantity": 2
       }
     ],
-    "created_at": "2026-09-25T05:36:22.883Z"
+    "created_at": "2026-09-25T05:36:22.883Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD655031"
   },
   {
     "_id": "6ab60876865b162b2fc0bb25",
@@ -4653,7 +5198,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-25T05:36:54.556Z"
+    "created_at": "2026-09-25T05:36:54.556Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD214275"
   },
   {
     "_id": "6ab60a12865b162b2fc0bb27",
@@ -4695,7 +5245,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-25T05:43:46.758Z"
+    "created_at": "2026-09-25T05:43:46.758Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG209471"
   },
   {
     "_id": "6ab60b11865b162b2fc0bb29",
@@ -4737,7 +5292,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-25T05:48:01.896Z"
+    "created_at": "2026-09-25T05:48:01.896Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG574069"
   },
   {
     "_id": "6ab60bf1865b162b2fc0bb2b",
@@ -4779,7 +5339,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-25T05:51:45.086Z"
+    "created_at": "2026-09-25T05:51:45.086Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_JOB259705"
   },
   {
     "_id": "6ab651a5865b162b2fc0bb2e",
@@ -4821,7 +5386,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-25T10:49:09.972Z"
+    "created_at": "2026-09-25T10:49:09.972Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_BKG117779"
   },
   {
     "_id": "6aba7322865b162b2fc0bb3e",
@@ -4863,7 +5433,12 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-28T14:01:06.427Z"
+    "created_at": "2026-09-28T14:01:06.427Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD875648"
   },
   {
     "_id": "6aba73b3865b162b2fc0bb40",
@@ -4905,6 +5480,58 @@
         "quantity": 1
       }
     ],
-    "created_at": "2026-09-28T14:03:31.768Z"
+    "created_at": "2026-09-28T14:03:31.768Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD310096"
+  },
+  {
+    "_id": "6aba7db5865b162b2fc0bb42",
+    "id": "ORD2066",
+    "order_number": "ORD495454",
+    "vendor_id": "6aba72716ce39fd78e8167cc",
+    "vendorId": "6aba72716ce39fd78e8167cc",
+    "customer_id": "cust_1790338650224",
+    "customerId": "cust_1790338650224",
+    "memberId": "cust_1790338650224",
+    "customer_name": "Hari",
+    "memberName": "Hari",
+    "customer_email": "graviity@gmail.com",
+    "customer_phone": "7643179664",
+    "customer_address": "2nd floor,Excel coworks, 2nd Floor, Marilingappa layout, Papareddipalya, Nagarbhavi, Bengaluru, Karnataka 560072, Bangalore, Bangalore, Karnataka - 635002",
+    "customer_latitude": 12.9498,
+    "customer_longitude": 77.6289,
+    "product_details": "Dell",
+    "amount": 70000,
+    "totalAmount": 70000,
+    "finalAmount": 70000,
+    "status": "Order Received",
+    "type": "Products",
+    "appointmentDate": null,
+    "appointmentTimeSlot": null,
+    "doctorName": null,
+    "tableNumber": null,
+    "roomNumber": null,
+    "prescriptionUrl": null,
+    "candidateEmail": "graviity@gmail.com",
+    "candidateResume": null,
+    "experience": null,
+    "candidateEducation": null,
+    "items": [
+      {
+        "productId": "6aba72ed6ce39fd78e816d97",
+        "name": "Dell",
+        "price": 70000,
+        "quantity": 1
+      }
+    ],
+    "created_at": "2026-09-28T14:46:13.189Z",
+    "paymentMethod": "Connect Wallet",
+    "paymentStatus": "Paid",
+    "payment_method": "Connect Wallet",
+    "payment_status": "Paid",
+    "transactionId": "TXN_ORD495454"
   }
 ]

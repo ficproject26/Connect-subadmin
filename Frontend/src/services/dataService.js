@@ -309,18 +309,37 @@ export const dataService = {
   getQCTaskManagers: () => apiRequest('/qc-tasks/managers'),
 
   // Vendor Subscriptions (territory-scoped)
-  getVendorSubscriptions: (params = {}) => {
+  getVendorSubscriptions: async (params = {}) => {
     const clean = {};
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
     });
     const qs = new URLSearchParams(clean).toString();
-    return apiRequest(`/vendors/subscriptions${qs ? `?${qs}` : ''}`);
+    try {
+      return await apiRequest(`/vendors/subscriptions${qs ? `?${qs}` : ''}`);
+    } catch (err) {
+      if (err.message && err.message.includes('not found')) {
+        return await apiRequest(`/subscriptions${qs ? `?${qs}` : ''}`);
+      }
+      throw err;
+    }
   },
-  recordVendorSubscriptionPayment: (id, data) => apiRequest(`/vendors/subscriptions/${id}/record-payment`, {
-    method: 'POST',
-    body: JSON.stringify(data)
-  }),
+  recordVendorSubscriptionPayment: async (id, data) => {
+    try {
+      return await apiRequest(`/vendors/subscriptions/${id}/record-payment`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    } catch (err) {
+      if (err.message && err.message.includes('not found')) {
+        return await apiRequest(`/subscriptions/${id}/record-payment`, {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+      }
+      throw err;
+    }
+  },
 
   // Real-Time Event Subscription Helpers
   subscribeRealtime: (entity, callback) => realtimeClient.subscribe(entity, callback)

@@ -65,6 +65,12 @@ app.use('/api/quality', qualityRoutes);
 app.use('/api/pincodes', pincodeRoutes);
 app.use('/api/operations', executiveRoutes);
 
+// Dedicated Territory-Scoped Vendor Subscription Routes
+const vendorSubscriptionController = require('./controllers/vendorSubscriptionController');
+const authMiddleware = require('./middleware/authMiddleware');
+app.get('/api/subscriptions', authMiddleware, vendorSubscriptionController.getVendorSubscriptions);
+app.post('/api/subscriptions/:id/record-payment', authMiddleware, vendorSubscriptionController.recordSubscriptionPayment);
+
 // Unified Health Check (Public)
 app.get('/api/health', (req, res) => {
   res.json({

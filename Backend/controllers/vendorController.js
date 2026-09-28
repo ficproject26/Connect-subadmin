@@ -186,6 +186,12 @@ const getVendors = async (req, res) => {
 const getVendorById = async (req, res) => {
   try {
     const { id } = req.params;
+    // Defensive check: if request to /vendors/subscriptions was captured by /:id param
+    if (id === 'subscriptions') {
+      const vendorSubscriptionController = require('./vendorSubscriptionController');
+      return vendorSubscriptionController.getVendorSubscriptions(req, res);
+    }
+
     const vendor = await db.vendors.findById(id);
     if (!vendor) {
       return res.status(404).json({ success: false, message: 'Vendor not found' });
