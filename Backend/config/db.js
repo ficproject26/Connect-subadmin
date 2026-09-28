@@ -855,8 +855,8 @@ function filterByLocation(items, user) {
   if (!user) return [];
 
   const rawRole = user.role || '';
-  const role = rawRole.toLowerCase().replace(/_/g, ' ');
-  const isSuper = role.includes('super admin') || role === 'admin' || user.state === 'All India';
+  const role = rawRole.toLowerCase().replace(/[_-]/g, ' ');
+  const isSuper = role.includes('super admin') || role === 'admin' || role === 'superadmin' || rawRole === 'super-admin' || user.state === 'All India';
   if (isSuper) return items;
 
   const { state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = user;
