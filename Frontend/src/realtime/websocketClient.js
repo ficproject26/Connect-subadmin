@@ -29,6 +29,57 @@ class RealtimeWebSocketClient {
     this.recentEventIds = new Set();
     this.entityVersions = new Map(); // entityId -> version
     this.isExplicitlyClosed = false;
+    this.supportChecked = false;
+    this.isSupported = null;
+    this.hasEverConnected = false;
+    this.isTemporarilyDisabled = false;
+  }
+
+  /**
+   * Determine whether the server supports real-time WebSockets.
+   * Performs a lightweight check against /api/health to avoid opening
+   * dead WebSockets that flood the console when reverse proxy does not support it.
+   */
+  async checkSupport() {
+    if (this.supportChecked && this.isSupported !== null) {
+      return this.isSupported;
+    }
+
+    if (import.meta.env.VITE_ENABLE_WS === 'false') {
+      this.isSupported = false;
+      this.supportChecked = true;
+      return false;
+    }
+
+    if (import.meta.env.VITE_WS_URL) {
+      this.isSupported = true;
+      this.supportChecked = true;
+      return true;
+    }
+
+    try {
+      const base = (API_BASE_URL || '').replace(/\/+$/, '');
+      const healthUrl = `${base}/api/health`;
+      const res = await fetch(healthUrl, { method: 'GET', headers: { Accept: 'application/json' } });
+      if (!res.ok) {
+        this.isSupported = false;
+        this.supportChecked = true;
+        return false;
+      }
+      const data = await res.json();
+      // Server indicates active realtime / websocket capability
+      if (data && (data.realtime || data.websocket)) {
+        this.isSupported = true;
+      } else {
+        // Server does not have realtime WebSocket active yet
+        this.isSupported = false;
+      }
+    } catch (e) {
+      this.isSupported = false;
+    }
+
+    this.supportChecked = true;
+    return this.isSupported;
   }
 
   /**
@@ -38,7 +89,9 @@ class RealtimeWebSocketClient {
     const token = localStorage.getItem('ams_token') || '';
     let wsBase;
 
-    if (API_BASE_URL) {
+    if (import.meta.env.VITE_WS_URL) {
+      wsBase = import.meta.env.VITE_WS_URL;
+    } else if (API_BASE_URL) {
       // Convert http(s) URL to ws(s)
       wsBase = API_BASE_URL.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
     } else {
@@ -60,7 +113,7 @@ class RealtimeWebSocketClient {
   /**
    * Connect to WebSocket server
    */
-  connect() {
+  async connect() {
     const token = localStorage.getItem('ams_token');
     if (!token) {
       this.setStatus(ConnectionStatus.DISCONNECTED);
@@ -68,6 +121,29 @@ class RealtimeWebSocketClient {
     }
 
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (this.isExplicitlyClosed || this.isTemporarilyDisabled) {
+      return;
+    }
+
+    // Check if the backend environment supports WebSocket before creating socket
+    const supported = await this.checkSupport();
+    if (!supported) {
+      this.setStatus(ConnectionStatus.DISCONNECTED);
+      return;
+    }
+
+    // If initial handshake has failed multiple times, pause to avoid repeated console errors
+    if (!this.hasEverConnected && this.reconnectAttempt >= 2) {
+      this.isTemporarilyDisabled = true;
+      this.setStatus(ConnectionStatus.DISCONNECTED);
+      setTimeout(() => {
+        this.isTemporarilyDisabled = false;
+        this.reconnectAttempt = 0;
+        this.supportChecked = false;
+      }, 120000);
       return;
     }
 
@@ -80,7 +156,9 @@ class RealtimeWebSocketClient {
       this.ws = new WebSocket(url);
 
       this.ws.onopen = () => {
+        this.hasEverConnected = true;
         this.reconnectAttempt = 0;
+        this.isTemporarilyDisabled = false;
         this.setStatus(ConnectionStatus.CONNECTED);
         this.startHeartbeat();
 
@@ -102,17 +180,16 @@ class RealtimeWebSocketClient {
         this.stopHeartbeat();
         this.setStatus(ConnectionStatus.DISCONNECTED);
 
-        if (!this.isExplicitlyClosed) {
+        if (!this.isExplicitlyClosed && !this.isTemporarilyDisabled) {
           this.scheduleReconnect();
         }
       };
 
       this.ws.onerror = (err) => {
-        // Handled silently; onclose will schedule reconnect
+        // Handled silently; onclose will schedule reconnect or disable
         this.setStatus(ConnectionStatus.DISCONNECTED);
       };
     } catch (err) {
-      console.warn('[RealTimeWS] Connection attempt failed:', err.message);
       this.scheduleReconnect();
     }
   }
@@ -137,9 +214,22 @@ class RealtimeWebSocketClient {
   }
 
   scheduleReconnect() {
-    if (this.reconnectTimer || this.isExplicitlyClosed) return;
+    if (this.reconnectTimer || this.isExplicitlyClosed || this.isTemporarilyDisabled) return;
 
     this.reconnectAttempt++;
+
+    // Guard: If we have never connected and failed 2 times, stop hammering the server
+    if (!this.hasEverConnected && this.reconnectAttempt >= 2) {
+      this.isTemporarilyDisabled = true;
+      this.setStatus(ConnectionStatus.DISCONNECTED);
+      setTimeout(() => {
+        this.isTemporarilyDisabled = false;
+        this.reconnectAttempt = 0;
+        this.supportChecked = false;
+      }, 120000);
+      return;
+    }
+
     // Exponential backoff with jitter
     const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempt) + Math.random() * 500, this.maxReconnectDelay);
 

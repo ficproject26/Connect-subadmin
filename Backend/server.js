@@ -108,6 +108,17 @@ app.get('/api/realtime/sync', (req, res) => {
   });
 });
 
+// WebSocket Information & Probe Endpoint
+app.get(['/ws', '/api/ws', '/api/realtime/info'], (req, res) => {
+  res.json({
+    success: true,
+    websocket: true,
+    message: 'Unified Real-Time WebSocket endpoint is active. Upgrade connection using Connection: Upgrade, Upgrade: websocket.',
+    path: '/ws',
+    serverTime: new Date().toISOString()
+  });
+});
+
 // Global 404
 app.use((req, res) => {
   res.status(404).json({ success: false, message: `Endpoint ${req.originalUrl} not found.` });

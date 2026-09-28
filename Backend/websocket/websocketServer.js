@@ -111,8 +111,8 @@ function initWebSocketServer(httpServer) {
     const parsedUrl = new URL(request.url, 'http://localhost');
     const pathname = parsedUrl.pathname;
 
-    // Support both /ws and /api/ws for proxy compatibility
-    if (pathname === '/ws' || pathname === '/api/ws' || pathname.endsWith('/ws')) {
+    // Support both /ws, /api/ws, and subpath proxies e.g. /subadmin-api/ws
+    if (pathname === '/ws' || pathname === '/api/ws' || pathname.endsWith('/ws') || pathname.endsWith('/ws/')) {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });

@@ -2269,27 +2269,18 @@ export function StateManagers({ level }) {
           searchPlaceholder={`Search ${config.title.toLowerCase()} by name, jurisdiction, or phone...`}
           exportFileName={config.exportFile}
           actions={
-            <div className="flex items-center gap-2">
+            canAddManager ? (
               <button
                 type="button"
-                onClick={() => setViewTab('hierarchy')}
-                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+                onClick={() => openAddManager()}
+                id="add-manager-table-btn"
+                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+                title={`Add ${designatedRoleLabel}`}
               >
-                <span>← Back to Hierarchy</span>
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">Add Manager</span>
               </button>
-              {canAddManager && (
-                <button
-                  type="button"
-                  onClick={() => openAddManager()}
-                  id="add-manager-table-btn"
-                  className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
-                  title={`Add ${designatedRoleLabel}`}
-                >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span className="whitespace-nowrap">Add Manager</span>
-                </button>
-              )}
-            </div>
+            ) : null
           }
         />
       )}
@@ -2307,25 +2298,16 @@ export function StateManagers({ level }) {
           searchPlaceholder="Search pending manager registrations by name or territory..."
           exportFileName="pending_manager_requests.csv"
           actions={
-            <div className="flex items-center gap-2">
+            canAddManager ? (
               <button
                 type="button"
-                onClick={() => setViewTab('hierarchy')}
-                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
+                onClick={() => openAddManager()}
+                className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
               >
-                <span>← Back to Hierarchy</span>
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span className="whitespace-nowrap">New Manager Request</span>
               </button>
-              {canAddManager && (
-                <button
-                  type="button"
-                  onClick={() => openAddManager()}
-                  className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span className="whitespace-nowrap">New Manager Request</span>
-                </button>
-              )}
-            </div>
+            ) : null
           }
         />
       )}
