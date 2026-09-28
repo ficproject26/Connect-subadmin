@@ -206,8 +206,12 @@ export const dataService = {
     body: JSON.stringify({ status })
   }),
 
-  // Operations: Executives, Support Team, Agents
+  // Operations: Executives, Support Team, Agents, Delivery Partners
   getExecutives: () => apiRequest('/operations/executives'),
+  getDeliveryPartners: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/operations/delivery-partners${qs ? `?${qs}` : ''}`);
+  },
   getSupportTeam: () => apiRequest('/operations/support-team'),
   updateSupportTicket: (id, data) => apiRequest(`/operations/support-team/${id}`, {
     method: 'PATCH',

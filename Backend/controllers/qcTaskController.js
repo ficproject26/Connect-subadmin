@@ -170,25 +170,8 @@ const getQCIssues = async (req, res) => {
     if (isQCTeam(user) && !isAdmin(user)) {
       allIssues = allIssues.filter(i => i.raisedById === (user._id || user.id));
     } else {
-      // Admin: filter by hierarchy scope
-      const rawRole = (user.role || '').toLowerCase();
-      if (!rawRole.includes('super') && rawRole !== 'admin') {
-        allIssues = allIssues.filter(issue => {
-          if (rawRole.includes('state')) {
-            return !user.state || issue.state === user.state;
-          }
-          if (rawRole.includes('district')) {
-            return (!user.district || issue.district === user.district) && (!user.state || issue.state === user.state);
-          }
-          if (rawRole.includes('division') || rawRole.includes('divisional')) {
-            return (!user.division || issue.division === user.division) && (!user.district || issue.district === user.district);
-          }
-          if (rawRole.includes('pincode')) {
-            return String(issue.pincode || '') === String(user.pincode || user.pincodeCode || '');
-          }
-          return false;
-        });
-      }
+      // Admin: filter by hierarchy scope via unified filterByLocation
+      allIssues = filterByLocation(allIssues, user);
     }
 
     if (status && status !== 'All') allIssues = allIssues.filter(i => i.status === status);
@@ -352,25 +335,8 @@ const getTasks = async (req, res) => {
         return (mId1 && aid === mId1) || (mId2 && aid === mId2) || (mName && aname === mName);
       });
     } else if (isAdmin(user)) {
-      // Admin sees tasks in their hierarchy scope
-      const rawRole = (user.role || '').toLowerCase();
-      if (!rawRole.includes('super') && rawRole !== 'admin') {
-        allTasks = allTasks.filter(task => {
-          if (rawRole.includes('state') && !rawRole.includes('district') && !rawRole.includes('division') && !rawRole.includes('pincode')) {
-            return !user.state || task.state === user.state;
-          }
-          if (rawRole.includes('district')) {
-            return (!user.district || task.district === user.district);
-          }
-          if (rawRole.includes('division') || rawRole.includes('divisional')) {
-            return (!user.division || task.division === user.division);
-          }
-          if (rawRole.includes('pincode')) {
-            return String(task.pincode || '') === String(user.pincode || user.pincodeCode || '');
-          }
-          return false;
-        });
-      }
+      // Admin sees tasks in their hierarchy scope via unified filterByLocation
+      allTasks = filterByLocation(allTasks, user);
     } else if (isQCTeam(user)) {
       // QC Team sees tasks linked to their issues
       allTasks = allTasks.filter(t => {

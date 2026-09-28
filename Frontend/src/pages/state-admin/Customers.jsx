@@ -96,16 +96,29 @@ export function StateCustomers() {
     {
       header: 'Geographic Scope',
       accessor: 'pincode',
-      render: (row) => (
-        <div className="space-y-0.5">
-          <div className={`font-semibold text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-            {row.district} / {row.division}
+      render: (row) => {
+        const areaParts = [row.district, row.division].filter(Boolean);
+        const streetCity = [row.street, row.city && row.city !== row.district ? row.city : ''].filter(Boolean).join(', ');
+        return (
+          <div className="space-y-0.5">
+            {areaParts.length > 0 && (
+              <div className={`font-semibold text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                {areaParts.join(' • ')}
+              </div>
+            )}
+            {streetCity && (
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title={row.fullAddress || streetCity}>
+                {streetCity}
+              </div>
+            )}
+            {row.pincode && (
+              <div className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> PIN: {row.pincode}
+              </div>
+            )}
           </div>
-          <div className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-            <MapPin className="w-3 h-3" /> PIN: {row.pincode}
-          </div>
-        </div>
-      )
+        );
+      }
     },
     {
       header: 'Orders & Spend',

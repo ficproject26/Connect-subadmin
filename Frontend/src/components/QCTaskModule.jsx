@@ -986,7 +986,7 @@ export function QCTaskModule() {
   const { isDark } = useTheme();
   const roleGroup = userRoleGroup(user);
 
-  const pincode = user?.pincode || '636114';
+  const pincode = user?.pincode || '';
   const district = user?.district || '';
   const division = user?.division || '';
   const state = user?.state || '';
@@ -1189,18 +1189,30 @@ export function QCTaskModule() {
     setViewIssue(null);
   };
 
-  // Dynamic Page Header Info (Matching Payments.jsx style)
-  const isPincodeAdmin = (user?.role || '').toLowerCase().includes('pincode');
-  const isDistrictAdmin = (user?.role || '').toLowerCase().includes('district');
-  const isDivisionAdmin = (user?.role || '').toLowerCase().includes('divisional') || (user?.role || '').toLowerCase().includes('division');
-  const isStateAdmin = (user?.role || '').toLowerCase().includes('state');
+  // Dynamic Page Header Info
+  const userRole = (user?.role || '').toLowerCase();
+  const isSuperAdmin = userRole.includes('super') || userRole === 'admin';
+  const isStateAdmin = userRole.includes('state') && !userRole.includes('district') && !userRole.includes('division') && !userRole.includes('pincode');
+  const isDistrictAdmin = userRole.includes('district');
+  const isDivisionAdmin = userRole.includes('divisional') || userRole.includes('division');
+  const isPincodeAdmin = userRole.includes('pincode');
 
-  let pageTitle = 'Pincode Task & QC Management';
-  let pageSubtitle = `Review QC issues, create tasks, assign managers, and monitor progress restricted to PIN ${pincode}.`;
-  let cardTitle = 'Station Tasks & QC Journal';
-  let cardSubtitle = `Audit QC issues and field task assignments mapped exclusively to Pincode ${pincode}`;
+  let pageTitle = 'Operations Task & QC Management';
+  let pageSubtitle = 'Review QC issues, create tasks, assign managers, and monitor progress across operations.';
+  let cardTitle = 'Operations Journal & QC Tasks';
+  let cardSubtitle = 'Audit QC issues and field task assignments across assigned territory';
 
-  if (isDistrictAdmin) {
+  if (isSuperAdmin) {
+    pageTitle = 'Operations Task & QC Management';
+    pageSubtitle = 'Global overview of QC issues, task assignments, and field resolutions across all territories.';
+    cardTitle = 'Global Operations Journal';
+    cardSubtitle = 'System-wide audit journal of QC issues and field task deliverables';
+  } else if (isStateAdmin) {
+    pageTitle = 'State Task & QC Management';
+    pageSubtitle = `Review QC issues, create tasks, assign managers and monitor progress across ${state || 'State'}.`;
+    cardTitle = 'State Operations Journal';
+    cardSubtitle = 'Audit QC issues and field assignments across state operations';
+  } else if (isDistrictAdmin) {
     pageTitle = 'District Task & QC Management';
     pageSubtitle = `Review QC issues, create tasks, assign managers and monitor progress for ${district || 'District'}.`;
     cardTitle = 'District Operations Journal';
@@ -1210,11 +1222,11 @@ export function QCTaskModule() {
     pageSubtitle = `Review QC issues, create tasks, assign managers and monitor progress for ${division || 'Division'}.`;
     cardTitle = 'Divisional Operations Journal';
     cardSubtitle = `Audit QC issues and field assignments mapped to ${division || 'Division'}`;
-  } else if (isStateAdmin) {
-    pageTitle = 'State Task & QC Management';
-    pageSubtitle = `Review QC issues, create tasks, assign managers and monitor progress across ${state || 'State'}.`;
-    cardTitle = 'State Operations Journal';
-    cardSubtitle = `Audit QC issues and field assignments across state operations`;
+  } else if (isPincodeAdmin) {
+    pageTitle = 'Pincode Task & QC Management';
+    pageSubtitle = `Review QC issues, create tasks, assign managers, and monitor progress restricted to PIN ${pincode || 'assigned area'}.`;
+    cardTitle = 'Station Tasks & QC Journal';
+    cardSubtitle = `Audit QC issues and field task assignments mapped exclusively to Pincode ${pincode || 'assigned area'}`;
   } else if (roleGroup === 'manager') {
     pageTitle = 'My Assigned Tasks';
     pageSubtitle = 'View, accept, update, and complete tasks assigned to your queue.';

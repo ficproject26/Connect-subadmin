@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { DeliveryPartnerDetailsModal } from '../../components/DeliveryPartnerDetailsModal';
+import { dataService } from '../../services/dataService';
 import {
   Truck,
   Phone,
@@ -19,8 +20,23 @@ export function DistrictDeliveryPartners() {
   const districtName = user?.district || '';
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-
   const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    dataService.getDeliveryPartners()
+      .then(res => {
+        if (isMounted) {
+          setPartners(res.deliveryPartners || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   const kpiStats = useMemo(() => {
     const totalPartners = partners.length;

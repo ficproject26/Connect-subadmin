@@ -153,42 +153,73 @@ async function buildCompleteHierarchy(scopeUser = null) {
     }
   }
 
-  // Prune unassigned geographic data: only branches with assigned users/admins/managers must be present
-  const assignedUsers = Array.from(db.users || []).filter(u => u.status !== 'inactive');
+  // Prune unassigned geographic data: only branches with assigned users/admins/agents/managers must be present
+  const allPersonnel = [
+    ...Array.from(db.users || []).filter(u => u.status !== 'inactive').map(u => ({
+      state: u.state || u.territory?.state,
+      stateId: u.stateId || u.territory?.stateId,
+      district: u.district || u.territory?.district,
+      districtId: u.districtId || u.territory?.districtId,
+      division: u.division || u.territory?.division,
+      divisionId: u.divisionId || u.territory?.divisionId,
+      pincode: u.pincode || u.territory?.pincode,
+      pincodeId: u.pincodeId || u.territory?.pincodeId,
+    })),
+    ...Array.from(db.agents || []).filter(a => a.status !== 'inactive').map(a => ({
+      state: a.state || a.territory?.state,
+      stateId: a.stateId || a.territory?.stateId,
+      district: a.district || a.territory?.district,
+      districtId: a.districtId || a.territory?.districtId,
+      division: a.division || a.territory?.division,
+      divisionId: a.divisionId || a.territory?.divisionId,
+      pincode: a.pincode || a.territory?.pincode,
+      pincodeId: a.pincodeId || a.territory?.pincodeId,
+    })),
+    ...Array.from(db.managers || []).filter(m => m.status !== 'inactive').map(m => ({
+      state: m.state || m.stateName,
+      stateId: m.stateId,
+      district: m.district || m.districtName,
+      districtId: m.districtId,
+      division: m.division || m.divisionName,
+      divisionId: m.divisionId,
+      pincode: m.pincode,
+      pincodeId: m.pincodeId,
+    }))
+  ];
 
   const hasAssignmentInState = (s) => {
     const sName = (s.name || '').trim().toLowerCase();
     const sId = String(s.id || s._id || s.stateId || '').trim().toLowerCase();
-    return assignedUsers.some(u => 
-      (sId && String(u.stateId || '').toLowerCase() === sId) ||
-      (sName && (u.state || '').trim().toLowerCase() === sName)
+    return allPersonnel.some(p => 
+      (sId && String(p.stateId || '').toLowerCase() === sId) ||
+      (sName && (p.state || '').trim().toLowerCase() === sName)
     );
   };
 
   const hasAssignmentInDist = (d) => {
     const dName = (d.name || '').trim().toLowerCase();
     const dId = String(d.id || d._id || d.districtId || '').trim().toLowerCase();
-    return assignedUsers.some(u => 
-      (dId && String(u.districtId || '').toLowerCase() === dId) ||
-      (dName && (u.district || '').trim().toLowerCase() === dName)
+    return allPersonnel.some(p => 
+      (dId && String(p.districtId || '').toLowerCase() === dId) ||
+      (dName && (p.district || '').trim().toLowerCase() === dName)
     );
   };
 
   const hasAssignmentInDiv = (v) => {
     const vName = (v.name || '').trim().toLowerCase();
     const vId = String(v.id || v._id || v.divisionId || '').trim().toLowerCase();
-    return assignedUsers.some(u => 
-      (vId && String(u.divisionId || '').toLowerCase() === vId) ||
-      (vName && (u.division || '').trim().toLowerCase() === vName)
+    return allPersonnel.some(p => 
+      (vId && String(p.divisionId || '').toLowerCase() === vId) ||
+      (vName && (p.division || '').trim().toLowerCase() === vName)
     );
   };
 
   const hasAssignmentInPin = (p) => {
     const pCode = String(p.code || p.pincode || p).trim();
     const pId = String(p.id || p._id || '').trim().toLowerCase();
-    return assignedUsers.some(u => 
-      (pId && String(u.pincodeId || '').toLowerCase() === pId) ||
-      (pCode && String(u.pincode || '').trim() === pCode)
+    return allPersonnel.some(p => 
+      (pId && String(p.pincodeId || '').toLowerCase() === pId) ||
+      (pCode && String(p.pincode || '').trim() === pCode)
     );
   };
 
@@ -304,20 +335,20 @@ const getDistricts = async (req, res) => {
         const dId = String(d._id || d.id || d.districtId || '').toLowerCase();
 
         const hasUser = allUsers.some(u => {
-          const uDist = (u.district || '').trim().toLowerCase();
-          const isDistMatch = uDist === dName || String(u.districtId || '').toLowerCase() === dId;
+          const uDist = (u.district || u.territory?.district || '').trim().toLowerCase();
+          const isDistMatch = uDist === dName || String(u.districtId || u.territory?.districtId || '').toLowerCase() === dId;
           const r = (u.role || '').toLowerCase();
           return isDistMatch && (r.includes('admin') || r.includes('agent') || r.includes('manager'));
         });
 
         const hasManager = allManagers.some(m => {
-          const mDist = (m.districtName || m.district || '').trim().toLowerCase();
-          return mDist === dName || String(m.districtId || '').toLowerCase() === dId;
+          const mDist = (m.districtName || m.district || m.territory?.district || '').trim().toLowerCase();
+          return mDist === dName || String(m.districtId || m.territory?.districtId || '').toLowerCase() === dId;
         });
 
         const hasAgent = allAgents.some(a => {
-          const aDist = (a.district || '').trim().toLowerCase();
-          return aDist === dName || String(a.districtId || '').toLowerCase() === dId;
+          const aDist = (a.district || a.territory?.district || '').trim().toLowerCase();
+          return aDist === dName || String(a.districtId || a.territory?.districtId || '').toLowerCase() === dId;
         });
 
         return hasUser || hasManager || hasAgent;

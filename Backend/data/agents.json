@@ -99,7 +99,40 @@
     "updatedAt": "2026-09-25T10:58:28.704Z",
     "__v": 0,
     "isActive": true,
-    "isApproved": true
+    "isApproved": true,
+    "address": {
+      "buildingNo": "",
+      "street": "",
+      "locality": "",
+      "postOffice": "",
+      "taluk": "",
+      "state": "",
+      "district": "",
+      "pincode": ""
+    },
+    "alternateMobile": "",
+    "assignedTerritory": {
+      "state": "",
+      "stateId": "",
+      "district": "",
+      "districtId": "",
+      "division": "",
+      "divisionId": "",
+      "taluk": "",
+      "talukId": "",
+      "pincode": "",
+      "pincodeId": ""
+    },
+    "bankDetails": {
+      "accountHolder": "",
+      "accountNumber": "",
+      "bankName": "",
+      "ifscCode": ""
+    },
+    "bloodGroup": "O+",
+    "fullAddress": "",
+    "preferredLanguage": "English",
+    "profilePhoto": ""
   },
   {
     "_id": "6a90220ab346b0af44cf20e4",
@@ -583,11 +616,17 @@
       "educationalCertificates": ""
     },
     "createdAt": "2026-09-01T10:41:24.554Z",
-    "updatedAt": "2026-09-25T05:55:27.872Z",
+    "updatedAt": "2026-09-26T14:17:22.772Z",
     "__v": 0,
     "isActive": true,
     "isApproved": true,
-    "isPaid": true
+    "isPaid": true,
+    "bankDetails": {
+      "bankName": "State Bank of India",
+      "accountNumber": "123456789012",
+      "ifscCode": "SBIN0001428",
+      "accountHolder": ""
+    }
   },
   {
     "_id": "6aa23689caf3cb00e6b9d23b",
@@ -634,7 +673,7 @@
     "_id": "6aaa2129861a520a723a37cf",
     "name": "Dinesh K",
     "email": "dinesh@gmail.com",
-    "password": "$2a$10$LQWqOlPTb03AE.uGsxpS8eRLZTyC9ngNvWiIStp8vfKHvS8zIRVKq",
+    "password": "$2a$10$SWucPDOggQCTF/dHmmtx9emqSsxHUzV.pufh7NYpHLxUubGOz2Rna",
     "phone": "9345867709",
     "role": "state",
     "registrationId": "REG-20260916-1273",
@@ -664,7 +703,7 @@
     "registrationFeePaid": false,
     "performanceScore": 0,
     "createdAt": "2026-09-16T04:56:09.968Z",
-    "updatedAt": "2026-09-16T07:35:15.790Z",
+    "updatedAt": "2026-09-26T11:42:02.642Z",
     "__v": 0,
     "assignedArea": "Kerala",
     "isActive": true,
@@ -857,13 +896,46 @@
     "registrationFeePaid": false,
     "performanceScore": 0,
     "createdAt": "2026-09-23T06:45:39.255Z",
-    "updatedAt": "2026-09-23T06:47:24.688Z",
+    "updatedAt": "2026-09-26T19:09:04.090Z",
     "__v": 0,
     "assignedArea": "Kerala / Thrissur",
     "isActive": true,
     "isApproved": true,
     "level": "district",
-    "isPaid": true
+    "isPaid": true,
+    "address": {
+      "buildingNo": "",
+      "street": "",
+      "locality": "",
+      "postOffice": "",
+      "taluk": "",
+      "state": "",
+      "district": "",
+      "pincode": ""
+    },
+    "alternateMobile": "",
+    "assignedTerritory": {
+      "state": "",
+      "stateId": "",
+      "district": "",
+      "districtId": "",
+      "division": "",
+      "divisionId": "",
+      "taluk": "",
+      "talukId": "",
+      "pincode": "",
+      "pincodeId": ""
+    },
+    "bankDetails": {
+      "bankName": "svi",
+      "accountNumber": "86536898654",
+      "ifscCode": "SBIN0001428",
+      "accountHolder": "Saravnan"
+    },
+    "bloodGroup": "O+",
+    "fullAddress": "",
+    "preferredLanguage": "English",
+    "profilePhoto": ""
   },
   {
     "_id": "6ab38972608a24860d292faa",
@@ -990,7 +1062,7 @@
     "_id": "6ab3b06b7ee04aa0f057f27b",
     "name": "Test",
     "email": "test@example.com",
-    "password": "$2a$10$oZoXDji1iRIRfIhGTojZgu4N3ATtM2NunOrEkFyzPUD3VoRpDTD4.",
+    "password": "$2a$10$j3qvkHzh/QJXMFYXAqUjre2M6rI2xhbemJ/KxYvifgCn7FRBJmPQS",
     "phone": "9876543210",
     "role": "pincode",
     "registrationId": "REG-20260923-1578",
@@ -1015,7 +1087,7 @@
     "registrationFeePaid": false,
     "performanceScore": 0,
     "createdAt": "2026-09-23T10:56:43.356Z",
-    "updatedAt": "2026-09-23T11:05:28.501Z",
+    "updatedAt": "2026-09-26T10:01:28.410Z",
     "__v": 0,
     "isActive": false,
     "isApproved": false,
@@ -1186,7 +1258,34 @@
       "accountNumber": "45546453253009",
       "ifscCode": "IFSC0000234",
       "accountHolder": "Dhanushiya Sri"
-    }
+    },
+    "address": {
+      "buildingNo": "",
+      "street": "",
+      "locality": "",
+      "postOffice": "",
+      "taluk": "",
+      "state": "",
+      "district": "",
+      "pincode": ""
+    },
+    "alternateMobile": "",
+    "assignedTerritory": {
+      "state": "",
+      "stateId": "",
+      "district": "",
+      "districtId": "",
+      "division": "",
+      "divisionId": "",
+      "taluk": "",
+      "talukId": "",
+      "pincode": "",
+      "pincodeId": ""
+    },
+    "bloodGroup": "O+",
+    "fullAddress": "",
+    "preferredLanguage": "English",
+    "profilePhoto": ""
   },
   {
     "_id": "6ab4f7051311030bfd3447be",
@@ -1649,5 +1748,69 @@
     "isApproved": true,
     "level": "district",
     "isPaid": true
+  },
+  {
+    "_id": "6ab795bf5b8b07aab348a2fa",
+    "name": "Hari",
+    "email": "graviity@gmail.com",
+    "password": "$2a$10$quhVEkfAfuuox6/xXafV6ebjuNB7PNnkCRwGatX5i7Kah5aSNvth2",
+    "phone": "7643179664",
+    "role": "pincode",
+    "registrationId": "FIC-CUST-978487",
+    "territory": {
+      "state": "Andhra Pradesh",
+      "district": "NTR District",
+      "division": "Vijayawada Central Division",
+      "pincode": "635002"
+    },
+    "kycStatus": "approved",
+    "status": "approved",
+    "rejectionReason": "",
+    "remarks": "",
+    "registrationFeePaid": false,
+    "performanceScore": 0,
+    "kycDocs": {
+      "aadhaarCard": "",
+      "panCard": "",
+      "passportPhoto": "",
+      "signature": "",
+      "cancelledCheque": "",
+      "educationalCertificates": ""
+    },
+    "createdAt": "2026-09-26T09:51:59.589Z",
+    "updatedAt": "2026-09-26T09:51:59.589Z",
+    "__v": 0
+  },
+  {
+    "_id": "6ab79e8c071d56fd60635115",
+    "name": "Dhanu",
+    "email": "dhanushiyasri1924@gmail.com",
+    "password": "$2a$10$vBIXnc5zI1xgRMxYxUTx7u03wkPN3dqH///rSTNtA8lkMIITbMvgi",
+    "phone": "8765432134",
+    "role": "state",
+    "registrationId": "ADM-TA-20260924-5683",
+    "territory": {
+      "state": "Tamil Nadu",
+      "district": "NTR District",
+      "division": "Vijayawada Central Division",
+      "pincode": "520001"
+    },
+    "kycStatus": "approved",
+    "status": "approved",
+    "rejectionReason": "",
+    "remarks": "",
+    "registrationFeePaid": false,
+    "performanceScore": 0,
+    "kycDocs": {
+      "aadhaarCard": "",
+      "panCard": "",
+      "passportPhoto": "",
+      "signature": "",
+      "cancelledCheque": "",
+      "educationalCertificates": ""
+    },
+    "createdAt": "2026-09-26T10:29:33.007Z",
+    "updatedAt": "2026-09-26T10:29:34.619Z",
+    "__v": 0
   }
 ]

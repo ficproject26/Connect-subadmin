@@ -638,7 +638,7 @@ export function ManagerReportsPanel() {
           </h3>
           <p className={`text-xs mt-0.5 ${isDark?"text-slate-400":"text-slate-500"}`}>
             {isPincodeAdmin 
-              ? `Submitted performance reports from Pincode Managers in your jurisdiction (PIN: ${user?.pincode || "636114"})`
+              ? `Submitted performance reports from Pincode Managers in your jurisdiction${user?.pincode ? ` (PIN: ${user.pincode})` : ''}`
               : "Submitted performance reports from field managers in your jurisdiction"}
           </p>
         </div>

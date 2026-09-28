@@ -15,5 +15,6 @@ router.get('/agents/hierarchy', executiveController.getAgentHierarchy);
 router.get('/agents/activities', executiveController.getAgentActivities);
 router.post('/agents/activities', executiveController.createAgentActivity);
 router.patch('/agents/activities/:id/advance', executiveController.advanceAgentActivity);
+router.get('/delivery-partners', executiveController.getDeliveryPartners);
 
 module.exports = router;

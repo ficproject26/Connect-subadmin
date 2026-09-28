@@ -453,6 +453,9 @@ const agentActivitiesCollection = new Collection('agent_activities', seed.agentA
 const kycRecordsCollection = new Collection('kyc_records', seed.kycRecords || [], 'kyc_records');
 const qualityCheckRecordsCollection = new Collection('quality_check_records', seed.qualityCheckRecords || [], 'quality_check_records');
 const managersCollection = new Collection('managers', [], 'managers');
+const cardholdersCollection = new Collection('cardholders', [], 'cardholders');
+const membershipOrdersCollection = new Collection('membership_orders', [], 'membership_orders');
+const deliveryPartnersCollection = new Collection('delivery_partners', seed.deliveryPartners || [], 'delivery_partners');
 
 // Harmonize demo admins and manager users into unified usersCollection
 function initUsers() {
@@ -529,6 +532,9 @@ const db = {
   kycRecords: kycRecordsCollection,
   qualityCheckRecords: qualityCheckRecordsCollection,
   managers: managersCollection,
+  cardholders: cardholdersCollection,
+  membershipOrders: membershipOrdersCollection,
+  deliveryPartners: deliveryPartnersCollection,
 
   get admins() {
     return Array.from(usersCollection).filter(u => 
@@ -671,7 +677,10 @@ function initDatabase() {
         agentActivitiesCollection,
         kycRecordsCollection,
         qualityCheckRecordsCollection,
-        managersCollection
+        managersCollection,
+        cardholdersCollection,
+        membershipOrdersCollection,
+        deliveryPartnersCollection
       ];
 
       await Promise.all(collections.map(col => col.initMongo(mongoDb)));
@@ -713,9 +722,127 @@ function initDatabase() {
 initDatabase().catch(e => console.warn('[Database] Auto-init:', e.message));
 
 /**
+ * Normalize division names for reliable comparison (e.g. "Hosur Division" -> "hosur")
+ */
+function normDiv(name) {
+  if (!name) return '';
+  return String(name).toLowerCase().replace(/\s+division$/i, '').trim();
+}
+
+/**
+ * Static & Dynamic postal directory for high-speed coordinate resolution
+ */
+const KNOWN_PINCODES = {
+  '641666': { state: 'tamil nadu', district: 'tirupur', division: 'palladam' },
+  '635305': { state: 'tamil nadu', district: 'dharmapuri', division: 'harur' },
+  '635002': { state: 'tamil nadu', district: 'krishnagiri', division: 'krishnagiri' },
+  '635001': { state: 'tamil nadu', district: 'krishnagiri', division: 'krishnagiri' },
+  '635109': { state: 'tamil nadu', district: 'krishnagiri', division: 'hosur' },
+  '635110': { state: 'tamil nadu', district: 'krishnagiri', division: 'hosur' },
+  '636112': { state: 'tamil nadu', district: 'salem', division: 'attur' },
+  '636114': { state: 'tamil nadu', district: 'salem', division: 'attur' },
+  '636001': { state: 'tamil nadu', district: 'salem', division: 'salem north' },
+  '636002': { state: 'tamil nadu', district: 'salem', division: 'salem north' },
+  '638001': { state: 'tamil nadu', district: 'erode', division: 'erode' },
+  '638103': { state: 'tamil nadu', district: 'tirupur', division: 'avinasi' },
+  '560068': { state: 'karnataka', district: 'bengaluru urban', division: 'bengaluru south' },
+  '560072': { state: 'karnataka', district: 'bengaluru urban', division: 'bengaluru south' },
+  '560087': { state: 'karnataka', district: 'bengaluru urban', division: 'bengaluru south' },
+  '560034': { state: 'karnataka', district: 'bengaluru urban', division: 'bengaluru south' },
+  '680001': { state: 'kerala', district: 'thrissur', division: 'thrissur' },
+  '680004': { state: 'kerala', district: 'thrissur', division: 'thrissur west' },
+  '680618': { state: 'kerala', district: 'thrissur', division: 'thrissur south' },
+  '520001': { state: 'andhra pradesh', district: 'ntr district', division: 'vijayawada central' }
+};
+
+const DISTRICT_STATE_MAP = {
+  'krishnagiri': 'tamil nadu',
+  'dharmapuri': 'tamil nadu',
+  'salem': 'tamil nadu',
+  'erode': 'tamil nadu',
+  'tirupur': 'tamil nadu',
+  'tiruppur': 'tamil nadu',
+  'dindigul': 'tamil nadu',
+  'coimbatore': 'tamil nadu',
+  'chennai': 'tamil nadu',
+  'namakkal': 'tamil nadu',
+  'madurai': 'tamil nadu',
+  'thiruvarur': 'tamil nadu',
+  'bengaluru urban': 'karnataka',
+  'bangalore': 'karnataka',
+  'thrissur': 'kerala',
+  'ntr district': 'andhra pradesh',
+  'vijayawada': 'andhra pradesh'
+};
+
+/**
+ * Extract unified geographic coordinates from any entity
+ */
+function extractEntityGeo(item, pinLookup) {
+  const t = item.territory || {};
+  const addr0 = (item.addresses && item.addresses[0]) || {};
+
+  let state = item.state || item.assignedState || t.state || addr0.state || item.vendorState || '';
+  let district = item.district || item.assignedDistrict || t.district || item.vendorDistrict || addr0.district || addr0.city || item.city || '';
+  let division = item.division || item.assignedDivision || t.division || addr0.division || '';
+  let pincode = String(item.pincode || item.assignedPincode || item.pincodeCode || t.pincode || addr0.pincode || item.postalCode || '').trim();
+
+  // If pincode missing, search address text
+  const rawAddr = String(item.address || item.fullAddress || item.customer_address || addr0.address || '');
+  if (!pincode && rawAddr) {
+    const m = rawAddr.match(/\b\d{6}\b/);
+    if (m) pincode = m[0];
+  }
+
+  // Lookup in dynamic + static pin table
+  if (pincode) {
+    const geo = pinLookup.get(pincode) || KNOWN_PINCODES[pincode];
+    if (geo) {
+      if (!state && geo.state) state = geo.state;
+      if (!district && geo.district) district = geo.district;
+      if (!division && geo.division) division = geo.division;
+    }
+  }
+
+  // If stateId is provided but state name is missing
+  if (!state && item.stateId) {
+    const sId = String(item.stateId).toLowerCase();
+    if (sId.includes('tn') || sId.includes('tamil')) state = 'tamil nadu';
+    else if (sId.includes('ka') || sId.includes('karn')) state = 'karnataka';
+    else if (sId.includes('kl') || sId.includes('ker')) state = 'kerala';
+    else if (sId.includes('ap') || sId.includes('andhra')) state = 'andhra pradesh';
+  }
+
+  // If district is known but state missing
+  const dNorm = String(district || '').trim().toLowerCase();
+  if (dNorm && DISTRICT_STATE_MAP[dNorm] && (!state || state.toLowerCase() === 'karnataka' && dNorm === 'salem')) {
+    state = DISTRICT_STATE_MAP[dNorm];
+  }
+
+  // String address fallback
+  if (!state && rawAddr) {
+    if (/tamil\s*nadu/i.test(rawAddr)) state = 'Tamil Nadu';
+    else if (/karnataka/i.test(rawAddr)) state = 'Karnataka';
+    else if (/kerala/i.test(rawAddr)) state = 'Kerala';
+    else if (/andhra\s*pradesh/i.test(rawAddr)) state = 'Andhra Pradesh';
+  }
+
+  return {
+    state: String(state || '').trim().toLowerCase(),
+    district: String(district || '').trim().toLowerCase(),
+    division: normDiv(division),
+    pincode: String(pincode || '').trim(),
+    stateId: item.stateId || null,
+    districtId: item.districtId || null,
+    divisionId: item.divisionId || null,
+    pincodeId: item.pincodeId || null
+  };
+}
+
+/**
  * Enhanced location filter supporting both Sub-Admin roles and Field Manager roles.
- * Matches by geographic name ('Tamil Nadu', 'Krishnagiri') or ID ('stateId', 'districtId').
- * Resolves item coordinates through centralized Pincode database lookup.
+ * Matches by geographic coordinates and IDs.
+ * Enforces strict non-leakage isolation across State, District, Division, and Pincode.
  */
 function filterByLocation(items, user) {
   if (!items || !Array.isArray(items)) return [];
@@ -723,13 +850,13 @@ function filterByLocation(items, user) {
 
   const rawRole = user.role || '';
   const role = rawRole.toLowerCase().replace(/_/g, ' ');
-  const isSuper = role.includes('super admin') || role === 'admin';
+  const isSuper = role.includes('super admin') || role === 'admin' || user.state === 'All India';
   if (isSuper) return items;
 
   const { state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = user;
   const userState = (state || '').trim().toLowerCase();
   const userDistrict = (district || '').trim().toLowerCase();
-  const userDivision = (division || '').trim().toLowerCase();
+  const userDivision = normDiv(division);
   const userPincode = (pincode || '').trim();
 
   // Index pincodes for fast geographic resolution
@@ -740,50 +867,56 @@ function filterByLocation(items, user) {
       pinLookup.set(code, {
         state: (p.state || '').trim().toLowerCase(),
         district: (p.district || '').trim().toLowerCase(),
-        division: (p.division || '').trim().toLowerCase()
+        division: normDiv(p.division)
       });
     }
   });
 
   return items.filter(item => {
-    let iState = (item.state || '').trim().toLowerCase();
-    let iDist = (item.district || '').trim().toLowerCase();
-    let iDiv = (item.division || '').trim().toLowerCase();
-    const iPin = String(item.pincode || item.pincodeCode || '').trim();
+    const geo = extractEntityGeo(item, pinLookup);
 
-    if (iPin && pinLookup.has(iPin)) {
-      const pinGeo = pinLookup.get(iPin);
-      if (!iState && pinGeo.state) iState = pinGeo.state;
-      if (!iDist && pinGeo.district) iDist = pinGeo.district;
-      if (!iDiv && pinGeo.division) iDiv = pinGeo.division;
-    }
-
-    // Pincode level user
+    // ── 1. PINCODE ADMIN (Level 4) ──────────────────────────────────
     if (role.includes('pincode')) {
-      if (userPincode && iPin && iPin === userPincode) return true;
+      if (userPincode && geo.pincode && geo.pincode === userPincode) return true;
       if (pincodeId && item.pincodeId && String(item.pincodeId) === String(pincodeId)) return true;
       return false;
     }
 
-    // Division level user
+    // ── 2. DIVISION ADMIN (Level 3) ─────────────────────────────────
     if (role.includes('division') || role.includes('divisional')) {
-      const matchDiv = !userDivision || iDiv === userDivision;
-      const matchDist = !userDistrict || iDist === userDistrict;
-      const matchState = !userState || userState === 'all india' || iState === userState;
-      return matchDiv && matchDist && matchState;
+      // Must match assigned State
+      if (userState && userState !== 'all india' && geo.state && geo.state !== userState) return false;
+      // Must match assigned District
+      if (userDistrict && geo.district && geo.district !== userDistrict) return false;
+      // Must match assigned Division
+      if (userDivision && geo.division) {
+        return geo.division === userDivision;
+      }
+      if (divisionId && item.divisionId && String(item.divisionId) === String(divisionId)) return true;
+      return Boolean(userDivision && geo.division && geo.division === userDivision);
     }
 
-    // District level user
+    // ── 3. DISTRICT ADMIN (Level 2) ─────────────────────────────────
     if (role.includes('district')) {
-      const matchDist = !userDistrict || iDist === userDistrict;
-      const matchState = !userState || userState === 'all india' || iState === userState;
-      return matchDist && matchState;
+      // Must match assigned State
+      if (userState && userState !== 'all india' && geo.state && geo.state !== userState) return false;
+      // Must match assigned District
+      if (userDistrict && geo.district) {
+        return geo.district === userDistrict;
+      }
+      if (districtId && item.districtId && String(item.districtId) === String(districtId)) return true;
+      return Boolean(userDistrict && geo.district && geo.district === userDistrict);
     }
 
-    // State level user
+    // ── 4. STATE ADMIN (Level 1) ────────────────────────────────────
     if (role.includes('state')) {
       if (!userState || userState === 'all india') return true;
-      return iState === userState || (stateId && String(item.stateId) === String(stateId));
+      // Reject cross-state records
+      if (geo.state) {
+        return geo.state === userState;
+      }
+      if (stateId && item.stateId && String(item.stateId) === String(stateId)) return true;
+      return false;
     }
 
     return false;

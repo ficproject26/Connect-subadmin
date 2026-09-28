@@ -721,6 +721,15 @@ function advanceAgentActivity(req, res) {
   }
 }
 
+function getDeliveryPartners(req, res) {
+  try {
+    let scoped = filterByLocation(Array.from(db.deliveryPartners || []), req.user);
+    return res.json({ success: true, count: scoped.length, deliveryPartners: scoped });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch delivery partners', error: error.message });
+  }
+}
+
 module.exports = {
   getExecutives,
   getSupportTeam,
@@ -729,5 +738,7 @@ module.exports = {
   getAgentHierarchy,
   getAgentActivities,
   createAgentActivity,
-  advanceAgentActivity
+  advanceAgentActivity,
+  getDeliveryPartners
 };
+

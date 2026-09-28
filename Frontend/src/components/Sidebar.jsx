@@ -404,7 +404,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
                 FORGE INDIA
               </h1>
               <span className="text-[10px] text-[#FED766] font-bold tracking-wider uppercase mt-1 block">
-                {role === 'Super Admin' || role === 'Main Admin' || role === 'State Admin' ? 'STATE ADMIN' : role === 'District Admin' ? 'DISTRICT ADMIN' : role?.toUpperCase()}
+                {role === 'Super Admin' || role === 'Main Admin' ? 'SUPER ADMIN' : role === 'State Admin' ? 'STATE ADMIN' : role === 'District Admin' ? 'DISTRICT ADMIN' : (role === 'Divisional Admin' || role === 'Division Admin') ? 'DIVISION ADMIN' : role === 'Pincode Admin' ? 'PINCODE ADMIN' : (role || 'ADMIN').toUpperCase()}
               </span>
             </div>
           </div>
