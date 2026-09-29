@@ -259,7 +259,26 @@ const populateManager = async (m, relation, user) => {
 const getLowerLevelManagers = async (req, res) => {
   try {
     const user = req.user;
-    const allUsers = Array.from(db.users);
+    const allUsersList = Array.from(db.users || []);
+    const allManagersList = Array.from(db.managers || []);
+
+    const combinedManagersMap = new Map();
+    allUsersList.filter(u => (u.role || '').toLowerCase().includes('manager')).forEach(u => {
+      const idKey = String(u._id || u.id || u.email || '').trim().toLowerCase();
+      if (idKey) combinedManagersMap.set(idKey, u);
+    });
+    allManagersList.forEach(m => {
+      const idKey = String(m._id || m.id || m.email || '').trim().toLowerCase();
+      if (idKey && !combinedManagersMap.has(idKey)) {
+        combinedManagersMap.set(idKey, {
+          ...m,
+          role: m.role || 'pincode_manager',
+          status: m.status || 'active'
+        });
+      }
+    });
+
+    const allCandidateManagers = Array.from(combinedManagersMap.values());
     const currentUserId = String(user.id || user._id);
     const rawRole = user.role || '';
     const roleLower = rawRole.toLowerCase().replace(/_/g, ' ');
@@ -269,8 +288,9 @@ const getLowerLevelManagers = async (req, res) => {
 
     if (roleLower.includes('admin')) {
       // Caller is an Administrator: view all managers subordinate to this Admin
-      rawSubordinates = allUsers.filter(u => canAdminManage(user, u));
+      rawSubordinates = allCandidateManagers.filter(u => canAdminManage(user, u));
     } else {
+      const allUsers = allUsersList;
       // Caller is a Field Manager
       let peerRoleFilter = user.role;
       let subordinateRoleFilter = [];

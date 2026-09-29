@@ -1082,7 +1082,13 @@ function getDivisions(req, res) {
       };
     });
 
-    return res.json({ success: true, count: enrichedDivisions.length, divisions: enrichedDivisions });
+    let finalDivisions = enrichedDivisions;
+    const isAssignedOnly = req.query.assignedOnly === 'true' || req.query.strictAssigned === 'true';
+    if (isAssignedOnly) {
+      finalDivisions = finalDivisions.filter(d => d.adminId && d.adminName && d.adminName !== 'Unassigned');
+    }
+
+    return res.json({ success: true, count: finalDivisions.length, divisions: finalDivisions });
   } catch (error) {
     console.error('[getDivisions] Error:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch divisions', error: error.message });
@@ -1437,7 +1443,13 @@ function getPincodes(req, res) {
       };
     });
 
-    return res.json({ success: true, count: enrichedPincodes.length, pincodes: enrichedPincodes });
+    let finalPincodes = enrichedPincodes;
+    const isAssignedOnly = req.query.assignedOnly === 'true' || req.query.strictAssigned === 'true';
+    if (isAssignedOnly) {
+      finalPincodes = finalPincodes.filter(p => p.adminId && p.adminName && p.adminName !== 'Unassigned');
+    }
+
+    return res.json({ success: true, count: finalPincodes.length, pincodes: finalPincodes });
   } catch (error) {
     console.error('[getPincodes] Error:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch pincodes', error: error.message });

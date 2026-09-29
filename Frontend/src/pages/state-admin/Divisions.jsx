@@ -74,6 +74,26 @@ export function StateDivisions() {
   const divisionFilter = searchParams.get('division');
   const divisionIdFilter = searchParams.get('divisionId');
 
+  // Strict Assignment Mode vs Geographic Directory
+  const [directoryMode, setDirectoryMode] = useState(districtFilter ? 'all' : 'assigned');
+
+  useEffect(() => {
+    if (districtFilter) {
+      setDirectoryMode('all');
+    }
+  }, [districtFilter]);
+
+  const assignedDivisions = useMemo(() => {
+    return divisions.filter(d => Boolean(d.adminId && d.adminName && d.adminName !== 'Unassigned'));
+  }, [divisions]);
+
+  const displayedDivisions = useMemo(() => {
+    if (directoryMode === 'assigned') {
+      return assignedDivisions;
+    }
+    return divisions;
+  }, [directoryMode, assignedDivisions, divisions]);
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -183,12 +203,15 @@ export function StateDivisions() {
       header: 'ADMINS NAME',
       accessor: (row) => row.adminName || 'Unassigned',
       render: (row) => {
-        const adminName = row.adminName || 'Unassigned';
-        const adminEmail = row.adminEmail || `${(row.name || '').toLowerCase().replace(/\s+/g, '_')}_admin@admin.com`;
+        const isAssigned = Boolean(row.adminId && row.adminName && row.adminName !== 'Unassigned');
+        const adminName = isAssigned ? row.adminName : 'Unassigned';
+        const adminEmail = isAssigned && row.adminEmail && row.adminEmail !== '-' ? row.adminEmail : '-';
         return (
           <div className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-              isDark ? 'bg-indigo-950/80 text-cyan-300 border border-indigo-800/60' : 'bg-blue-100 text-blue-700 border border-blue-200'
+              isAssigned
+                ? (isDark ? 'bg-indigo-950/80 text-cyan-300 border border-indigo-800/60' : 'bg-blue-100 text-blue-700 border border-blue-200')
+                : (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700' : 'bg-slate-100 text-slate-400 border border-slate-200')
             }`}>
               {adminName[0]}
             </div>
@@ -390,11 +413,64 @@ export function StateDivisions() {
         </div>
       )}
 
+      {/* Directory Mode Selector Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <button
+          type="button"
+          onClick={() => setDirectoryMode('assigned')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            directoryMode === 'assigned'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : isDark
+              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <span>Assigned Admins Directory</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+            directoryMode === 'assigned'
+              ? 'bg-blue-700 text-white'
+              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
+          }`}>
+            {assignedDivisions.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDirectoryMode('all')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            directoryMode === 'all'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : isDark
+              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <span>All Geographic Divisions</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+            directoryMode === 'all'
+              ? 'bg-blue-700 text-white'
+              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
+          }`}>
+            {divisions.length}
+          </span>
+        </button>
+      </div>
+
       <DataTable
-        title={districtFilter ? `Divisions in ${districtFilter}` : "Divisions Directory"}
-        subtitle="Hierarchical administration divisions under state jurisdiction. Click any row to inspect details."
+        title={
+          directoryMode === 'assigned'
+            ? (districtFilter ? `Assigned Division Admins in ${districtFilter}` : "Assigned Division Admins Directory")
+            : (districtFilter ? `Divisions in ${districtFilter}` : "Divisions Geographic Directory")
+        }
+        subtitle={
+          directoryMode === 'assigned'
+            ? "Showing only administrative divisions with verified assigned administrators."
+            : "Complete geographic administration divisions under territory jurisdiction."
+        }
         columns={columns}
-        data={divisions}
+        data={displayedDivisions}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search division name or district..."
@@ -403,6 +479,11 @@ export function StateDivisions() {
           setSelectedAdmin(getAdminDetails(row));
           setSelectedDivision(row);
         }}
+        emptyMessage={
+          directoryMode === 'assigned'
+            ? "No assigned division administrators found under this territory hierarchy."
+            : (districtFilter ? `No divisions found for this district.` : "No divisions found.")
+        }
       />
 
       {/* Division Administrator Profile & Division Details Modal */}

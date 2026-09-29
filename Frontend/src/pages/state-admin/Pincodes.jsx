@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
@@ -25,69 +25,75 @@ import {
   ShieldAlert,
   Package,
   UserCheck,
-  Layers
+  Layers,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
-
-const FALLBACK_STATE_PINCODES = [];
 
 export function StatePincodes() {
   const { isDark } = useTheme();
   const [pincodes, setPincodes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [selectedPincode, setSelectedPincode] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
+  const divisionFilter = searchParams.get('division');
+  const districtFilter = searchParams.get('district');
+  const stateFilter = searchParams.get('state');
+
+  // Strict Assignment Mode: default to 'assigned' when viewing Pincode Admins directly, or 'all' if filtering by division/district
+  const [directoryMode, setDirectoryMode] = useState(divisionFilter || districtFilter ? 'all' : 'assigned');
+
   const getAdminDetails = (row) => {
     const adminName = row.adminName || row.assignedAdmin || 'Unassigned';
+    const isAssigned = Boolean(row.adminId || (adminName && adminName !== 'Unassigned' && adminName !== '-'));
     return {
-      id: row.adminId || `ADM-PIN-${row.pincode}`,
-      employeeCode: row.employeeCode || `EMP-PIN-${row.pincode.slice(-3)}`,
-      name: adminName,
-      email: row.adminEmail || '-',
-      phone: row.adminPhone || '-',
-      emergencyPhone: row.emergencyPhone || '-',
+      id: isAssigned ? (row.adminId || `ADM-PIN-${row.pincode}`) : '-',
+      employeeCode: isAssigned ? (row.employeeCode || `EMP-PIN-${String(row.pincode).slice(-3)}`) : '-',
+      name: isAssigned ? adminName : 'Unassigned',
+      email: isAssigned ? (row.adminEmail || '-') : '-',
+      phone: isAssigned ? (row.adminPhone || '-') : '-',
+      emergencyPhone: isAssigned ? (row.emergencyPhone || '-') : '-',
       pincode: row.pincode,
       area: row.areaName || row.area || 'Assigned Zone',
       division: row.division || row.divisionName || '-',
       district: row.district || row.districtName || '-',
       state: row.state || 'Tamil Nadu',
       totalCustomers: row.customerCount || row.customers || 0,
-      population: row.population || '45,000+',
+      population: row.population || '-',
       status: row.status || 'Active',
-      joinedDate: row.joinedDate || '15 Jan 2024',
-      qualification: row.qualification || 'Bachelor of Science / Management',
-      experience: row.experience || '4+ Years Field Operations',
-      specialization: row.specialization || 'Hyperlocal Territory & Courier Logistics',
-      address: row.address || `Pincode Hyperlocal Hub ${row.pincode}, ${row.areaName || 'Zone'}, ${row.division || ''} Division, ${row.district || ''}`
+      joinedDate: row.joinedDate || (row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '-'),
+      qualification: row.qualification || '-',
+      experience: row.experience || '-',
+      specialization: row.specialization || '-',
+      address: row.address || (row.areaName ? `${row.areaName}, PIN: ${row.pincode}` : '-')
     };
   };
 
   const getWorkforceMetrics = (pin) => [
-    { label: 'Total Managers', value: pin.totalManagers || 1, icon: UserCog, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
-    { label: 'Total Agents', value: pin.totalAgents || 3, icon: Users, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
-    { label: 'Delivery Partners', value: pin.deliveryPartner || 12, icon: Truck, color: 'text-cyan-500 bg-cyan-50 dark:bg-cyan-950/60 border-cyan-200 dark:border-cyan-900/50' },
-    { label: 'Technicians', value: pin.technician || 6, icon: Wrench, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900/50' },
-    { label: 'Field Executives', value: pin.executive || 4, icon: Award, color: 'text-violet-500 bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-900/50' },
-    { label: 'Pending KYC Checks', value: pin.pendingKYC || 2, icon: ShieldAlert, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900/50' }
+    { label: 'Total Managers', value: pin.totalManagers || 0, icon: UserCog, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
+    { label: 'Total Agents', value: pin.totalAgents || 0, icon: Users, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
+    { label: 'Delivery Partners', value: pin.deliveryPartner || 0, icon: Truck, color: 'text-cyan-500 bg-cyan-50 dark:bg-cyan-950/60 border-cyan-200 dark:border-cyan-900/50' },
+    { label: 'Technicians', value: pin.technician || 0, icon: Wrench, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900/50' },
+    { label: 'Field Executives', value: pin.executive || 0, icon: Award, color: 'text-violet-500 bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-900/50' },
+    { label: 'Pending KYC Checks', value: pin.pendingKYC || 0, icon: ShieldAlert, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900/50' }
   ];
 
   const getCommerceMetrics = (pin) => [
-    { label: 'Total Customers', value: (pin.customers || pin.customerCount || pin.totalCustomers || 124).toLocaleString(), icon: Users, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-900/50' },
-    { label: 'Total Vendors', value: (pin.vendors || 18).toLocaleString(), icon: Store, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/60 border-orange-200 dark:border-orange-900/50' },
-    { label: 'Total Orders', value: (pin.orders || 342).toLocaleString(), icon: Package, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
-    { label: 'Total Bookings', value: (pin.totalBookings || 89).toLocaleString(), icon: CalendarCheck, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/60 border-purple-200 dark:border-purple-900/50' },
-    { label: 'Job Applications', value: (pin.totalJobApplied || 28).toLocaleString(), icon: Briefcase, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
-    { label: 'Membership Cards', value: (pin.totalMembershipCards || 45).toLocaleString(), icon: CreditCard, color: 'text-teal-500 bg-teal-50 dark:bg-teal-950/60 border-teal-200 dark:border-teal-900/50' }
+    { label: 'Total Customers', value: (pin.customers || pin.customerCount || pin.totalCustomers || 0).toLocaleString(), icon: Users, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-900/50' },
+    { label: 'Total Vendors', value: (pin.vendors || pin.totalVendors || 0).toLocaleString(), icon: Store, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/60 border-orange-200 dark:border-orange-900/50' },
+    { label: 'Total Orders', value: (pin.orders || pin.totalOrders || 0).toLocaleString(), icon: Package, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
+    { label: 'Total Bookings', value: (pin.totalBookings || 0).toLocaleString(), icon: CalendarCheck, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/60 border-purple-200 dark:border-purple-900/50' },
+    { label: 'Job Applications', value: (pin.totalJobApplied || 0).toLocaleString(), icon: Briefcase, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
+    { label: 'Membership Cards', value: (pin.totalMembershipCards || 0).toLocaleString(), icon: CreditCard, color: 'text-teal-500 bg-teal-50 dark:bg-teal-950/60 border-teal-200 dark:border-teal-900/50' }
   ];
-
-  const divisionFilter = searchParams.get('division');
-  const districtFilter = searchParams.get('district');
-  const stateFilter = searchParams.get('state');
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = {};
       if (stateFilter) params.state = stateFilter;
@@ -121,10 +127,8 @@ export function StatePincodes() {
       const allManagers = mgrRes?.subordinates || mgrRes?.data || mgrRes?.managers || [];
       const allAgents = agentRes?.agents || agentRes?.data || [];
 
-      // Enrich with personnel hierarchy data
-      const enrichedList = list.map((p, idx) => {
-        const fallback = (FALLBACK_STATE_PINCODES && FALLBACK_STATE_PINCODES.length > 0) ? FALLBACK_STATE_PINCODES[idx % FALLBACK_STATE_PINCODES.length] : {};
-        
+      // Enrich with personnel hierarchy data strictly from real records
+      const enrichedList = list.map((p) => {
         // Find matching manager
         const matchedMgr = allManagers.find(m => 
           m.assignedPincode === p.pincode || 
@@ -140,13 +144,13 @@ export function StatePincodes() {
 
         return {
           ...p,
-          employeeCode: p.employeeCode || fallback.employeeCode || `EMP-PIN-${String(p.pincode).slice(-3)}`,
-          managerName: matchedMgr?.fullName || matchedMgr?.name || p.managerName || fallback.managerName || '-',
-          managerEmail: matchedMgr?.email || p.managerEmail || fallback.managerEmail || '-',
-          managerPhone: matchedMgr?.mobile || matchedMgr?.phone || p.managerPhone || fallback.managerPhone || '-',
-          agentName: matchedAgent?.name || matchedAgent?.fullName || p.agentName || fallback.agentName || '-',
-          agentEmail: matchedAgent?.email || p.agentEmail || fallback.agentEmail || '-',
-          agentPhone: matchedAgent?.phone || matchedAgent?.mobile || p.agentPhone || fallback.agentPhone || '-',
+          employeeCode: p.employeeCode || (p.adminId ? `EMP-PIN-${String(p.pincode).slice(-3)}` : '-'),
+          managerName: matchedMgr?.fullName || matchedMgr?.name || p.managerName || '-',
+          managerEmail: matchedMgr?.email || p.managerEmail || '-',
+          managerPhone: matchedMgr?.mobile || matchedMgr?.phone || p.managerPhone || '-',
+          agentName: matchedAgent?.name || matchedAgent?.fullName || p.agentName || '-',
+          agentEmail: matchedAgent?.email || p.agentEmail || '-',
+          agentPhone: matchedAgent?.phone || matchedAgent?.mobile || p.agentPhone || '-',
           customers: p.customers || p.customerCount || 0,
           customerCount: p.customerCount || p.customers || 0,
           vendors: p.vendors || p.totalVendors || 0,
@@ -168,6 +172,7 @@ export function StatePincodes() {
       setPincodes(enrichedList);
     } catch (e) {
       console.error('Failed to load pincodes:', e);
+      setError(e.message || 'Failed to retrieve pincode data.');
       setPincodes([]);
     } finally {
       setLoading(false);
@@ -285,16 +290,25 @@ export function StatePincodes() {
     }
   ];
 
+  const assignedPincodes = useMemo(() => {
+    return pincodes.filter(p => {
+      const adminName = p.adminName || p.assignedAdmin;
+      return Boolean(p.adminId || (adminName && adminName !== 'Unassigned' && adminName !== '-'));
+    });
+  }, [pincodes]);
+
+  const displayedPincodes = directoryMode === 'assigned' ? assignedPincodes : pincodes;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            {divisionFilter && (
+            {(divisionFilter || districtFilter) && (
               <button
                 type="button"
                 onClick={() => setSearchParams({})}
-                className={`p-1 rounded-lg border transition ${
+                className={`p-1 rounded-lg border transition cursor-pointer ${
                   isDark
                     ? 'hover:bg-slate-800 text-slate-400 hover:text-white border-slate-700'
                     : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900 border-slate-200'
@@ -323,25 +337,107 @@ export function StatePincodes() {
             ? 'bg-slate-800/80 border-slate-700 text-slate-400'
             : 'bg-slate-100 border-slate-200 text-slate-600'
         }`}>
-          <span>{stateFilter || 'State'}</span>
+          <Link to="/state-admin/dashboard" className="hover:text-blue-600 hover:underline">{stateFilter || 'State'}</Link>
           <span>&rarr;</span>
-          <span className={districtFilter ? "font-bold" : ""}>{districtFilter || 'Districts'}</span>
+          <Link to={districtFilter ? `/state-admin/divisions?district=${encodeURIComponent(districtFilter)}` : '/state-admin/districts'} className={`hover:text-blue-600 hover:underline ${districtFilter ? "font-bold" : ""}`}>
+            {districtFilter || 'Districts'}
+          </Link>
           <span>&rarr;</span>
-          <span className={divisionFilter ? "font-bold" : ""}>{divisionFilter || 'Divisions'}</span>
+          <Link to={divisionFilter ? `/state-admin/divisions?division=${encodeURIComponent(divisionFilter)}` : '/state-admin/divisions'} className={`hover:text-blue-600 hover:underline ${divisionFilter ? "font-bold" : ""}`}>
+            {divisionFilter || 'Divisions'}
+          </Link>
           <span>&rarr;</span>
           <span className="text-blue-600 font-bold">Pincodes</span>
         </div>
       </div>
 
+      {/* Error state banner */}
+      {error && !loading && (
+        <div className="p-4 rounded-xl border border-rose-500/40 bg-rose-50/80 dark:bg-rose-950/40 flex items-center justify-between gap-3 text-rose-700 dark:text-rose-300">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+            <div className="text-xs">
+              <span className="font-bold">Error loading pincode data:</span> {error}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadData}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
+      {/* Directory Mode Selector Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <button
+          type="button"
+          onClick={() => setDirectoryMode('assigned')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            directoryMode === 'assigned'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : isDark
+              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <span>Assigned Admins Directory</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+            directoryMode === 'assigned'
+              ? 'bg-blue-700 text-white'
+              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
+          }`}>
+            {assignedPincodes.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDirectoryMode('all')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            directoryMode === 'all'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : isDark
+              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <span>All Geographic Pincodes</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+            directoryMode === 'all'
+              ? 'bg-blue-700 text-white'
+              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
+          }`}>
+            {pincodes.length}
+          </span>
+        </button>
+      </div>
+
       <DataTable
-        title={divisionFilter ? `Pincodes in ${divisionFilter} Division` : (districtFilter ? `Pincodes in ${districtFilter}` : "State Pincodes Registry")}
-        subtitle="Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin Profile and Pincode Breakdown."
+        title={
+          directoryMode === 'assigned'
+            ? (divisionFilter ? `Assigned Pincode Admins in ${divisionFilter}` : "Assigned Pincode Administrators")
+            : (divisionFilter ? `Pincodes in ${divisionFilter} Division` : (districtFilter ? `Pincodes in ${districtFilter}` : "State Pincodes Registry"))
+        }
+        subtitle={
+          directoryMode === 'assigned'
+            ? "Displaying strictly pincodes with appointed Pincode Administrators."
+            : "Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin Profile and Pincode Breakdown."
+        }
         columns={columns}
-        data={pincodes}
+        data={displayedPincodes}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search pincode or area name..."
         exportFileName="state_pincodes.csv"
+        emptyMessage={
+          directoryMode === 'assigned'
+            ? "No assigned Pincode Admins found under this territory. Switch to 'All Geographic Pincodes' to view all service zones."
+            : "No pincodes found for this selection."
+        }
         onRowClick={(row) => {
           setSelectedAdmin(getAdminDetails(row));
           setSelectedPincode(row);
@@ -566,13 +662,13 @@ export function StatePincodes() {
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     </div>
                     <div className="font-bold text-xs text-slate-900 dark:text-white">
-                      {selectedPincode.managerName || 'Karthik Raja'}
+                      {selectedPincode.managerName || '-'}
                     </div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 truncate">
-                      {selectedPincode.managerEmail || 'karthik.mgr@subadmin.com'}
+                      {selectedPincode.managerEmail || '-'}
                     </div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                      {selectedPincode.managerPhone || '9845211234'}
+                      {selectedPincode.managerPhone || '-'}
                     </div>
                   </div>
 
@@ -585,13 +681,13 @@ export function StatePincodes() {
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     </div>
                     <div className="font-bold text-xs text-slate-900 dark:text-white">
-                      {selectedPincode.agentName || 'Suresh V'}
+                      {selectedPincode.agentName || '-'}
                     </div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 truncate">
-                      {selectedPincode.agentEmail || 'suresh.agent@subadmin.com'}
+                      {selectedPincode.agentEmail || '-'}
                     </div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                      {selectedPincode.agentPhone || '9789123456'}
+                      {selectedPincode.agentPhone || '-'}
                     </div>
                   </div>
                 </div>
@@ -602,13 +698,13 @@ export function StatePincodes() {
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Customers</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.customers || selectedPincode.customerCount || 124).toLocaleString()}
+                    {(selectedPincode.customers || selectedPincode.customerCount || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Vendors</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.vendors || 18).toLocaleString()}
+                    {(selectedPincode.vendors || 0).toLocaleString()}
                   </div>
                   <button
                     type="button"
@@ -622,13 +718,13 @@ export function StatePincodes() {
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Total Orders</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.orders || 342).toLocaleString()}
+                    {(selectedPincode.orders || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Bookings</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.totalBookings || 89).toLocaleString()}
+                    {(selectedPincode.totalBookings || 0).toLocaleString()}
                   </div>
                 </div>
               </div>

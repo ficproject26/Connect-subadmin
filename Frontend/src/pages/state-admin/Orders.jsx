@@ -116,14 +116,19 @@ export function StateOrders() {
       header: 'Location Scope',
       accessor: 'pincode',
       className: 'whitespace-nowrap min-w-[150px]',
-      render: (row) => (
-        <div className="whitespace-nowrap">
-          <div className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{row.district} / {row.division}</div>
-          <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
-            <MapPin className="w-3 h-3 shrink-0" /> PIN: {row.pincode}
+      render: (row) => {
+        const dist = row.district || row.deliveryDistrict || '';
+        const div = row.division || row.deliveryDivision || '';
+        const locLabel = dist && div ? `${dist} / ${div}` : (dist || div || row.state || 'Tamil Nadu');
+        return (
+          <div className="whitespace-nowrap">
+            <div className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{locLabel}</div>
+            <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+              <MapPin className="w-3 h-3 shrink-0" /> PIN: {row.pincode || '-'}
+            </div>
           </div>
-        </div>
-      )
+        );
+      }
     },
     {
       header: 'Amount & Savings',
@@ -133,12 +138,13 @@ export function StateOrders() {
         const tier = row.membershipTier;
         const isCardMember = tier && !['normal', 'standard', 'customer', 'none'].includes(String(tier).toLowerCase());
         const normalizedTier = isCardMember ? (tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()) : null;
+        const amt = Number(row.netPayable ?? row.totalAmount ?? row.finalAmount ?? row.amount ?? 0);
 
         return (
           <div className="whitespace-nowrap">
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                ₹{row.netPayable?.toLocaleString()}
+                ₹{amt.toLocaleString()}
               </span>
               {isCardMember && (
                 <span title={`${normalizedTier} Card`} className="inline-flex items-center">
@@ -155,7 +161,7 @@ export function StateOrders() {
               </div>
             )}
             <div className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'} whitespace-nowrap mt-0.5`}>
-              {row.paymentMode}
+              {row.paymentMode || row.paymentMethod || 'Online'}
             </div>
           </div>
         );

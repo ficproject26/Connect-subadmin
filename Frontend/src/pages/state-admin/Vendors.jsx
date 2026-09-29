@@ -182,6 +182,11 @@ export function StateVendors() {
             <div className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate" title={creator.name}>
               {creator.name}
             </div>
+            {creator.id && creator.id !== '-' && (
+              <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">
+                ID: {creator.id}
+              </div>
+            )}
             <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
               <Phone className="w-2.5 h-2.5 shrink-0 text-slate-400" />
               <span>{creator.phone}</span>

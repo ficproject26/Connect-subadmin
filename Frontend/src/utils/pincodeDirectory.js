@@ -75,30 +75,54 @@ export function resolveVendorAddedBy(vendor) {
   }
 
   // 1. Direct addedBy property on vendor object
-  if (vendor.addedBy && vendor.addedBy.name) {
+  if (vendor.addedBy && vendor.addedBy.name && vendor.addedBy.name !== 'Unassigned') {
     return {
       id: vendor.addedBy.id || '-',
       name: vendor.addedBy.name,
-      role: vendor.addedBy.role || '-',
+      role: vendor.addedBy.role || 'Agent',
       phone: vendor.addedBy.phone || '-',
       email: vendor.addedBy.email || '-',
       addedAt: vendor.addedBy.addedAt || (vendor.createdAt ? vendor.createdAt.split('T')[0] : '-')
     };
   }
 
-  // 2. Fallback to assigned agent if any
-  if (vendor.assignedAgent && vendor.assignedAgent.name) {
+  // 2. onboardedByInfo property
+  if (vendor.onboardedByInfo && vendor.onboardedByInfo.name && vendor.onboardedByInfo.name !== 'Unassigned') {
     return {
-      id: vendor.assignedAgent.id || '-',
+      id: vendor.onboardedByInfo.id || '-',
+      name: vendor.onboardedByInfo.name,
+      role: vendor.onboardedByInfo.role || 'Agent',
+      phone: vendor.onboardedByInfo.phone || '-',
+      email: vendor.onboardedByInfo.email || '-',
+      addedAt: vendor.onboardedByInfo.addedAt || (vendor.createdAt ? vendor.createdAt.split('T')[0] : '-')
+    };
+  }
+
+  // 3. Fallback to assigned agent if any
+  if (vendor.assignedAgent && typeof vendor.assignedAgent === 'object' && vendor.assignedAgent.name) {
+    return {
+      id: vendor.assignedAgent.id || vendor.assignedAgent.registrationId || '-',
       name: vendor.assignedAgent.name,
-      role: 'Pincode Agent',
-      phone: vendor.assignedAgent.phone || '-',
+      role: vendor.assignedAgent.role ? `${vendor.assignedAgent.role} Agent` : 'Pincode Agent',
+      phone: vendor.assignedAgent.phone || vendor.assignedAgent.mobile || '-',
       email: vendor.assignedAgent.email || '-',
       addedAt: vendor.createdAt ? vendor.createdAt.split('T')[0] : '-'
     };
   }
 
-  // Default fallback
+  // 4. Agent directly on vendor
+  if (vendor.agentName) {
+    return {
+      id: vendor.agentRegistrationId || vendor.agentId || '-',
+      name: vendor.agentName,
+      role: 'Pincode Agent',
+      phone: vendor.agentPhone || '-',
+      email: '-',
+      addedAt: vendor.createdAt ? vendor.createdAt.split('T')[0] : '-'
+    };
+  }
+
+  // Default fallback: Unassigned
   return {
     id: '-',
     name: 'Unassigned',

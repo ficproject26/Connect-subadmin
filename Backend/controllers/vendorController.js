@@ -23,14 +23,153 @@ const maskGst = (gst) => {
   return `${stateCode}••••••••••${endCode}`;
 };
 
-// Helper: Ensure vendor has addedBy info
-function ensureVendorAddedBy(v) {
-  if (v.addedBy && v.addedBy.name) return v;
-  v.addedBy = v.addedBy || null;
-  return v;
+// Helper: Resolve who onboarded this vendor (Agent or Manager)
+function resolveOnboardedBy(vendor) {
+  if (vendor.addedBy && vendor.addedBy.name && vendor.addedBy.name !== 'Unassigned') {
+    return vendor.addedBy;
+  }
+
+  const allAgents = Array.from(db.agents || []);
+  const allUsers = Array.from(db.users || []);
+  const allManagers = Array.from(db.managers || []);
+
+  const agentKey = String(vendor.agentId || vendor.onboardedBy || vendor.assignedAgent || '').trim().toLowerCase();
+  const managerKey = String(vendor.managerId || '').trim().toLowerCase();
+
+  // 1. Try finding in agents collection by ObjectId, id, or registrationId
+  if (agentKey) {
+    const matchedAgent = allAgents.find(a => {
+      const aId = String(a._id || a.id || '').trim().toLowerCase();
+      const aReg = String(a.registrationId || a.agentCode || '').trim().toLowerCase();
+      const aName = String(a.name || '').trim().toLowerCase();
+      return aId === agentKey || aReg === agentKey || aName === agentKey;
+    });
+
+    if (matchedAgent) {
+      const rawRole = (matchedAgent.role || '').toLowerCase();
+      let roleTitle = 'Pincode Agent';
+      if (rawRole.includes('state')) roleTitle = 'State Agent';
+      else if (rawRole.includes('district')) roleTitle = 'District Agent';
+      else if (rawRole.includes('division') || rawRole.includes('divisional')) roleTitle = 'Divisional Agent';
+      else if (rawRole.includes('pincode')) roleTitle = 'Pincode Agent';
+
+      return {
+        role: roleTitle,
+        type: 'Agent',
+        name: matchedAgent.name,
+        id: matchedAgent.registrationId || matchedAgent.agentCode || String(matchedAgent._id || matchedAgent.id),
+        phone: matchedAgent.phone || matchedAgent.mobile || '-',
+        email: matchedAgent.email || '-',
+        addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
+      };
+    }
+  }
+
+  // 2. If vendor document directly stores agent info
+  if (vendor.agentName) {
+    return {
+      role: 'Pincode Agent',
+      type: 'Agent',
+      name: vendor.agentName,
+      id: vendor.agentRegistrationId || vendor.agentId || '-',
+      phone: vendor.agentPhone || '-',
+      email: '-',
+      addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
+    };
+  }
+
+  // 3. Try finding in managers collection or users
+  if (managerKey || agentKey) {
+    const searchKey = managerKey || agentKey;
+    const matchedMgr = allManagers.find(m => {
+      const mId = String(m.id || m._id || '').trim().toLowerCase();
+      const mCode = String(m.employeeCode || '').trim().toLowerCase();
+      return mId === searchKey || mCode === searchKey;
+    }) || allUsers.find(u => {
+      const r = (u.role || '').toLowerCase();
+      const uId = String(u._id || u.id || '').trim().toLowerCase();
+      const uLogin = String(u.loginId || '').trim().toLowerCase();
+      return r.includes('manager') && (uId === searchKey || uLogin === searchKey);
+    });
+
+    if (matchedMgr) {
+      const r = (matchedMgr.role || '').toLowerCase();
+      let roleTitle = 'Pincode Manager';
+      if (r.includes('state')) roleTitle = 'State Manager';
+      else if (r.includes('district')) roleTitle = 'District Manager';
+      else if (r.includes('division')) roleTitle = 'Division Manager';
+      else if (r.includes('pincode')) roleTitle = 'Pincode Manager';
+
+      return {
+        role: matchedMgr.roleTitle || roleTitle,
+        type: 'Manager',
+        name: matchedMgr.name,
+        id: matchedMgr.employeeCode || String(matchedMgr._id || matchedMgr.id),
+        phone: matchedMgr.mobile || matchedMgr.phone || '-',
+        email: matchedMgr.email || '-',
+        addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
+      };
+    }
+  }
+
+  // 4. Check if KYC records note includes onboarding agent name (e.g., 'Onboarded by Murugan')
+  const vIdStr = String(vendor._id || vendor.id || '');
+  const kycRec = (db.kycRecords || []).find(k => k.id === `KYC-${vIdStr}` || String(k.vendorId) === vIdStr);
+  if (kycRec && kycRec.notes && kycRec.notes.toLowerCase().includes('onboarded by')) {
+    const match = kycRec.notes.match(/onboarded\s+by\s+([A-Za-z\s]+)/i);
+    if (match && match[1]) {
+      const name = match[1].replace(/\..*$/, '').trim();
+      return {
+        role: 'Pincode Agent',
+        type: 'Agent',
+        name: name,
+        id: '-',
+        phone: '-',
+        email: '-',
+        addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
+      };
+    }
+  }
+
+  // Fallback: Real empty state, NEVER fake Admin
+  return {
+    role: '-',
+    type: '-',
+    name: 'Unassigned',
+    id: '-',
+    phone: '-',
+    email: '-',
+    addedAt: '-'
+  };
 }
 
-// Populate location names and IDs
+// Helper: Resolve dynamic KYC status from vendor document & db.kycRecords
+function resolveVendorKycStatus(vendor) {
+  const vIdStr = String(vendor._id || vendor.id || '');
+  const kycRec = (db.kycRecords || []).find(k => k.id === `KYC-${vIdStr}` || String(k.vendorId) === vIdStr);
+
+  const rawStatus = (kycRec && kycRec.status) ? kycRec.status : (vendor.kycStatus || vendor.status || 'Pending');
+  const clean = String(rawStatus).trim().toLowerCase();
+
+  if (['approved', 'verified', 'completed', 'kyc approved', 'kyc verified'].includes(clean)) {
+    return 'Verified';
+  }
+  if (['rejected', 'kyc rejected'].includes(clean)) {
+    return 'Rejected';
+  }
+  if (['under review', 'kyc under review', 'pending verification'].includes(clean)) {
+    return 'Pending Verification';
+  }
+  if (clean === 'pending pincode admin approval') {
+    return 'Pending Pincode Admin Approval';
+  }
+  if (['pending', 'kyc pending'].includes(clean)) {
+    return 'Pending';
+  }
+  return rawStatus;
+}
+
+// Populate location names, IDs, onboarding attribution, and dynamic KYC status
 const populateVendorLocations = async (vendor) => {
   const [state, district, division, pincode] = await Promise.all([
     vendor.stateId ? db.states.findById(vendor.stateId) : (vendor.state ? db.states.findOne({ name: vendor.state }) : null),
@@ -44,6 +183,10 @@ const populateVendorLocations = async (vendor) => {
   const divisionName = vendor.division || division?.name || '';
   const pincodeCode = vendor.pincode || pincode?.code || '';
   const pincodeArea = pincode?.areaName || vendor.address || '';
+
+  const addedBy = resolveOnboardedBy(vendor);
+  const kycStatus = resolveVendorKycStatus(vendor);
+  const approvalStatus = vendor.approvalStatus || ((vendor.status === 'Active' || vendor.status === 'Approved') ? 'Approved' : 'Pending');
 
   const normalized = {
     ...vendor,
@@ -71,11 +214,13 @@ const populateVendorLocations = async (vendor) => {
     divisionId: vendor.divisionId || (division ? division._id : null),
     pincodeId: vendor.pincodeId || (pincode ? pincode._id : null),
     status: vendor.status || 'Active',
-    kycStatus: vendor.kycStatus || (vendor.status === 'Active' ? 'Verified' : 'Pending Verification'),
-    approvalStatus: vendor.approvalStatus || (vendor.status === 'Active' ? 'Approved' : 'Pending')
+    kycStatus,
+    approvalStatus,
+    addedBy,
+    onboardedBy: addedBy.id,
+    onboardedByInfo: addedBy
   };
 
-  ensureVendorAddedBy(normalized);
   return normalized;
 };
 

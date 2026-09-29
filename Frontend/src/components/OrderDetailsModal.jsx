@@ -170,12 +170,26 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
                 <div className="font-bold text-sm text-navy dark:text-white">
                   {order.customerName}
                 </div>
+                {order.customerPhone && order.customerPhone !== '-' && (
+                  <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300">
+                    Phone: {order.customerPhone}
+                  </div>
+                )}
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                   <MapPin className="w-3 h-3 text-emerald-500 shrink-0" />
-                  <span>{order.district}, {order.division}</span>
-                  <span>•</span>
-                  <span className="font-mono">PIN: {order.pincode}</span>
+                  <span>{order.district ? `${order.district}${order.division ? `, ${order.division}` : ''}` : (order.state || 'Tamil Nadu')}</span>
+                  {order.pincode && (
+                    <>
+                      <span>•</span>
+                      <span className="font-mono">PIN: {order.pincode}</span>
+                    </>
+                  )}
                 </div>
+                {order.customerAddress && (
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-2 mt-0.5" title={order.customerAddress}>
+                    {order.customerAddress}
+                  </div>
+                )}
               </div>
 
               <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
@@ -202,11 +216,14 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
                 <div className="font-bold text-sm text-navy dark:text-white">
                   {vendorName}
                 </div>
+                {vendorCategory && vendorCategory !== '-' && (
+                  <div className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                    {vendorCategory}
+                  </div>
+                )}
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                   <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
                   <span>{vendorLocation}</span>
-                  <span>•</span>
-                  <span className="font-mono">PIN: {order.pincode}</span>
                 </div>
               </div>
 

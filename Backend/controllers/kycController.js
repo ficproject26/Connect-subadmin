@@ -144,6 +144,42 @@ async function processKYC(req, res) {
       }
     }
 
+    // If this KYC record belongs to a vendor, synchronize vendor document in db.vendors
+    if (record.type === 'Vendor' || record.vendorId) {
+      const vId = record.vendorId || (record.id && record.id.replace('KYC-', ''));
+      const vendor = await db.vendors.findById(vId) || db.vendors.find(v => String(v._id || v.id) === String(vId));
+      if (vendor) {
+        const isApproved = status === 'Verified' || status === 'Approved' || status === 'KYC Approved';
+        const updates = isApproved ? {
+          kycStatus: 'Verified',
+          approvalStatus: 'Approved',
+          status: 'Active',
+          kycVerifiedAt: new Date().toISOString(),
+          kycVerifiedBy: `${req.user.name} (${req.user.role})`
+        } : {
+          kycStatus: 'Rejected',
+          approvalStatus: 'Rejected',
+          rejectionReason: reason || 'KYC documents verification rejected.',
+          kycRejectedAt: new Date().toISOString(),
+          kycRejectedBy: `${req.user.name} (${req.user.role})`
+        };
+        await db.vendors.findByIdAndUpdate(vId, updates);
+
+        if (db.auditLogs) {
+          await db.auditLogs.insertOne({
+            action: isApproved ? 'VENDOR_KYC_VERIFIED' : 'VENDOR_KYC_REJECTED',
+            adminId: req.user.id || req.user._id,
+            adminName: req.user.name,
+            adminRole: req.user.role,
+            targetVendorId: vId,
+            details: `KYC verification marked as ${status} for vendor ${vendor.businessName || vendor.name}.`,
+            ip: req.ip || '127.0.0.1',
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+    }
+
     return res.json({ success: true, message: `KYC marked as ${status}`, record });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to update KYC status', error: error.message });
