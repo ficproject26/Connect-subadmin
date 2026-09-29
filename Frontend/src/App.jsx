@@ -1,11 +1,22 @@
 import React from 'react';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { RealtimeProvider } from './context/RealtimeContext';
 import NotificationToast from './components/NotificationToast';
 import { AppRoutes } from './routes/AppRoutes';
+
+// Detect Electron environment (set by preload via contextBridge, or by user-agent)
+const isElectron =
+  (typeof window !== 'undefined' && window.electronAPI?.isElectron === true) ||
+  (typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron'));
+
+// In Electron (file:// protocol), BrowserRouter's HTML5 history doesn't work on
+// deep routes. HashRouter (#/path) works perfectly with file:// loading.
+// On web, BrowserRouter is used as before.
+const Router = isElectron ? HashRouter : BrowserRouter;
+
 
 class GlobalErrorBoundary extends React.Component {
   constructor(props) {
@@ -67,7 +78,7 @@ export default function App() {
   return (
     <GlobalErrorBoundary>
       <ThemeProvider>
-        <BrowserRouter>
+        <Router>
           <AuthProvider>
             <RealtimeProvider>
               <NotificationProvider>
@@ -75,7 +86,7 @@ export default function App() {
               </NotificationProvider>
             </RealtimeProvider>
           </AuthProvider>
-        </BrowserRouter>
+        </Router>
       </ThemeProvider>
     </GlobalErrorBoundary>
   );

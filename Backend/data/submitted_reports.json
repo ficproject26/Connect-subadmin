@@ -72,5 +72,42 @@
     },
     "tasks": [],
     "updatedAt": "2026-09-28T07:57:28.349Z"
+  },
+  {
+    "_id": "rpt_1790660938100_mppoh",
+    "createdAt": "2026-09-29T05:48:58.100Z",
+    "dateRange": "29 Sept 2026",
+    "district": "Krishnagiri",
+    "districtId": "6aa10f71ca0932e6eaec1f5d",
+    "division": "Hosur",
+    "divisionId": "6aa10f71ca0932e6eaec1f5e",
+    "endDate": "2026-09-29T18:29:59.999Z",
+    "id": "rpt_1790660938100_mppoh",
+    "managerEmail": "murugan@gmail.com",
+    "managerId": "usr_mgr_1790588690346_2iph",
+    "managerName": "Murugan",
+    "managerPhone": "",
+    "managerRole": "Pincode Admin",
+    "periodLabel": "Today (29 Sept 2026)",
+    "pincode": "635126",
+    "pincodeId": "6aba0f82af9e0372e50b70d5",
+    "reportNumber": "RPT-635126-20260929-895",
+    "shopVisits": [],
+    "startDate": "2026-09-28T18:30:00.000Z",
+    "state": "Tamil Nadu",
+    "stateId": "6aa10f70ca0932e6eaec1f5c",
+    "status": "Submitted",
+    "submittedAt": "2026-09-29T05:48:58.100Z",
+    "summary": {
+      "totalVisits": 0,
+      "interested": 0,
+      "notInterested": 0,
+      "newTieups": 0,
+      "tasksAssigned": 0,
+      "tasksCompleted": 0,
+      "tasksPending": 0
+    },
+    "tasks": [],
+    "updatedAt": "2026-09-29T05:48:58.101Z"
   }
 ]

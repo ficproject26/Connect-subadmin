@@ -602,5 +602,21 @@
     "createdAt": "2026-09-28T05:27:18.099Z",
     "updatedAt": "2026-09-28T05:27:18.099Z",
     "__v": 0
+  },
+  {
+    "_id": "6abb46d7305af8d5cc1abede",
+    "districtId": "DIST-PY-PY",
+    "stateId": "6abb46c1305af8d5cc1abed8",
+    "name": "Pondicherry",
+    "code": "PY",
+    "headquarters": "",
+    "description": "",
+    "notes": "",
+    "status": "Active",
+    "createdBy": "6a8d22c11bc647d92ae36337",
+    "updatedBy": "6a8d22c11bc647d92ae36337",
+    "createdAt": "2026-09-29T05:04:23.181Z",
+    "updatedAt": "2026-09-29T05:04:23.181Z",
+    "__v": 0
   }
 ]

@@ -11,9 +11,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6ab4c2ec5df0d82cb7a09cac"
+      "6ab4c2ec5df0d82cb7a09cac",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-28T13:55:34.607Z"
+    "updatedAt": "2026-09-29T07:16:12.119Z"
   },
   {
     "_id": "6ab4f6df1311030bfd3447a2",
@@ -27,9 +28,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.162Z"
+    "updatedAt": "2026-09-29T07:16:12.711Z"
   },
   {
     "_id": "6ab6178d2555c67bd9bc7198",
@@ -43,9 +45,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.175Z"
+    "updatedAt": "2026-09-29T07:16:12.717Z"
   },
   {
     "_id": "6ab618da2555c67bd9bc7246",
@@ -59,9 +62,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.189Z"
+    "updatedAt": "2026-09-29T07:16:12.723Z"
   },
   {
     "_id": "6ab624b7c3c80ae7e778e73f",
@@ -75,9 +79,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.204Z"
+    "updatedAt": "2026-09-29T07:16:12.731Z"
   },
   {
     "_id": "6ab65d79c3c80ae7e778f58c",
@@ -91,9 +96,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.221Z"
+    "updatedAt": "2026-09-29T07:16:12.742Z"
   },
   {
     "_id": "6ab65da3c3c80ae7e778f599",
@@ -107,9 +113,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.236Z"
+    "updatedAt": "2026-09-29T07:16:12.750Z"
   },
   {
     "_id": "6ab4f6df1311030bfd3447a2",
@@ -122,10 +129,11 @@
     "read": false,
     "receiver": "6a926325caf3cb00e6b9a590",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.257Z",
+    "updatedAt": "2026-09-29T07:16:12.757Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -139,10 +147,11 @@
     "read": false,
     "receiver": "6a926325caf3cb00e6b9a590",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.272Z",
+    "updatedAt": "2026-09-29T07:16:12.764Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -156,10 +165,11 @@
     "read": false,
     "receiver": "6a9120a73cbecf25841b8d87",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.289Z",
+    "updatedAt": "2026-09-29T07:16:12.773Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -173,10 +183,11 @@
     "read": false,
     "receiver": "6a9120a73cbecf25841b8d87",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.304Z",
+    "updatedAt": "2026-09-29T07:16:12.780Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -190,10 +201,11 @@
     "read": false,
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.317Z",
+    "updatedAt": "2026-09-29T07:16:12.785Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -207,10 +219,11 @@
     "read": false,
     "receiver": "6ab3ca2d7ee04aa0f057fcf1",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.333Z",
+    "updatedAt": "2026-09-29T07:16:12.793Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -224,10 +237,11 @@
     "read": false,
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.347Z",
+    "updatedAt": "2026-09-29T07:16:12.800Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -242,9 +256,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.362Z"
+    "updatedAt": "2026-09-29T07:16:12.806Z"
   },
   {
     "_id": "6ab754e0c3c80ae7e778fad1",
@@ -258,9 +273,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.376Z"
+    "updatedAt": "2026-09-29T07:16:12.813Z"
   },
   {
     "_id": "6ab749c3c3c80ae7e778f91c",
@@ -273,10 +289,11 @@
     "read": false,
     "receiver": "6ab5f81fb8654beabd8f91b5",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.390Z",
+    "updatedAt": "2026-09-29T07:16:12.823Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -290,10 +307,11 @@
     "read": false,
     "receiver": "6ab64f46c3c80ae7e778f144",
     "title": "New Target Assigned",
-    "updatedAt": "2026-09-26T09:44:08.405Z",
+    "updatedAt": "2026-09-29T07:16:12.829Z",
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ]
   },
   {
@@ -308,9 +326,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.420Z"
+    "updatedAt": "2026-09-29T07:16:12.837Z"
   },
   {
     "_id": "6ab76b6345152c228d4639a6",
@@ -324,9 +343,10 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.435Z"
+    "updatedAt": "2026-09-29T07:16:12.847Z"
   },
   {
     "_id": "6ab76b6645152c228d4639b0",
@@ -340,9 +360,40 @@
     "__v": 0,
     "isRead": true,
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
-    "updatedAt": "2026-09-26T09:44:08.450Z"
+    "updatedAt": "2026-09-29T07:16:12.855Z"
+  },
+  {
+    "_id": "d49b3a56-4669-4e02-9a00-15ea78c39860",
+    "createdAt": "2026-09-26T09:51:20.086Z",
+    "id": "d49b3a56-4669-4e02-9a00-15ea78c39860",
+    "isRead": true,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100003 as Completed.",
+    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
+    "title": "Task TSK-100003 Completed",
+    "type": "task_updated",
+    "updatedAt": "2026-09-29T07:16:12.863Z",
+    "userId": "user_state_1",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
+  },
+  {
+    "_id": "90a463e2-a108-44b1-ba53-b625361fc0de",
+    "id": "90a463e2-a108-44b1-ba53-b625361fc0de",
+    "type": "task_updated",
+    "title": "Task TSK-100005 Completed",
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100005 as Completed.",
+    "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
+    "userId": "user_state_1",
+    "isRead": true,
+    "createdAt": "2026-09-26T10:17:29.078Z",
+    "updatedAt": "2026-09-29T07:16:12.869Z",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
   },
   {
     "_id": "NOTIF-1790414127807-0AM4",
@@ -364,7 +415,8 @@
     },
     "priority": "normal",
     "readBy": [
-      "6a8d22c11bc647d92ae36337"
+      "6a8d22c11bc647d92ae36337",
+      "usr_mgr_1790580930154_8uge"
     ],
     "scope": {
       "state": null,
@@ -382,31 +434,7 @@
     },
     "title": "Task Update: TSK-100234 is In Progress",
     "type": "task_update",
-    "updatedAt": "2026-09-26T09:44:08.508Z"
-  },
-  {
-    "_id": "7050b430-187f-448e-b4f0-94a07bf4c8ba",
-    "createdAt": "2026-09-26T09:51:19.729Z",
-    "id": "7050b430-187f-448e-b4f0-94a07bf4c8ba",
-    "isRead": false,
-    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100003 as In Progress.",
-    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
-    "title": "Task TSK-100003 In Progress",
-    "type": "task_updated",
-    "updatedAt": "2026-09-26T09:51:19.729Z",
-    "userId": "user_state_1"
-  },
-  {
-    "_id": "d49b3a56-4669-4e02-9a00-15ea78c39860",
-    "createdAt": "2026-09-26T09:51:20.086Z",
-    "id": "d49b3a56-4669-4e02-9a00-15ea78c39860",
-    "isRead": false,
-    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100003 as Completed.",
-    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
-    "title": "Task TSK-100003 Completed",
-    "type": "task_updated",
-    "updatedAt": "2026-09-26T09:51:20.086Z",
-    "userId": "user_state_1"
+    "updatedAt": "2026-09-29T07:16:12.876Z"
   },
   {
     "_id": "19e18be6-98d1-4edc-a548-46acc9b9a7f5",
@@ -416,9 +444,27 @@
     "message": "Ramesh Kumar (TN State Manager) marked task TSK-100004 as In Progress.",
     "recordId": "5364b421-35cc-4e43-89ae-e81d6a396a98",
     "userId": "user_state_1",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-09-26T10:15:28.017Z",
-    "updatedAt": "2026-09-26T10:15:28.017Z"
+    "updatedAt": "2026-09-29T07:16:12.883Z",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
+  },
+  {
+    "_id": "7050b430-187f-448e-b4f0-94a07bf4c8ba",
+    "createdAt": "2026-09-26T09:51:19.729Z",
+    "id": "7050b430-187f-448e-b4f0-94a07bf4c8ba",
+    "isRead": true,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100003 as In Progress.",
+    "recordId": "34bac63b-d9f1-4a68-9278-9f5441d5e229",
+    "title": "Task TSK-100003 In Progress",
+    "type": "task_updated",
+    "updatedAt": "2026-09-29T07:16:12.892Z",
+    "userId": "user_state_1",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
   },
   {
     "_id": "c18ae4c9-52d8-453e-a61a-0fc0fda780ca",
@@ -428,9 +474,12 @@
     "message": "Ramesh Kumar (TN State Manager) marked task TSK-100004 as Completed.",
     "recordId": "5364b421-35cc-4e43-89ae-e81d6a396a98",
     "userId": "user_state_1",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-09-26T10:15:28.362Z",
-    "updatedAt": "2026-09-26T10:15:28.362Z"
+    "updatedAt": "2026-09-29T07:16:12.899Z",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
   },
   {
     "_id": "b76e5ac2-5091-441c-adde-2071678ae90c",
@@ -440,45 +489,42 @@
     "message": "Ramesh Kumar (TN State Manager) marked task TSK-100005 as In Progress.",
     "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
     "userId": "user_state_1",
-    "isRead": false,
+    "isRead": true,
     "createdAt": "2026-09-26T10:17:28.488Z",
-    "updatedAt": "2026-09-26T10:17:28.489Z"
-  },
-  {
-    "_id": "90a463e2-a108-44b1-ba53-b625361fc0de",
-    "id": "90a463e2-a108-44b1-ba53-b625361fc0de",
-    "type": "task_updated",
-    "title": "Task TSK-100005 Completed",
-    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100005 as Completed.",
-    "recordId": "9b88cd31-a1e7-4449-bccf-fe5bca3e294f",
-    "userId": "user_state_1",
-    "isRead": false,
-    "createdAt": "2026-09-26T10:17:29.078Z",
-    "updatedAt": "2026-09-26T10:17:29.078Z"
+    "updatedAt": "2026-09-29T07:16:12.904Z",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
   },
   {
     "_id": "f75e5b76-0878-48b2-900f-4f8061b89721",
     "createdAt": "2026-09-26T14:17:22.238Z",
     "id": "f75e5b76-0878-48b2-900f-4f8061b89721",
-    "isRead": false,
+    "isRead": true,
     "message": "Ramesh Kumar (TN State Manager) marked task TSK-100006 as In Progress.",
     "recordId": "65d3185e-a6df-427b-a565-c00481726817",
     "title": "Task TSK-100006 In Progress",
     "type": "task_updated",
-    "updatedAt": "2026-09-26T14:17:22.238Z",
-    "userId": "user_state_1"
+    "updatedAt": "2026-09-29T07:16:12.915Z",
+    "userId": "user_state_1",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
   },
   {
     "_id": "4e15b71f-49c7-4bbd-8ed9-aba6bd7f67f5",
     "createdAt": "2026-09-26T14:17:22.243Z",
     "id": "4e15b71f-49c7-4bbd-8ed9-aba6bd7f67f5",
-    "isRead": false,
+    "isRead": true,
     "message": "Ramesh Kumar (TN State Manager) marked task TSK-100006 as Completed.",
     "recordId": "65d3185e-a6df-427b-a565-c00481726817",
     "title": "Task TSK-100006 Completed",
     "type": "task_updated",
-    "updatedAt": "2026-09-26T14:17:22.243Z",
-    "userId": "user_state_1"
+    "updatedAt": "2026-09-29T07:16:12.922Z",
+    "userId": "user_state_1",
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ]
   },
   {
     "_id": "NOTIF-1790580241699-1RHE",
@@ -488,7 +534,7 @@
     "entityId": "6ab4bbe57ee04aa0f0580792",
     "entityType": "vendor",
     "id": "NOTIF-1790580241699-1RHE",
-    "isRead": false,
+    "isRead": true,
     "message": "Pincode Admin Ragul approved merchant 'Empire'. Sent for central KYC review.",
     "metadata": {
       "vendorId": "6ab4bbe57ee04aa0f0580792",
@@ -499,7 +545,9 @@
       "pincode": "635126"
     },
     "priority": "normal",
-    "readBy": [],
+    "readBy": [
+      "usr_mgr_1790580930154_8uge"
+    ],
     "scope": {
       "state": "Tamil Nadu",
       "district": "Krishnagiri",
@@ -516,7 +564,7 @@
     },
     "title": "Vendor Approved: Empire",
     "type": "vendor_status",
-    "updatedAt": "2026-09-28T07:24:01.699Z"
+    "updatedAt": "2026-09-29T07:16:12.929Z"
   },
   {
     "_id": "NOTIF-1790589311649-NBEH",
@@ -592,5 +640,67 @@
     "title": "Vendor Approved: y",
     "type": "vendor_status",
     "updatedAt": "2026-09-28T13:55:29.917Z"
+  },
+  {
+    "_id": "NOTIF-1790659045582-GA75",
+    "actionUrl": "/state-admin/vendors",
+    "category": "vendor",
+    "createdAt": "2026-09-29T05:17:25.582Z",
+    "entityId": "6ab6591ec3c80ae7e778f48b",
+    "entityType": "vendor",
+    "id": "NOTIF-1790659045582-GA75",
+    "isRead": false,
+    "message": "Pincode Admin Maran approved merchant 'y'. Sent for central KYC review.",
+    "metadata": {
+      "vendorId": "6ab6591ec3c80ae7e778f48b",
+      "vendorName": "y",
+      "action": "Accept",
+      "reason": null,
+      "verifiedBy": "Maran",
+      "pincode": "636112"
+    },
+    "priority": "normal",
+    "readBy": [],
+    "scope": {
+      "state": "Tamil Nadu",
+      "district": "Salem",
+      "division": "Salem Urban Division",
+      "pincode": "636112",
+      "targetUserId": null,
+      "targetRoles": [
+        "State Admin",
+        "District Admin",
+        "Division Admin",
+        "Pincode Admin",
+        "Manager"
+      ]
+    },
+    "title": "Vendor Approved: y",
+    "type": "vendor_status",
+    "updatedAt": "2026-09-29T05:17:25.582Z"
+  },
+  {
+    "_id": "c2940e4c-ca20-4db7-954b-c4ff531f750a",
+    "createdAt": "2026-09-29T06:03:52.439Z",
+    "id": "c2940e4c-ca20-4db7-954b-c4ff531f750a",
+    "isRead": false,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100012 as In Progress.",
+    "recordId": "1c1477d9-e7de-4478-8be4-667e5fd79dcf",
+    "title": "Task TSK-100012 In Progress",
+    "type": "task_updated",
+    "updatedAt": "2026-09-29T06:03:52.439Z",
+    "userId": "user_state_1"
+  },
+  {
+    "_id": "8d06aca6-eafd-4785-86c4-d15682dbc907",
+    "createdAt": "2026-09-29T06:03:52.444Z",
+    "id": "8d06aca6-eafd-4785-86c4-d15682dbc907",
+    "isRead": false,
+    "message": "Ramesh Kumar (TN State Manager) marked task TSK-100012 as Completed.",
+    "recordId": "1c1477d9-e7de-4478-8be4-667e5fd79dcf",
+    "title": "Task TSK-100012 Completed",
+    "type": "task_updated",
+    "updatedAt": "2026-09-29T06:03:52.444Z",
+    "userId": "user_state_1"
   }
 ]

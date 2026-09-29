@@ -1,11 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { ShieldCheck, Mail, Phone, Layers } from 'lucide-react';
 
 export function DistrictDivisionAdmins() {
   const { user } = useAuth();
   const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (user?.district) params.district = user.district;
+      if (user?.districtId) params.districtId = user.districtId;
+      if (user?.state) params.state = user.state;
+
+      const res = await dataService.getDivisions(params);
+      if (res?.success && Array.isArray(res.divisions)) {
+        // Enforce Requirement 18: Show ONLY divisions that currently have an assigned Division Admin
+        const assignedOnly = res.divisions
+          .filter(d => {
+            const adminName = d.adminName || d.assignedAdmin;
+            return Boolean(adminName && adminName !== 'Unassigned' && adminName !== '-' && d.status !== 'Suspended');
+          })
+          .map(d => ({
+            id: d.adminId || `ADM-DIV-${d.id || d._id}`,
+            name: d.adminName || d.assignedAdmin,
+            email: d.adminEmail || '-',
+            phone: d.adminPhone || '-',
+            division: d.name || d.divisionName,
+            district: d.districtName || d.district || user?.district,
+            pincodes: Array.isArray(d.pincodes) ? d.pincodes : [],
+            status: d.status || 'Active'
+          }));
+        setAdmins(assignedOnly);
+      } else {
+        setAdmins([]);
+      }
+    } catch (err) {
+      console.error('Failed to load district division admins:', err);
+      setAdmins([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [user]);
 
   const columns = [
     {
@@ -34,14 +78,18 @@ export function DistrictDivisionAdmins() {
     },
     {
       header: 'Covered Pincodes',
-      accessor: 'pincodes',
+      accessor: (row) => (row.pincodes || []).join(' '),
       render: (row) => (
-        <div className="flex gap-1">
-          {row.pincodes.map(p => (
-            <span key={p} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[11px] text-slate-700 dark:text-slate-300 font-semibold">
-              PIN: {p}
-            </span>
-          ))}
+        <div className="flex flex-wrap gap-1">
+          {row.pincodes && row.pincodes.length > 0 ? (
+            row.pincodes.map(p => (
+              <span key={p} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[11px] text-slate-700 dark:text-slate-300 font-semibold">
+                PIN: {p}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-slate-400 italic">None assigned</span>
+          )}
         </div>
       )
     },
@@ -75,6 +123,8 @@ export function DistrictDivisionAdmins() {
         subtitle="Manage subordinate division administrators and access credentials"
         columns={columns}
         data={admins}
+        loading={loading}
+        onRefresh={loadData}
         searchPlaceholder="Search division admin..."
         exportFileName="district_division_admins.csv"
       />

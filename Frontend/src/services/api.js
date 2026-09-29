@@ -91,8 +91,13 @@ export async function apiRequest(endpoint, options = {}) {
         if (response.status === 401 && !isNoAutoLogout) {
           localStorage.removeItem('ams_token');
           localStorage.removeItem('ams_user');
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
+          // In Electron (HashRouter), routes are prefixed with #; in web use pathname
+          const isElectron =
+            (typeof window !== 'undefined' && window.electronAPI?.isElectron === true) ||
+            (typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron'));
+          const loginPath = isElectron ? '/#/login' : '/login';
+          if (window.location.pathname !== '/login' && window.location.hash !== '#/login') {
+            window.location.href = loginPath;
           }
         }
 

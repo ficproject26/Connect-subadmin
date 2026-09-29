@@ -38,14 +38,27 @@ function getDashboardSummary(req, res) {
       Diamond: scopedCustomers.filter(c => c.membership && c.membership.tier === 'Diamond').length
     };
 
-    const revenueTrend = scopedOrders.length === 0 ? [] : [
-      { month: 'Oct', revenue: Math.round(totalRevenue * 0.12), orders: Math.round(scopedOrders.length * 1.5) },
-      { month: 'Nov', revenue: Math.round(totalRevenue * 0.18), orders: Math.round(scopedOrders.length * 1.8) },
-      { month: 'Dec', revenue: Math.round(totalRevenue * 0.25), orders: Math.round(scopedOrders.length * 2.2) },
-      { month: 'Jan', revenue: Math.round(totalRevenue * 0.20), orders: Math.round(scopedOrders.length * 1.9) },
-      { month: 'Feb', revenue: Math.round(totalRevenue * 0.22), orders: Math.round(scopedOrders.length * 2.0) },
-      { month: 'Mar', revenue: Math.round(totalRevenue * 0.28), orders: Math.round(scopedOrders.length * 2.5) }
-    ];
+    // Build real monthly revenue trend from actual order timestamps (last 6 months)
+    const revenueTrend = (() => {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const now = new Date();
+      const result = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const yr = d.getFullYear();
+        const mo = d.getMonth(); // 0-indexed
+        const label = monthNames[mo];
+        const monthOrders = scopedOrders.filter(o => {
+          const created = o.createdAt || o.orderDate || o.date;
+          if (!created) return false;
+          const od = new Date(created);
+          return !isNaN(od.getTime()) && od.getFullYear() === yr && od.getMonth() === mo;
+        });
+        const monthRevenue = monthOrders.reduce((sum, o) => sum + (o.netPayable || o.totalAmount || 0), 0);
+        result.push({ month: label, revenue: Math.round(monthRevenue), orders: monthOrders.length });
+      }
+      return result;
+    })();
 
     const orderStatusBreakdown = [
       { status: 'Delivered', count: scopedOrders.filter(o => o.status === 'Delivered').length },
@@ -181,7 +194,10 @@ const getDashboardStats = async (req, res) => {
       todayTieups,
       weekTieups,
       verifiedVendors: statusCounts.active,
-      openIssues: 0,
+      openIssues: (() => {
+        const issues = filterByLocation(Array.from(db.qcIssues || []), user);
+        return issues.filter(i => (i.status || '').toLowerCase() === 'open').length;
+      })(),
       kycPending: statusCounts.pending,
       vendorRequests: statusCounts.pending
     };
@@ -190,12 +206,13 @@ const getDashboardStats = async (req, res) => {
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       .slice(0, 5);
 
+    const scopedIssues = filterByLocation(Array.from(db.qcIssues || []), user);
     const issueCounts = {
-      total: 0,
-      open: 0,
-      inProgress: 0,
-      escalated: 0,
-      resolved: 0
+      total: scopedIssues.length,
+      open: scopedIssues.filter(i => (i.status || '').toLowerCase() === 'open').length,
+      inProgress: scopedIssues.filter(i => ['in_progress', 'in progress', 'inprogress'].includes((i.status || '').toLowerCase())).length,
+      escalated: scopedIssues.filter(i => (i.status || '').toLowerCase() === 'escalated').length,
+      resolved: scopedIssues.filter(i => (i.status || '').toLowerCase() === 'resolved').length
     };
 
     res.json({

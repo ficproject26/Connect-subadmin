@@ -95,6 +95,7 @@ function enrichCustomer(c, allCardholders) {
   if (card) {
     const rawTier = card.cardType || card.tier || 'Silver';
     const tier = rawTier === 'Platinum' ? 'Diamond' : rawTier;
+    // Default tier maps — used ONLY when actual DB fields are absent
     const discountMap = { Silver: 5, Gold: 12, Diamond: 20 };
     const pointsMap = { Silver: 500, Gold: 1200, Diamond: 2500 };
 
@@ -104,8 +105,9 @@ function enrichCustomer(c, allCardholders) {
       status: card.status === 'active' ? 'Active' : 'Expired',
       validUntil: card.expiryDate || new Date(Date.now() + 365 * 86400000).toISOString(),
       issueDate: card.createdAt || new Date().toISOString(),
-      discountPercent: discountMap[tier] || 10,
-      points: pointsMap[tier] || 1000
+      // Prefer actual stored values from DB before falling back to defaults
+      discountPercent: card.discountPercent || discountMap[tier] || 10,
+      points: card.points || card.rewardPoints || pointsMap[tier] || 1000
     };
   }
 
@@ -200,6 +202,7 @@ function getMembershipCards(req, res) {
 
         const rawTier = ch.cardType || ch.tier || 'Silver';
         const tier = rawTier === 'Platinum' ? 'Diamond' : rawTier;
+        // Default tier maps — used ONLY when actual DB fields are absent
         const discountMap = { Silver: 5, Gold: 12, Diamond: 20 };
         const pointsMap = { Silver: 500, Gold: 1200, Diamond: 2500 };
         const amountMap = { Silver: 8000, Gold: 15000, Diamond: 35000 };
@@ -214,16 +217,17 @@ function getMembershipCards(req, res) {
           cardNumber: ch.cardNumber,
           tier,
           cardType: tier,
-          amount: amountMap[tier] || 15000,
-          paymentAmount: amountMap[tier] || 15000,
-          paymentStatus: 'PAID',
-          paymentDate: ch.createdAt,
+          // Prefer actual stored values from the cardholder record
+          amount: ch.amount || ch.cardAmount || amountMap[tier] || 15000,
+          paymentAmount: ch.paymentAmount || ch.amount || amountMap[tier] || 15000,
+          paymentStatus: ch.paymentStatus || 'PAID',
+          paymentDate: ch.paymentDate || ch.createdAt,
           issueDate: ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
-          validFrom: ch.createdAt,
-          validUntil: ch.expiryDate,
-          status: (ch.status === 'active' ? 'Active' : 'Expired'),
-          discountPercent: discountMap[tier] || 10,
-          points: pointsMap[tier] || 1000,
+          validFrom: ch.validFrom || ch.createdAt,
+          validUntil: ch.expiryDate || ch.validUntil,
+          status: (ch.status === 'active' ? 'Active' : (ch.status === 'expired' ? 'Expired' : (ch.status || 'Active'))),
+          discountPercent: ch.discountPercent || discountMap[tier] || 10,
+          points: ch.points || ch.rewardPoints || pointsMap[tier] || 1000,
           state,
           district,
           division,

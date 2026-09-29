@@ -458,6 +458,10 @@ const membershipOrdersCollection = new Collection('membership_orders', [], 'memb
 const deliveryPartnersCollection = new Collection('delivery_partners', seed.deliveryPartners || [], 'delivery_partners');
 const subscriptionsCollection = new Collection('subscriptions', [], 'subscriptions');
 const subscriptionPaymentsCollection = new Collection('subscription_payments', [], 'subscriptionpayments');
+const deliveryStatusHistoryCollection = new Collection('delivery_status_history', [], 'delivery_status_history');
+const settlementsCollection = new Collection('settlements', [], 'settlements');
+const productsCollection = new Collection('products', [], 'products');
+const jobappliedsCollection = new Collection('jobapplieds', [], 'jobapplieds');
 
 // Harmonize demo admins and manager users into unified usersCollection
 function initUsers() {
@@ -539,6 +543,10 @@ const db = {
   deliveryPartners: deliveryPartnersCollection,
   subscriptions: subscriptionsCollection,
   subscriptionPayments: subscriptionPaymentsCollection,
+  deliveryStatusHistory: deliveryStatusHistoryCollection,
+  settlements: settlementsCollection,
+  products: productsCollection,
+  jobapplieds: jobappliedsCollection,
 
   get admins() {
     return Array.from(usersCollection).filter(u => 
@@ -686,7 +694,11 @@ function initDatabase() {
         membershipOrdersCollection,
         deliveryPartnersCollection,
         subscriptionsCollection,
-        subscriptionPaymentsCollection
+        subscriptionPaymentsCollection,
+        deliveryStatusHistoryCollection,
+        settlementsCollection,
+        productsCollection,
+        jobappliedsCollection
       ];
 
       await Promise.all(collections.map(col => col.initMongo(mongoDb)));

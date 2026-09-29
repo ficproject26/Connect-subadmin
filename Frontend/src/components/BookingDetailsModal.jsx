@@ -20,7 +20,9 @@ import {
   Building,
   Car,
   FileText,
-  Phone
+  Phone,
+  Users,
+  Hotel
 } from 'lucide-react';
 
 export function BookingDetailsModal({ booking, isOpen, onClose }) {
@@ -30,30 +32,30 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
 
   const typeLower = (booking.bookingType || booking.type || booking.category || '').toLowerCase();
   const serviceLower = (booking.service || '').toLowerCase();
-  const statusLower = (booking.status || '').toLowerCase();
+  const statusLower = (booking.status || '').toLowerCase().trim();
 
   const isStay = typeLower === 'stay' || serviceLower.includes('stay') || serviceLower.includes('hotel') || serviceLower.includes('villa') || serviceLower.includes('resort') || serviceLower.includes('room');
   const isTravel = typeLower === 'travel' || serviceLower.includes('travel') || serviceLower.includes('tour') || serviceLower.includes('cab') || serviceLower.includes('shuttle') || serviceLower.includes('trip') || serviceLower.includes('ride');
 
-  // Determine member role and name
-  let representativeName = booking.technicianName || booking.technicianAssigned || 'Unassigned';
-  let representativeRole = 'Technician';
+  // Determine representative / host
+  let representativeName = booking.technicianName || booking.technicianAssigned || 'Not assigned';
+  let representativeRole = 'Assigned Technician';
   let RepIcon = Wrench;
-  let repId = booking.technicianId || '-';
-  let repPhone = booking.technicianPhone || '-';
+  let repId = booking.technicianId || 'Not provided';
+  let repPhone = booking.technicianPhone || 'Not provided';
 
   if (isStay) {
-    representativeName = booking.stayExecutive || booking.stayExecutiveName || booking.executiveName || booking.executiveAssigned || booking.technicianAssigned || 'Unassigned';
-    representativeRole = 'Stay Executive';
-    RepIcon = Building;
-    repId = booking.executiveId || '-';
-    repPhone = booking.executivePhone || '-';
+    representativeName = booking.hotelName || booking.vendorName || booking.propertyName || 'Hotel Front Desk / Vendor';
+    representativeRole = 'Hotel / Property Host';
+    RepIcon = Hotel;
+    repId = booking.vendorId || 'Not provided';
+    repPhone = booking.vendorPhone || booking.contactPhone || 'Not provided';
   } else if (isTravel) {
-    representativeName = booking.travelExecutive || booking.travelExecutiveName || booking.executiveName || booking.executiveAssigned || booking.technicianAssigned || 'Unassigned';
-    representativeRole = 'Travel Executive';
+    representativeName = booking.travelExecutive || booking.travelExecutiveName || 'Travel Coordinator';
+    representativeRole = 'Travel Dispatcher';
     RepIcon = Car;
-    repId = booking.executiveId || '-';
-    repPhone = booking.executivePhone || '-';
+    repId = booking.executiveId || 'Not provided';
+    repPhone = booking.executivePhone || 'Not provided';
   }
 
   const isCardMember = booking.membershipTier && 
@@ -61,14 +63,13 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
   const normalizedTier = isCardMember ? 
     (booking.membershipTier.charAt(0).toUpperCase() + booking.membershipTier.slice(1).toLowerCase()) : null;
 
-  // Build timeline based on booking category & current status
+  // Real timeline events from database delivery_status_history
   const buildTimeline = () => {
     let steps = [];
     if (isStay) {
       steps = [
         { status: 'Booking Requested', desc: 'Customer selected dates & requested hotel/room stay' },
-        { status: 'Availability Confirmed', desc: 'Vendor confirmed room inventory & availability' },
-        { status: 'Booking Confirmed', desc: 'Room reservation verified & payment confirmed' },
+        { status: 'Confirmed', desc: 'Vendor confirmed room reservation & payment verified' },
         { status: 'Check-in', desc: 'Guest arrived and completed hotel check-in' },
         { status: 'Check-out', desc: 'Guest completed room stay and checked out' },
         { status: 'Completed', desc: 'Stay concluded and verified' }
@@ -79,7 +80,6 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
         { status: 'Confirmed', desc: 'Travel request verified & booking confirmed' },
         { status: 'Vehicle Assigned', desc: 'Driver & vehicle allocated for the journey' },
         { status: 'Pickup Started', desc: 'Driver en route to customer pickup doorstep' },
-        { status: 'In Transit', desc: 'Journey in progress with GPS tracking active' },
         { status: 'Completed', desc: 'Safely arrived at destination & trip completed' }
       ];
     } else {
@@ -92,52 +92,48 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
       ];
     }
 
-    let currentIdx = 0;
-    if (isStay) {
-      if (statusLower === 'completed') currentIdx = 5;
-      else if (statusLower === 'check-out') currentIdx = 4;
-      else if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'check-in') currentIdx = 3;
-      else if (statusLower === 'confirmed') currentIdx = 2;
-      else if (statusLower === 'availability confirmed') currentIdx = 1;
-      else currentIdx = 0;
-    } else if (isTravel) {
-      if (statusLower === 'completed') currentIdx = 5;
-      else if (statusLower === 'in progress' || statusLower === 'in-progress' || statusLower === 'in transit') currentIdx = 4;
-      else if (statusLower === 'pickup started') currentIdx = 3;
-      else if (statusLower === 'vehicle assigned') currentIdx = 2;
-      else if (statusLower === 'confirmed') currentIdx = 1;
-      else currentIdx = 0;
-    } else {
-      if (statusLower === 'completed') currentIdx = 4;
-      else if (statusLower === 'in progress' || statusLower === 'in-progress') currentIdx = 3;
-      else if (statusLower === 'confirmed') currentIdx = 1;
-      else currentIdx = 0;
-    }
+    const dbTimeline = Array.isArray(booking.timeline) ? booking.timeline : [];
 
-    const baseDate = booking.scheduledDate || '2026-03-05 10:00 AM';
-    const datePart = baseDate.split(' ')[0];
-
-    const getTimeForStep = (idx) => {
-      if (isStay) {
-        const times = ['09:30 AM', '10:45 AM', '12:00 PM', '02:00 PM', '11:00 AM', '12:30 PM'];
-        return `${datePart}, ${times[idx] || '12:00 PM'}`;
-      }
-      if (isTravel) {
-        const times = ['07:00 AM', '07:30 AM', '08:00 AM', '08:20 AM', '08:45 AM', '10:15 AM'];
-        return `${datePart}, ${times[idx] || '08:30 AM'}`;
-      }
-      return `${datePart}, ${10 + idx * 2}:00 AM`;
+    // Helper to find real timestamp in database history
+    const findHistory = (name) => {
+      const n = name.toLowerCase();
+      return dbTimeline.find(h => {
+        const hs = (h.status || '').toLowerCase();
+        if (n.includes('create') || n.includes('request')) {
+          return hs.includes('placed') || hs.includes('request') || hs.includes('receive') || hs.includes('create');
+        }
+        return hs === n || hs.includes(n);
+      });
     };
+
+    let currentIdx = 0;
+    if (statusLower === 'completed') currentIdx = steps.length - 1;
+    else if (statusLower === 'check-out') currentIdx = isStay ? 3 : steps.length - 2;
+    else if (statusLower === 'check-in' || statusLower === 'in progress' || statusLower === 'in-progress') currentIdx = isStay ? 2 : 3;
+    else if (statusLower === 'confirmed') currentIdx = 1;
+    else currentIdx = 0;
 
     return steps.map((s, idx) => {
       let state = 'upcoming';
-      if (idx < currentIdx) state = 'completed';
-      else if (idx === currentIdx) state = 'current';
+      const hist = findHistory(s.status);
+
+      if (idx < currentIdx) {
+        state = 'completed';
+      } else if (idx === currentIdx) {
+        state = (idx === 0) ? 'completed' : 'current';
+      }
+
+      let time = null;
+      if (hist && hist.time) {
+        time = hist.time;
+      } else if (idx === 0) {
+        time = booking.scheduledDate || booking.bookingDate || 'Not provided';
+      }
 
       return {
         status: s.status,
-        desc: s.desc,
-        time: idx <= currentIdx ? getTimeForStep(idx) : null,
+        desc: hist?.desc || s.desc,
+        time,
         state
       };
     });
@@ -145,11 +141,13 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
 
   const timelineEvents = buildTimeline();
 
-  // Pricing calculations
-  const baseCharge = Number(booking.charge) || 0;
+  // Financial calculations
+  const baseCharge = Number(booking.charge || booking.totalAmount || booking.finalAmount || 0);
   const discountRate = normalizedTier === 'Diamond' ? 0.20 : normalizedTier === 'Gold' ? 0.15 : normalizedTier === 'Silver' ? 0.10 : 0;
   const discountAmount = isCardMember ? Math.round(baseCharge * discountRate) : 0;
   const netAmount = baseCharge - discountAmount;
+
+  const guestsList = Array.isArray(booking.guests) ? booking.guests : [];
 
   return (
     <Modal
@@ -166,20 +164,20 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
       maxWidth="max-w-3xl"
     >
       <div className="space-y-6">
-        {/* Top Summary Card - Clean & Balanced 50/50 Layout */}
+        {/* Top Summary Card - Customer & Property / Provider Details */}
         <div className={`p-4 rounded-xl border ${
           isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/70 border-slate-200'
         }`}>
-          <div className="grid grid-cols-2 divide-x divide-slate-200 dark:divide-slate-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800">
             {/* Left: Customer Details */}
-            <div className="pr-5 space-y-2">
+            <div className="md:pr-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-navy-muted dark:text-slate-400 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-navy dark:text-blue-400" />
                   Customer Details
                 </span>
                 <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-                  ID: {booking.customerId || '-'}
+                  ID: {booking.customerId || 'Not provided'}
                 </span>
               </div>
 
@@ -192,28 +190,43 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
                     </span>
                   )}
                 </div>
+                <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300">
+                  Phone: {booking.customerPhone && booking.customerPhone !== '-' ? booking.customerPhone : 'Not provided'}
+                </div>
+                {booking.customerEmail && booking.customerEmail !== 'Not provided' && (
+                  <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
+                    Email: {booking.customerEmail}
+                  </div>
+                )}
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                   <MapPin className="w-3 h-3 text-emerald-500 shrink-0" />
-                  <span>{booking.district}, {booking.division}</span>
-                  <span>•</span>
-                  <span className="font-mono">PIN: {booking.pincode}</span>
+                  <span>{booking.district || booking.state || 'Tamil Nadu'}{booking.division ? `, ${booking.division}` : ''}</span>
+                  {booking.pincode && (
+                    <>
+                      <span>•</span>
+                      <span className="font-mono">PIN: {booking.pincode}</span>
+                    </>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-2 mt-0.5" title={booking.customerAddress}>
+                  {booking.customerAddress || 'Not provided'}
                 </div>
               </div>
 
               <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
                 <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                <span>Scheduled: <span className="font-medium text-navy-secondary dark:text-slate-200">{booking.scheduledDate}</span></span>
+                <span>Booking Date: <span className="font-medium text-navy-secondary dark:text-slate-200">{booking.bookingDate || booking.scheduledDate || 'Not provided'}</span></span>
               </div>
             </div>
 
-            {/* Right: Representative Details */}
-            <div className="pl-5 space-y-2">
+            {/* Right: Hotel / Property / Provider Details */}
+            <div className="pt-4 md:pt-0 md:pl-5 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-navy-muted dark:text-slate-400 flex items-center gap-1.5">
                   <RepIcon className="w-3.5 h-3.5 text-navy dark:text-blue-400" />
-                  Representative Details
+                  {isStay ? 'Hotel / Property Details' : 'Provider Details'}
                 </span>
-                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
+                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate max-w-[150px]" title={repId}>
                   ID: {repId}
                 </span>
               </div>
@@ -225,9 +238,13 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                   <ShieldCheck className="w-3 h-3 text-indigo-500 shrink-0" />
                   <span className="font-medium text-slate-700 dark:text-slate-300">{representativeRole}</span>
-                  <span>•</span>
-                  <span>{isStay ? 'Contact / Reference' : 'Certified Staff'}</span>
                 </div>
+                {isStay && (
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 space-y-0.5">
+                    <div>Room Type: <strong className="text-indigo-600 dark:text-indigo-400">{booking.roomName || 'Deluxe Room'}</strong></div>
+                    <div>Room Number: <span className="font-mono">{booking.roomNumber || 'Not assigned'}</span></div>
+                  </div>
+                )}
               </div>
 
               <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
@@ -237,6 +254,80 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
             </div>
           </div>
         </div>
+
+        {/* Hotel / Stay Specifics Card */}
+        {isStay && (
+          <div className={`p-4 rounded-2xl border ${
+            isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'
+          } shadow-sm space-y-3`}>
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <Hotel className="w-4 h-4 text-indigo-500" />
+                Stay Reservation & Guest Details
+              </h4>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80">
+                {booking.numberOfRooms || 1} Room(s) • {booking.numberOfGuests || 1} Guest(s)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Check-in</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{booking.checkInDate}</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">{booking.checkInTime}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Check-out</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{booking.checkOutDate}</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">{booking.checkOutTime}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Guest Count</span>
+                <span className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">
+                  {booking.numberOfGuests} Guests
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                  ({booking.adults || booking.numberOfGuests || 1} Adults{booking.children ? `, ${booking.children} Children` : ''})
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Room Allocation</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {booking.numberOfRooms || 1} Room(s)
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5 truncate" title={booking.roomName}>
+                  {booking.roomName || 'Deluxe'}
+                </span>
+              </div>
+            </div>
+
+            {/* Guests List (Only if individual guest records exist in database) */}
+            {guestsList.length > 0 ? (
+              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-2">
+                  Individual Guest Roster ({guestsList.length})
+                </div>
+                <div className="space-y-1.5">
+                  {guestsList.map((g, idx) => (
+                    <div key={idx} className="p-2 rounded-lg bg-slate-50/80 dark:bg-slate-800/40 text-xs flex items-center justify-between">
+                      <div>
+                        <strong className="text-slate-800 dark:text-slate-200">{g.name || `Guest ${idx + 1}`}</strong>
+                        <span className="text-slate-400 ml-2">({g.gender || 'Adult'}, {g.age ? `${g.age} yrs` : 'Age not provided'})</span>
+                      </div>
+                      <div className="font-mono text-[11px] text-slate-500">
+                        {g.idNumber ? `ID: ${g.idNumber}` : (g.aadhaar ? `Aadhaar: ${g.aadhaar}` : 'ID verified at desk')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-[11px] text-slate-400 italic pt-1">
+                Guest count registered: {booking.numberOfGuests} ({booking.adults || 1} Adults, {booking.children || 0} Children). Primary guest: {booking.customerName}.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Booking Status Timeline Stepper */}
         <div className={`p-4 sm:p-5 rounded-2xl border ${
@@ -324,46 +415,12 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Service Requested & Scope Card */}
-        <div className={`p-4 rounded-2xl border ${
-          isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'
-        } shadow-sm space-y-3`}>
-          <div className="flex items-center justify-between">
-            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-blue-500" />
-              Service Specifications
-            </h4>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80">
-              {isStay ? 'Stay & Hospitality' : isTravel ? 'Outstation Travel' : 'On-Site Service'}
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div>
-              <div className="font-bold text-sm text-slate-900 dark:text-white">
-                {booking.service}
-              </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Category: {booking.bookingType || (isStay ? 'Stay' : isTravel ? 'Travel' : 'Service')} • Pincode: {booking.pincode}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="font-bold text-sm text-slate-900 dark:text-white">
-                ₹{baseCharge.toLocaleString()}
-              </div>
-              <div className="text-[10px] text-slate-400">
-                Service Fee
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Pricing & Financial Summary Breakdown */}
         <div className={`p-4 rounded-2xl border ${
           isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-50/80 border-slate-200'
         } space-y-2 text-xs`}>
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-            <span>Service Base Charge:</span>
+            <span>Booking Total Charge:</span>
             <span className="font-semibold text-slate-700 dark:text-slate-300">
               ₹{baseCharge.toLocaleString()}
             </span>
@@ -389,7 +446,7 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span>Payment Method & Status:</span>
             <span className="font-medium text-slate-700 dark:text-slate-300">
-              Online (UPI) • <span className="text-emerald-600 font-semibold">Verified</span>
+              {booking.paymentMode || 'Online'} • <span className="text-emerald-600 font-semibold">{booking.paymentStatus || 'Paid'}</span>
             </span>
           </div>
 

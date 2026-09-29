@@ -37,7 +37,7 @@ function getPincodeDirectory() {
   return pinMap;
 }
 
-function normalizeOrder(order, pinMap, vendorMap) {
+function normalizeOrder(order, pinMap, vendorMap, historyMap) {
   if (!order) return null;
 
   const orderId = String(order.id || order._id || '');
@@ -119,14 +119,41 @@ function normalizeOrder(order, pinMap, vendorMap) {
   const tax = Number(order.tax || order.taxAmount || 0);
   const netPayable = rawTotal || (rawSubtotal - discountAmount + deliveryFee + tax);
 
-  // Vendor Enrichment
+  // Vendor Enrichment from vendors and settlements
   const vendorKey = String(order.vendor_id || order.vendorId || '').trim();
   const matchedVendor = vendorKey ? vendorMap.get(vendorKey) : null;
-  const vendorName = matchedVendor ? (matchedVendor.businessName || matchedVendor.name) : (order.vendorName || '-');
-  const vendorId = matchedVendor ? (matchedVendor._id || matchedVendor.id) : (vendorKey || '-');
-  const vendorCategory = matchedVendor ? (matchedVendor.category || matchedVendor.subCategory || '-') : (order.vendorCategory || '-');
-  const vendorContact = matchedVendor ? (matchedVendor.contactPerson || matchedVendor.phone || matchedVendor.mobile || '-') : (order.vendorContact || '-');
-  const vendorLocation = matchedVendor ? (matchedVendor.address || (matchedVendor.district ? `${matchedVendor.district}${matchedVendor.division ? `, ${matchedVendor.division}` : ''}` : '-')) : (order.vendorLocation || (district ? `${district}${division ? `, ${division}` : ''}` : '-'));
+  const vendorName = matchedVendor ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName) : (order.vendorName || 'Not provided');
+  const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorBusinessName || matchedVendor.name) : (order.vendorBusinessName || vendorName);
+  const vendorId = matchedVendor ? (matchedVendor._id || matchedVendor.id || matchedVendor.vendorId) : (vendorKey || 'Not provided');
+  const vendorCategory = matchedVendor ? (matchedVendor.category || matchedVendor.subCategory || '-') : (order.vendorCategory || 'Not provided');
+  const vendorContact = matchedVendor ? (matchedVendor.contactPerson || matchedVendor.phone || matchedVendor.mobile || '-') : (order.vendorContact || order.vendorPhone || 'Not provided');
+  const vendorPhone = matchedVendor ? (matchedVendor.phone || matchedVendor.mobile) : (order.vendorPhone || 'Not provided');
+  const vendorEmail = matchedVendor ? matchedVendor.email : (order.vendorEmail || 'Not provided');
+  const vendorLocation = matchedVendor ? (matchedVendor.address || (matchedVendor.district ? `${matchedVendor.district}${matchedVendor.division ? `, ${matchedVendor.division}` : ''}` : 'Not provided')) : (order.vendorLocation || (district ? `${district}${division ? `, ${division}` : ''}` : 'Not provided'));
+
+  // Build Real Timeline from delivery_status_history
+  const rawHist = (historyMap && (historyMap.get(orderId) || historyMap.get(orderNumber) || historyMap.get(String(order._id)))) || [];
+  const sortedHist = [...rawHist].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+
+  const timeline = sortedHist.map(h => ({
+    status: h.status,
+    time: formatOrderDate(h.timestamp),
+    timestamp: h.timestamp,
+    desc: h.notes || `Order ${h.status}`,
+    updatedBy: h.updated_by || 'System'
+  }));
+
+  // Ensure initial order placed timestamp is present
+  const orderCreatedTime = order.created_at || order.createdAt || order.orderDate;
+  if (!timeline.some(t => (t.status || '').toLowerCase() === 'order placed' || (t.status || '').toLowerCase() === 'order received')) {
+    timeline.unshift({
+      status: 'Order Placed',
+      time: formatOrderDate(orderCreatedTime),
+      timestamp: orderCreatedTime,
+      desc: 'Customer placed order through catalog',
+      updatedBy: 'Customer'
+    });
+  }
 
   return {
     ...order,
@@ -135,15 +162,16 @@ function normalizeOrder(order, pinMap, vendorMap) {
     orderId: orderId,
     orderNumber,
     order_number: orderNumber,
-    orderDate: formatOrderDate(order.created_at || order.createdAt || order.orderDate),
-    created_at: order.created_at || order.createdAt,
+    orderDate: formatOrderDate(orderCreatedTime),
+    orderTime: orderCreatedTime ? new Date(orderCreatedTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Not provided',
+    created_at: orderCreatedTime,
     customerName: order.customer_name || order.customerName || order.memberName || 'Customer',
     customer_name: order.customer_name || order.customerName || order.memberName || 'Customer',
-    customerId: order.customerId || order.customerDisplayId || order.memberId || '-',
-    customerPhone: order.customer_phone || order.customerPhone || order.phone || '-',
-    customerEmail: order.customerEmail || order.email || order.candidateEmail || '-',
-    customerAddress,
-    customer_address: customerAddress,
+    customerId: order.customerId || order.customerDisplayId || order.memberId || 'Not provided',
+    customerPhone: order.customer_phone || order.customerPhone || order.phone || 'Not provided',
+    customerEmail: order.customerEmail || order.email || order.candidateEmail || 'Not provided',
+    customerAddress: customerAddress || 'Not provided',
+    customer_address: customerAddress || 'Not provided',
     state,
     district,
     division,
@@ -163,32 +191,75 @@ function normalizeOrder(order, pinMap, vendorMap) {
     tax,
     paymentMode: order.payment_method || order.paymentMethod || 'Online',
     paymentStatus: order.payment_status || order.paymentStatus || 'Paid',
-    status: order.status || 'Order Received',
+    status: order.status || order.orderStatus || 'Unknown',
     membershipTier: order.membershipTier || order.tier || 'standard',
     vendorId,
     vendor_id: vendorId,
     vendorName,
+    vendorBusinessName,
     vendorCategory,
     vendorContact,
-    vendorLocation
+    vendorPhone,
+    vendorEmail,
+    vendorLocation,
+    deliveryPartnerName: order.deliveryPartnerName || order.deliveryPartner?.name || 'Not provided',
+    deliveryPartnerId: order.deliveryPartnerId || order.deliveryPartner?.id || 'Not provided',
+    deliveryPartnerPhone: order.deliveryPartnerPhone || order.deliveryPartner?.phone || 'Not provided',
+    deliveryStatus: order.deliveryStatus || order.status || 'Not provided',
+    deliveryAssignedAt: order.deliveryAssignedAt ? formatOrderDate(order.deliveryAssignedAt) : 'Not provided',
+    timeline
   };
 }
 
 function getOrders(req, res) {
   try {
     const rawOrders = Array.from(db.orders || []);
+    // Scope geographically according to user role
     let scoped = filterByLocation(rawOrders, req.user);
+
+    // Keep commerce orders for the Orders ledger
+    const { type } = req.query;
+    if (type) {
+      scoped = scoped.filter(o => (o.type || '').toLowerCase() === type.toLowerCase());
+    } else {
+      scoped = scoped.filter(o => o.type !== 'Job');
+    }
 
     const pinMap = getPincodeDirectory();
 
-    // Fast vendor map
+    // Fast vendor map from db.vendors and db.settlements
     const vendorMap = new Map();
     Array.from(db.vendors || []).forEach(v => {
       const vId = String(v._id || v.id || '').trim();
       if (vId) vendorMap.set(vId, v);
     });
 
-    const normalizedOrders = scoped.map(o => normalizeOrder(o, pinMap, vendorMap)).filter(Boolean);
+    // Augment with settlements for business name mapping
+    Array.from(db.settlements || []).forEach(s => {
+      const vId = String(s.vendorId || s._id || s.id || '').trim();
+      if (vId) {
+        const existing = vendorMap.get(vId) || {};
+        vendorMap.set(vId, {
+          ...existing,
+          businessName: existing.businessName || existing.name || s.vendorBusinessName,
+          vendorBusinessName: s.vendorBusinessName || existing.businessName,
+          _id: vId,
+          id: vId
+        });
+      }
+    });
+
+    // Build status history lookup map
+    const historyMap = new Map();
+    Array.from(db.deliveryStatusHistory || []).forEach(h => {
+      const oId = String(h.order_id || h.order_number || '');
+      if (oId) {
+        if (!historyMap.has(oId)) historyMap.set(oId, []);
+        historyMap.get(oId).push(h);
+      }
+    });
+
+    const normalizedOrders = scoped.map(o => normalizeOrder(o, pinMap, vendorMap, historyMap)).filter(Boolean);
 
     const { search, status, pincode, district, division } = req.query;
     let filtered = normalizedOrders;

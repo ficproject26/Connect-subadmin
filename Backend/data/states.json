@@ -19,5 +19,20 @@
     "name": "Karnataka",
     "stateId": "ST-KAR-0001",
     "status": "Active"
+  },
+  {
+    "_id": "6abb46c1305af8d5cc1abed8",
+    "stateId": "ST-PY",
+    "name": "Pondicherry",
+    "code": "PY",
+    "status": "Active",
+    "description": "",
+    "logo": "",
+    "notes": "",
+    "createdBy": "6a8d22c11bc647d92ae36337",
+    "updatedBy": "6a8d22c11bc647d92ae36337",
+    "createdAt": "2026-09-29T05:04:01.662Z",
+    "updatedAt": "2026-09-29T05:04:01.662Z",
+    "__v": 0
   }
 ]

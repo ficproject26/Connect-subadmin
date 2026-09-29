@@ -41,58 +41,92 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
 
   if (!order) return null;
 
-  const statusLower = (order.status || '').toLowerCase();
+  const statusLower = (order.status || '').toLowerCase().trim();
   const isCancelled = statusLower === 'cancelled';
   const isReturnFlow = ['return requested', 'return approved', 'returned'].includes(statusLower);
 
-  // Generate or extract timeline events
+  // Generate real database-driven timeline events
   const buildTimeline = () => {
-    if (order.timeline && Array.isArray(order.timeline) && order.timeline.length > 0) {
-      return order.timeline.filter(t => (t.status || '').toLowerCase() !== 'processing');
-    }
+    // If order already has a rich timeline array from backend delivery_status_history
+    const dbTimeline = Array.isArray(order.timeline) ? order.timeline : [];
 
-    const orderDateStr = order.orderDate || '2026-03-01 10:30';
-    const baseTime = new Date(orderDateStr.replace(' ', 'T')).getTime() || Date.now();
-
-    const formatStepTime = (offsetHours) => {
-      const d = new Date(baseTime + offsetHours * 3600 * 1000);
-      return d.toLocaleString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
+    // Helper to find real timestamp from database delivery_status_history
+    const findHistoryEvent = (stepStatus) => {
+      const s = stepStatus.toLowerCase();
+      return dbTimeline.find(h => {
+        const hStatus = (h.status || '').toLowerCase();
+        if (s === 'order placed') return hStatus === 'order placed' || hStatus === 'order received';
+        if (s === 'confirmed') return hStatus === 'confirmed';
+        if (s === 'packed') return hStatus === 'packed';
+        if (s === 'shipped') return hStatus === 'shipped';
+        if (s === 'out for delivery') return hStatus === 'out for delivery';
+        if (s === 'delivered') return hStatus === 'delivered';
+        return hStatus === s;
       });
     };
 
     if (isCancelled) {
+      const cancelHist = dbTimeline.find(h => (h.status || '').toLowerCase().includes('cancel'));
       return [
-        { status: 'Order Placed', time: formatStepTime(0), desc: 'Order received into state ledger', state: 'completed' },
-        { status: 'Cancelled', time: formatStepTime(2), desc: 'Order cancelled by customer / out of stock', state: 'cancelled' }
+        {
+          status: 'Order Placed',
+          time: order.orderDate || 'Not provided',
+          desc: 'Order received into state ledger',
+          state: 'completed'
+        },
+        {
+          status: 'Cancelled',
+          time: cancelHist ? (cancelHist.time || cancelHist.timestamp) : 'Not provided',
+          desc: cancelHist?.desc || 'Order cancelled by customer or vendor',
+          state: 'cancelled'
+        }
       ];
     }
 
-    // Determine current step index in standard flow
+    // Determine current step index in standard flow based on ACTUAL database order.status
     const stepOrder = ['order placed', 'confirmed', 'packed', 'shipped', 'out for delivery', 'delivered'];
-    let currentIndex = stepOrder.indexOf(statusLower);
-    if (currentIndex === -1) {
-      if (statusLower === 'processing') {
-        currentIndex = 1; // Map processing to confirmed
-      } else {
-        currentIndex = isReturnFlow ? (stepOrder.length - 1) : 1;
-      }
+    let currentIndex = 0;
+    if (statusLower === 'order received' || statusLower === 'order placed') {
+      currentIndex = 0;
+    } else if (statusLower === 'confirmed') {
+      currentIndex = 1;
+    } else if (statusLower === 'packed') {
+      currentIndex = 2;
+    } else if (statusLower === 'shipped') {
+      currentIndex = 3;
+    } else if (statusLower === 'out for delivery') {
+      currentIndex = 4;
+    } else if (statusLower === 'delivered') {
+      currentIndex = 5;
+    } else if (isReturnFlow) {
+      currentIndex = 5; // Return flow happens after delivery
     }
 
     const events = STANDARD_STEPS.map((step, idx) => {
       let state = 'upcoming';
-      if (idx < currentIndex) state = 'completed';
-      else if (idx === currentIndex) state = 'current';
+      const hist = findHistoryEvent(step.status);
+
+      if (idx < currentIndex) {
+        state = 'completed';
+      } else if (idx === currentIndex) {
+        // If current step is Order Placed / Order Received, it has already been received/completed
+        state = (idx === 0) ? 'completed' : 'current';
+      }
+
+      // Real timestamp: only use actual history event timestamp or order creation date for step 0
+      let time = null;
+      if (hist && hist.time) {
+        time = hist.time;
+      } else if (idx === 0) {
+        time = order.orderDate || (order.created_at ? new Date(order.created_at).toLocaleString('en-IN') : null);
+      } else if (idx <= currentIndex && hist) {
+        time = hist.time;
+      }
 
       return {
         status: step.status,
-        desc: step.desc,
-        time: idx <= currentIndex ? formatStepTime(idx * 4 + 1) : null,
+        desc: hist?.desc || step.desc,
+        time,
         state
       };
     });
@@ -104,13 +138,14 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
 
       RETURN_STEPS.forEach((step, rIdx) => {
         let state = 'upcoming';
+        const hist = findHistoryEvent(step.status);
         if (rIdx < currentReturnIdx) state = 'completed';
         else if (rIdx === currentReturnIdx) state = 'current';
 
         events.push({
           status: step.status,
-          desc: step.desc,
-          time: rIdx <= currentReturnIdx ? formatStepTime(28 + rIdx * 6) : null,
+          desc: hist?.desc || step.desc,
+          time: hist ? hist.time : null,
           state,
           isReturn: true
         });
@@ -127,12 +162,14 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
   const normalizedTier = isCardMember ? 
     (order.membershipTier.charAt(0).toUpperCase() + order.membershipTier.slice(1).toLowerCase()) : null;
 
-  // Derive vendor details based on order data
-  const vendorName = order.vendorName || order.vendor?.name || 'Unassigned';
-  const vendorId = order.vendorId || order.vendor?.id || '-';
-  const vendorCategory = order.vendorCategory || order.vendor?.category || '-';
-  const vendorContact = order.vendorContact || order.vendor?.contactPerson || '-';
-  const vendorLocation = order.vendorLocation || (order.district ? `${order.district}${order.division ? `, ${order.division}` : ''}` : '-');
+  // Real vendor details from database
+  const vendorName = order.vendorBusinessName || order.vendorName || 'Not provided';
+  const vendorId = order.vendorId && order.vendorId !== '-' ? order.vendorId : 'Not provided';
+  const vendorCategory = order.vendorCategory && order.vendorCategory !== '-' ? order.vendorCategory : 'Not provided';
+  const vendorContact = order.vendorContact && order.vendorContact !== '-' ? order.vendorContact : (order.vendorPhone || 'Not provided');
+  const vendorPhone = order.vendorPhone && order.vendorPhone !== '-' ? order.vendorPhone : 'Not provided';
+  const vendorEmail = order.vendorEmail && order.vendorEmail !== '-' ? order.vendorEmail : 'Not provided';
+  const vendorLocation = order.vendorLocation && order.vendorLocation !== '-' ? order.vendorLocation : (order.district ? `${order.district}${order.division ? `, ${order.division}` : ''}` : 'Not provided');
 
   return (
     <Modal
@@ -149,30 +186,33 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
       maxWidth="max-w-3xl"
     >
       <div className="space-y-6">
-        {/* Top Summary Card - Clean & Balanced 50/50 Layout */}
+        {/* Top Summary Card - 3-way layout for Customer, Vendor, and Delivery */}
         <div className={`p-4 rounded-xl border ${
           isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/70 border-slate-200'
         }`}>
-          <div className="grid grid-cols-2 divide-x divide-slate-200 dark:divide-slate-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800">
             {/* Left: Customer Details */}
-            <div className="pr-5 space-y-2">
+            <div className="md:pr-4 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-navy-muted dark:text-slate-400 flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-navy dark:text-blue-400" />
                   Customer Details
                 </span>
                 <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-                  ID: {order.customerId || '-'}
+                  ID: {order.customerId || 'Not provided'}
                 </span>
               </div>
 
               <div>
                 <div className="font-bold text-sm text-navy dark:text-white">
-                  {order.customerName}
+                  {order.customerName || 'Customer'}
                 </div>
-                {order.customerPhone && order.customerPhone !== '-' && (
-                  <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300">
-                    Phone: {order.customerPhone}
+                <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300">
+                  Phone: {order.customerPhone && order.customerPhone !== '-' ? order.customerPhone : 'Not provided'}
+                </div>
+                {order.customerEmail && order.customerEmail !== 'Not provided' && order.customerEmail !== '-' && (
+                  <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
+                    Email: {order.customerEmail}
                   </div>
                 )}
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
@@ -185,29 +225,25 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
                     </>
                   )}
                 </div>
-                {order.customerAddress && (
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-2 mt-0.5" title={order.customerAddress}>
-                    {order.customerAddress}
-                  </div>
-                )}
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-2 mt-0.5" title={order.customerAddress}>
+                  {order.customerAddress || 'Not provided'}
+                </div>
               </div>
 
               <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
                 <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                <span>Order: <span className="font-medium text-navy-secondary dark:text-slate-200">{order.orderDate}</span></span>
-                <span>•</span>
-                <span>Est: <span className="font-medium text-navy-secondary dark:text-slate-200">{order.deliveryDate || 'Within 24 hrs'}</span></span>
+                <span>Order Date: <span className="font-medium text-navy-secondary dark:text-slate-200">{order.orderDate || 'Not provided'}</span></span>
               </div>
             </div>
 
             {/* Right: Vendor Details */}
-            <div className="pl-5 space-y-2">
+            <div className="pt-4 md:pt-0 md:pl-5 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-navy-muted dark:text-slate-400 flex items-center gap-1.5">
                   <Store className="w-3.5 h-3.5 text-navy dark:text-blue-400" />
                   Vendor Details
                 </span>
-                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
+                <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate max-w-[150px]" title={vendorId}>
                   ID: {vendorId}
                 </span>
               </div>
@@ -216,9 +252,9 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
                 <div className="font-bold text-sm text-navy dark:text-white">
                   {vendorName}
                 </div>
-                {vendorCategory && vendorCategory !== '-' && (
+                {vendorCategory && vendorCategory !== 'Not provided' && (
                   <div className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                    {vendorCategory}
+                    Category: {vendorCategory}
                   </div>
                 )}
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
@@ -227,10 +263,37 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
                 </div>
               </div>
 
-              <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
-                <User className="w-3 h-3 text-slate-400 shrink-0" />
-                <span>Contact: <span className="font-medium text-navy-secondary dark:text-slate-200">{vendorContact}</span></span>
+              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5 pt-0.5">
+                <div className="flex items-center gap-1.5">
+                  <User className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span>Contact: <span className="font-medium text-navy-secondary dark:text-slate-200">{vendorContact}</span></span>
+                </div>
+                {vendorEmail !== 'Not provided' && (
+                  <div className="text-[11px] text-slate-400 font-mono truncate">
+                    Email: {vendorEmail}
+                  </div>
+                )}
               </div>
+            </div>
+          </div>
+
+          {/* Delivery Details Row */}
+          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Delivery Partner</span>
+              <span className="font-medium text-slate-800 dark:text-slate-200">{order.deliveryPartnerName || 'Not assigned'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Partner Contact</span>
+              <span className="font-mono text-slate-800 dark:text-slate-200">{order.deliveryPartnerPhone || 'Not provided'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Delivery Status</span>
+              <span className="font-semibold text-blue-600 dark:text-indigo-400">{order.deliveryStatus || order.status}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Assigned Date</span>
+              <span className="text-slate-800 dark:text-slate-200">{order.deliveryAssignedAt || 'Pending assignment'}</span>
             </div>
           </div>
         </div>

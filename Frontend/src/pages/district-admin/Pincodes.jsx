@@ -44,7 +44,7 @@ export function DistrictPincodes() {
     const adminName = row.adminName || row.assignedAdmin || 'Unassigned';
     return {
       id: row.adminId || `ADM-PIN-${row.pincode}`,
-      employeeCode: row.employeeCode || `EMP-PIN-${row.pincode.slice(-3)}`,
+      employeeCode: row.employeeCode || '-',
       name: adminName,
       email: row.adminEmail || '-',
       phone: row.adminPhone || '-',
@@ -55,32 +55,32 @@ export function DistrictPincodes() {
       district: row.district || user?.district || '-',
       state: user?.state || '-',
       totalCustomers: row.customerCount || row.customers || 0,
-      population: row.population || '45,000+',
+      population: row.population || '-',
       status: row.status || 'Active',
-      joinedDate: row.joinedDate || '15 Jan 2024',
-      qualification: row.qualification || 'Bachelor of Science / Management',
-      experience: row.experience || '4+ Years Field Operations',
-      specialization: row.specialization || 'Hyperlocal Territory & Courier Logistics',
+      joinedDate: row.joinedDate || '-',
+      qualification: row.qualification || '-',
+      experience: row.experience || '-',
+      specialization: row.specialization || '-',
       address: row.address || `Pincode Hyperlocal Hub ${row.pincode}, ${row.areaName || 'Zone'}, ${row.division || ''} Division, ${user?.district || ''}`
     };
   };
 
   const getWorkforceMetrics = (pin) => [
-    { label: 'Total Managers', value: pin.totalManagers || 1, icon: UserCog, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
-    { label: 'Total Agents', value: pin.totalAgents || 3, icon: Users, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
-    { label: 'Delivery Partners', value: pin.deliveryPartner || 12, icon: Truck, color: 'text-cyan-500 bg-cyan-50 dark:bg-cyan-950/60 border-cyan-200 dark:border-cyan-900/50' },
-    { label: 'Technicians', value: pin.technician || 6, icon: Wrench, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900/50' },
-    { label: 'Field Executives', value: pin.executive || 4, icon: Award, color: 'text-violet-500 bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-900/50' },
-    { label: 'Pending KYC Checks', value: pin.pendingKYC || 2, icon: ShieldAlert, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900/50' }
+    { label: 'Total Managers', value: pin.totalManagers || 0, icon: UserCog, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
+    { label: 'Total Agents', value: pin.totalAgents || 0, icon: Users, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
+    { label: 'Delivery Partners', value: pin.deliveryPartner || 0, icon: Truck, color: 'text-cyan-500 bg-cyan-50 dark:bg-cyan-950/60 border-cyan-200 dark:border-cyan-900/50' },
+    { label: 'Technicians', value: pin.technician || 0, icon: Wrench, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900/50' },
+    { label: 'Field Executives', value: pin.executive || 0, icon: Award, color: 'text-violet-500 bg-violet-50 dark:bg-violet-950/60 border-violet-200 dark:border-violet-900/50' },
+    { label: 'Pending KYC Checks', value: pin.pendingKYC || 0, icon: ShieldAlert, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900/50' }
   ];
 
   const getCommerceMetrics = (pin) => [
-    { label: 'Total Customers', value: (pin.customers || pin.customerCount || pin.totalCustomers || 124).toLocaleString(), icon: Users, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-900/50' },
-    { label: 'Total Vendors', value: (pin.vendors || 18).toLocaleString(), icon: Store, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/60 border-orange-200 dark:border-orange-900/50' },
-    { label: 'Total Orders', value: (pin.orders || 342).toLocaleString(), icon: Package, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
-    { label: 'Total Bookings', value: (pin.totalBookings || 89).toLocaleString(), icon: CalendarCheck, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/60 border-purple-200 dark:border-purple-900/50' },
-    { label: 'Job Applications', value: (pin.totalJobApplied || 28).toLocaleString(), icon: Briefcase, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
-    { label: 'Membership Cards', value: (pin.totalMembershipCards || 45).toLocaleString(), icon: CreditCard, color: 'text-teal-500 bg-teal-50 dark:bg-teal-950/60 border-teal-200 dark:border-teal-900/50' }
+    { label: 'Total Customers', value: (pin.customers || pin.customerCount || pin.totalCustomers || 0).toLocaleString(), icon: Users, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-900/50' },
+    { label: 'Total Vendors', value: (pin.vendors || 0).toLocaleString(), icon: Store, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/60 border-orange-200 dark:border-orange-900/50' },
+    { label: 'Total Orders', value: (pin.orders || 0).toLocaleString(), icon: Package, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/50' },
+    { label: 'Total Bookings', value: (pin.totalBookings || 0).toLocaleString(), icon: CalendarCheck, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/60 border-purple-200 dark:border-purple-900/50' },
+    { label: 'Job Applications', value: (pin.totalJobApplied || 0).toLocaleString(), icon: Briefcase, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-900/50' },
+    { label: 'Membership Cards', value: (pin.totalMembershipCards || 0).toLocaleString(), icon: CreditCard, color: 'text-teal-500 bg-teal-50 dark:bg-teal-950/60 border-teal-200 dark:border-teal-900/50' }
   ];
 
   const loadData = async () => {
@@ -608,13 +608,13 @@ export function DistrictPincodes() {
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Customers</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.customers || selectedPincode.customerCount || 124).toLocaleString()}
+                    {(selectedPincode.customers || selectedPincode.customerCount || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Vendors</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.vendors || 18).toLocaleString()}
+                    {(selectedPincode.vendors || 0).toLocaleString()}
                   </div>
                   <button
                     type="button"
@@ -628,13 +628,13 @@ export function DistrictPincodes() {
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Total Orders</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.orders || 342).toLocaleString()}
+                    {(selectedPincode.orders || 0).toLocaleString()}
                   </div>
                 </div>
                 <div className={`p-3 rounded-xl border text-center ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Bookings</div>
                   <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                    {(selectedPincode.totalBookings || 89).toLocaleString()}
+                    {(selectedPincode.totalBookings || 0).toLocaleString()}
                   </div>
                 </div>
               </div>

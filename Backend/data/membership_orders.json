@@ -404,5 +404,21 @@
     "createdAt": "2026-09-28T03:57:54.246Z",
     "paymentId": "pay_mem_1790567873241_6541",
     "updatedAt": "2026-09-28T03:57:55.957Z"
+  },
+  {
+    "_id": "6abb4ab0865b162b2fc0bb44",
+    "orderId": "order_test_1790659248497_5156",
+    "userId": "cust_1789534115636",
+    "customerId": "FIC-CUST-154981",
+    "planKey": "Gold Elite",
+    "planName": "Gold Elite",
+    "planLevel": 2,
+    "previousPlan": "Silver Tier",
+    "amountRupees": 15000,
+    "amountPaise": 1500000,
+    "status": "COMPLETED",
+    "createdAt": "2026-09-29T05:20:48.497Z",
+    "paymentId": "pay_mem_1790659250368_2432",
+    "updatedAt": "2026-09-29T05:20:50.577Z"
   }
 ]

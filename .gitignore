@@ -8,6 +8,11 @@ dist/
 build/
 Frontend/dist/
 
+# Electron release/packager output
+Frontend/release/
+release/
+
+
 # Environment variables
 .env
 Backend/.env

@@ -2,11 +2,19 @@
   "name": "admin-management-frontend",
   "private": true,
   "version": "1.0.0",
+  "description": "Desktop Application",
+  "author": "Forge India Connect",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+
+    "electron:dev": "cross-env ELECTRON_DEV=true electron .",
+    "electron:start": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && cross-env ELECTRON_DEV=true electron .\"",
+    "electron:build": "npm run build && electron-builder --win",
+    "dist": "npm run build && electron-builder --win --publish never"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -21,8 +29,57 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
-    "vite": "^5.2.11"
+    "vite": "^5.2.11",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "in.ficapp.subadmin",
+    "productName": "Forge India Connect Admin",
+    "copyright": "Copyright © 2024 Forge India Connect",
+    "directories": {
+      "buildResources": "electron/icons",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "electron/icons/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FIC Admin"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.exe"
+    }
   }
 }
+

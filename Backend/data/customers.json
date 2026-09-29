@@ -418,12 +418,25 @@
     "isActive": true,
     "addresses": [
       {
-        "id": "addr_1_1789534115637",
+        "name": "Moorthy",
+        "phone": "6379789641",
+        "pincode": "560091",
+        "locality": "Vinayaka Layout",
+        "address": "Kengeri Main Road",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "landmark": "",
+        "altPhone": "",
+        "type": "Work",
+        "id": "addr_1790661327378_275"
+      },
+      {
+        "id": "addr_reg_cust_1789534115636",
         "name": "Moorthy",
         "phone": "6379789641",
         "pincode": "560072",
         "locality": "bangalore",
-        "address": "excel coworks west",
+        "address": "edwasgthdyfygmfnhdbgfvred",
         "city": "bangalore",
         "state": "Karnataka",
         "landmark": "",
@@ -447,11 +460,20 @@
         "amount": 8000,
         "status": "SUCCESS",
         "date": "2026-09-24T12:29:51.350Z"
+      },
+      {
+        "plan": "Gold Elite",
+        "previousPlan": "Silver Tier",
+        "paymentId": "pay_mem_1790659250368_2432",
+        "orderId": "order_test_1790659248497_5156",
+        "amount": 15000,
+        "status": "SUCCESS",
+        "date": "2026-09-29T05:20:50.577Z"
       }
     ],
     "membershipStatus": "ACTIVE",
-    "membershipTier": "Silver Tier",
-    "membershipUpdatedAt": "2026-09-24T12:29:51.350Z"
+    "membershipTier": "Gold Elite",
+    "membershipUpdatedAt": "2026-09-29T05:20:50.577Z"
   },
   {
     "_id": "cust_1789538278814",
