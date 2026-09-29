@@ -252,14 +252,16 @@ function getMembershipCards(req, res) {
   }
 }
 
-function upgradeMembership(req, res) {
+async function upgradeMembership(req, res) {
   try {
     const { customerId, tier, pointsBonus } = req.body;
     if (!['Silver', 'Gold', 'Diamond'].includes(tier)) {
       return res.status(400).json({ success: false, message: 'Invalid tier. Must be Silver, Gold, or Diamond.' });
     }
 
-    const customer = db.customers.find(c => (c.id === customerId || c._id === customerId));
+    const customer = await db.customers.findOne({
+      $or: [{ _id: customerId }, { id: customerId }]
+    });
     if (!customer) {
       return res.status(404).json({ success: false, message: 'Customer not found' });
     }
@@ -271,15 +273,23 @@ function upgradeMembership(req, res) {
     }
 
     const discountMap = { Silver: 5, Gold: 12, Diamond: 20 };
-    if (!customer.membership) customer.membership = {};
-    customer.membership.tier = tier;
-    customer.membership.discountPercent = discountMap[tier];
-    if (pointsBonus) customer.membership.points = (customer.membership.points || 0) + Number(pointsBonus);
+    const membership = {
+      ...(customer.membership || {}),
+      tier,
+      discountPercent: discountMap[tier],
+      points: (customer.membership?.points || 0) + (pointsBonus ? Number(pointsBonus) : 0),
+      updatedAt: new Date().toISOString()
+    };
+
+    const updated = await db.customers.findByIdAndUpdate(customer._id || customer.id, {
+      membership,
+      updatedAt: new Date().toISOString()
+    });
 
     return res.json({
       success: true,
       message: `Customer ${customer.name} upgraded to ${tier} membership.`,
-      customer
+      customer: updated || { ...customer, membership }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to upgrade membership', error: error.message });

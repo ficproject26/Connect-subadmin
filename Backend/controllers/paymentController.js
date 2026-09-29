@@ -34,12 +34,14 @@ function getAgentPayments(req, res) {
   }
 }
 
-function processAgentPayment(req, res) {
+async function processAgentPayment(req, res) {
   try {
     const { id } = req.params;
     const { action, transactionRef, notes } = req.body; // action: 'approve' | 'pay' | 'reject'
 
-    const payment = db.agentPayments.find(p => p.id === id);
+    const payment = await db.agentPayments.findOne({
+      $or: [{ _id: id }, { id: id }]
+    });
     if (!payment) {
       return res.status(404).json({ success: false, message: 'Payment request not found' });
     }
@@ -50,37 +52,40 @@ function processAgentPayment(req, res) {
     }
 
     const currentDate = new Date().toISOString().split('T')[0];
+    const updates = { updatedAt: new Date().toISOString() };
 
     if (action === 'approve') {
-      payment.status = 'Approved';
-      payment.approvedBy = `${req.user.name} (${req.user.role})`;
-      payment.approvalDate = currentDate;
-      if (notes) payment.notes = notes;
+      updates.status = 'Approved';
+      updates.approvedBy = `${req.user.name} (${req.user.role})`;
+      updates.approvalDate = currentDate;
+      if (notes) updates.notes = notes;
     } else if (action === 'pay') {
-      payment.status = 'Paid';
-      payment.paidBy = `${req.user.name} (${req.user.role})`;
-      payment.paidDate = currentDate;
-      payment.transactionRef = transactionRef || `TXN-REF-${Date.now()}`;
-      if (notes) payment.notes = notes;
+      updates.status = 'Paid';
+      updates.paidBy = `${req.user.name} (${req.user.role})`;
+      updates.paidDate = currentDate;
+      updates.transactionRef = transactionRef || `TXN-REF-${Date.now()}`;
+      if (notes) updates.notes = notes;
     } else if (action === 'reject') {
-      payment.status = 'Rejected';
-      payment.rejectedBy = `${req.user.name} (${req.user.role})`;
-      payment.rejectionReason = notes || 'Rejected during administrative review';
+      updates.status = 'Rejected';
+      updates.rejectedBy = `${req.user.name} (${req.user.role})`;
+      updates.rejectionReason = notes || 'Rejected during administrative review';
     } else {
       return res.status(400).json({ success: false, message: 'Invalid action. Must be approve, pay, or reject' });
     }
 
+    const updated = await db.agentPayments.findByIdAndUpdate(payment._id || payment.id, updates);
+
     return res.json({
       success: true,
-      message: `Payment request marked as ${payment.status}`,
-      payment
+      message: `Payment request marked as ${updates.status}`,
+      payment: updated || { ...payment, ...updates }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to process payment', error: error.message });
   }
 }
 
-function requestAgentPayment(req, res) {
+async function requestAgentPayment(req, res) {
   try {
     const { agentId, agentName, amount, paymentDetails, notes } = req.body;
     if (!agentName || !amount) {
@@ -99,15 +104,17 @@ function requestAgentPayment(req, res) {
       paymentDetails: paymentDetails || 'UPI / Bank Transfer',
       requestDate: new Date().toISOString().split('T')[0],
       status: 'Pending',
-      notes: notes || 'Direct Commission Settlement Request'
+      notes: notes || 'Direct Commission Settlement Request',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
-    db.agentPayments.unshift(newPayment);
+    const inserted = await db.agentPayments.insertOne(newPayment);
 
     return res.status(201).json({
       success: true,
       message: 'Payment request submitted successfully',
-      payment: newPayment
+      payment: inserted || newPayment
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to submit payment request', error: error.message });
@@ -139,12 +146,14 @@ function getVendorPayments(req, res) {
   }
 }
 
-function processVendorPayment(req, res) {
+async function processVendorPayment(req, res) {
   try {
     const { id } = req.params;
     const { action, transactionRef, notes } = req.body;
 
-    const payment = db.vendorPayments.find(p => p.id === id);
+    const payment = await db.vendorPayments.findOne({
+      $or: [{ _id: id }, { id: id }]
+    });
     if (!payment) return res.status(404).json({ success: false, message: 'Vendor payment not found' });
 
     const scoped = filterByLocation([payment], req.user);
@@ -153,20 +162,27 @@ function processVendorPayment(req, res) {
     }
 
     const currentDate = new Date().toISOString().split('T')[0];
+    const updates = { updatedAt: new Date().toISOString() };
 
     if (action === 'approve') {
-      payment.status = 'Approved';
-      payment.approvedBy = `${req.user.name} (${req.user.role})`;
-      payment.approvalDate = currentDate;
+      updates.status = 'Approved';
+      updates.approvedBy = `${req.user.name} (${req.user.role})`;
+      updates.approvalDate = currentDate;
     } else if (action === 'pay') {
-      payment.status = 'Paid';
-      payment.paidDate = currentDate;
-      payment.transactionRef = transactionRef || `UTR-${Date.now()}`;
+      updates.status = 'Paid';
+      updates.paidDate = currentDate;
+      updates.transactionRef = transactionRef || `UTR-${Date.now()}`;
     }
 
-    if (notes) payment.notes = notes;
+    if (notes) updates.notes = notes;
 
-    return res.json({ success: true, message: `Vendor payment marked as ${payment.status}`, payment });
+    const updated = await db.vendorPayments.findByIdAndUpdate(payment._id || payment.id, updates);
+
+    return res.json({
+      success: true,
+      message: `Vendor payment marked as ${updates.status || payment.status}`,
+      payment: updated || { ...payment, ...updates }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to process vendor payment', error: error.message });
   }

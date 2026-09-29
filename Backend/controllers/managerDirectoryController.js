@@ -536,18 +536,20 @@ const approveManager = async (req, res) => {
       });
     }
 
-    // Update status to active, adminApprovalStatus to approved, and kycStatus to Verified (skip KYC for now)
-    manager.status = 'active';
-    manager.adminApprovalStatus = 'approved';
-    manager.kycStatus = 'Verified';
-    manager.adminApprovedBy = req.user.name || req.user.email;
-    manager.adminApprovedById = req.user.id || req.user._id;
-    manager.adminApprovedByRole = req.user.role;
-    manager.adminApprovedAt = new Date().toISOString();
-    manager.rejectionReason = null;
-    manager.updatedAt = new Date().toISOString();
+    const approveUpdates = {
+      status: 'active',
+      adminApprovalStatus: 'approved',
+      kycStatus: 'Verified',
+      adminApprovedBy: req.user.name || req.user.email,
+      adminApprovedById: req.user.id || req.user._id,
+      adminApprovedByRole: req.user.role,
+      adminApprovedAt: new Date().toISOString(),
+      rejectionReason: null,
+      updatedAt: new Date().toISOString()
+    };
+    Object.assign(manager, approveUpdates);
 
-    await db.users.update(manager);
+    await db.users.findByIdAndUpdate(manager._id || manager.id, approveUpdates);
 
     // Audit log entry
     await db.auditLogs.insertOne({
@@ -601,16 +603,19 @@ const rejectManager = async (req, res) => {
     const rejectionReason = (reason || '').trim() || 'Registration credentials or KYC documents did not meet the required criteria.';
 
     // Update status to rejected
-    manager.status = 'rejected';
-    manager.adminApprovalStatus = 'rejected';
-    manager.rejectionReason = rejectionReason;
-    manager.adminRejectedBy = req.user.name || req.user.email;
-    manager.adminRejectedById = req.user.id || req.user._id;
-    manager.adminRejectedByRole = req.user.role;
-    manager.adminRejectedAt = new Date().toISOString();
-    manager.updatedAt = new Date().toISOString();
+    const rejectUpdates = {
+      status: 'rejected',
+      adminApprovalStatus: 'rejected',
+      rejectionReason,
+      adminRejectedBy: req.user.name || req.user.email,
+      adminRejectedById: req.user.id || req.user._id,
+      adminRejectedByRole: req.user.role,
+      adminRejectedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    Object.assign(manager, rejectUpdates);
 
-    await db.users.update(manager);
+    await db.users.findByIdAndUpdate(manager._id || manager.id, rejectUpdates);
 
     // Audit log entry
     await db.auditLogs.insertOne({

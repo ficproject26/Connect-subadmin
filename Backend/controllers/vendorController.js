@@ -682,10 +682,12 @@ const pincodeAdminVerifyVendor = async (req, res) => {
     // Sync KYC records
     const kycRecord = (db.kycRecords || []).find(k => k.id === `KYC-${id}` || k.vendorId === id);
     if (kycRecord) {
-      kycRecord.status = updates.kycStatus;
-      kycRecord.verifiedBy = decidedBy;
-      kycRecord.verifiedDate = decidedAt.split('T')[0];
-      kycRecord.notes = isReject ? `Rejected by Pincode Admin: ${rejectionReason.trim()}` : 'Approved by Pincode Admin. Forwarded to KYC Team.';
+      await db.kycRecords.findByIdAndUpdate(kycRecord._id || kycRecord.id, {
+        status: updates.kycStatus,
+        verifiedBy: decidedBy,
+        verifiedDate: decidedAt.split('T')[0],
+        notes: isReject ? `Rejected by Pincode Admin: ${rejectionReason.trim()}` : 'Approved by Pincode Admin. Forwarded to KYC Team.'
+      });
     }
 
     // Audit log
@@ -766,10 +768,12 @@ const kycVerifyVendor = async (req, res) => {
     // Sync KYC records
     const kycRecord = (db.kycRecords || []).find(k => k.id === `KYC-${id}` || k.vendorId === id);
     if (kycRecord) {
-      kycRecord.status = updates.kycStatus;
-      kycRecord.verifiedBy = decidedBy;
-      kycRecord.verifiedDate = decidedAt.split('T')[0];
-      kycRecord.notes = isReject ? `KYC Rejected: ${rejectionReason.trim()}` : 'KYC Clearance Completed. Merchant certified.';
+      await db.kycRecords.findByIdAndUpdate(kycRecord._id || kycRecord.id, {
+        status: updates.kycStatus,
+        verifiedBy: decidedBy,
+        verifiedDate: decidedAt.split('T')[0],
+        notes: isReject ? `KYC Rejected: ${rejectionReason.trim()}` : 'KYC Clearance Completed. Merchant certified.'
+      });
     }
 
     // Audit log

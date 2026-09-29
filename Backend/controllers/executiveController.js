@@ -19,12 +19,14 @@ function getSupportTeam(req, res) {
   }
 }
 
-function updateTicketStatus(req, res) {
+async function updateTicketStatus(req, res) {
   try {
     const { id } = req.params;
     const { status, assignedTo } = req.body;
 
-    const ticket = db.supportTeam.find(t => t.id === id);
+    const ticket = await db.supportTeam.findOne({
+      $or: [{ _id: id }, { id: id }]
+    });
     if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
     const scoped = filterByLocation([ticket], req.user);
@@ -32,10 +34,13 @@ function updateTicketStatus(req, res) {
       return res.status(403).json({ success: false, message: 'Ticket outside your jurisdiction' });
     }
 
-    if (status) ticket.status = status;
-    if (assignedTo) ticket.assignedTo = assignedTo;
+    const updates = { updatedAt: new Date().toISOString() };
+    if (status) updates.status = status;
+    if (assignedTo) updates.assignedTo = assignedTo;
 
-    return res.json({ success: true, message: 'Ticket updated', ticket });
+    const updated = await db.supportTeam.findByIdAndUpdate(ticket._id || ticket.id, updates);
+
+    return res.json({ success: true, message: 'Ticket updated', ticket: updated || { ...ticket, ...updates } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to update ticket', error: error.message });
   }
@@ -652,10 +657,13 @@ function createAgentActivity(req, res) {
     };
 
     if (!db.agentActivities) db.agentActivities = [];
-    db.agentActivities.unshift(newActivity);
+    await db.agentActivities.insertOne(newActivity);
 
     const foundAgent = db.agents.find(a => String(a.id || a._id) === String(pincodeAgent.id || pincodeAgent._id));
-    if (foundAgent) foundAgent.vendorOnboardings = (foundAgent.vendorOnboardings || 0) + 1;
+    if (foundAgent) {
+      const updatedOnboardings = (foundAgent.vendorOnboardings || 0) + 1;
+      await db.agents.findByIdAndUpdate(foundAgent.id || foundAgent._id, { vendorOnboardings: updatedOnboardings });
+    }
 
     return res.status(201).json({ success: true, message: 'Vendor onboarding activity created and routed to Divisional Agent', activity: newActivity });
   } catch (error) {
@@ -666,11 +674,11 @@ function createAgentActivity(req, res) {
 // ─────────────────────────────────────────────────────────────────
 // PATCH /operations/agents/activities/:id/advance
 // ─────────────────────────────────────────────────────────────────
-function advanceAgentActivity(req, res) {
+async function advanceAgentActivity(req, res) {
   try {
     const { id } = req.params;
     const { notes } = req.body;
-    const activity = (db.agentActivities || []).find(a => a.id === id);
+    const activity = (db.agentActivities || []).find(a => String(a.id || a._id) === String(id));
 
     if (!activity) {
       return res.status(404).json({ success: false, message: 'Activity record not found' });
@@ -710,10 +718,16 @@ function advanceAgentActivity(req, res) {
 
       const pinAgent = db.agents.find(a => String(a.id || a._id) === String(activity.pincodeAgent?.id));
       if (pinAgent) {
-        pinAgent.walletBalance = (pinAgent.walletBalance || 0) + (activity.commissionAmount || 1500);
-        pinAgent.totalEarned = (pinAgent.totalEarned || 0) + (activity.commissionAmount || 1500);
+        const newBal = (pinAgent.walletBalance || 0) + (activity.commissionAmount || 1500);
+        const newEarned = (pinAgent.totalEarned || 0) + (activity.commissionAmount || 1500);
+        await db.agents.findByIdAndUpdate(pinAgent.id || pinAgent._id, {
+          walletBalance: newBal,
+          totalEarned: newEarned
+        });
       }
     }
+
+    await db.agentActivities.findByIdAndUpdate(activity.id || activity._id, activity);
 
     return res.json({ success: true, message: `Activity advanced to ${activity.currentStage} (${activity.status})`, activity });
   } catch (error) {

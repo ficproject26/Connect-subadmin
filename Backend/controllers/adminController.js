@@ -291,21 +291,38 @@ async function addStateAdmin(req, res) {
   }
 }
 
-function updateStateStatus(req, res) {
+async function updateStateStatus(req, res) {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    let updated = null;
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
 
-    db.hierarchy.states.forEach(s => {
-      if (s.id === id || s.name === id || s.code === id) {
-        s.status = status;
-        updated = s;
-      }
+    const state = await db.states.findOne({
+      $or: [{ _id: id }, { id: id }, { stateId: id }, { name: id }, { code: id }]
     });
 
-    if (!updated) {
+    if (!state) {
       return res.status(404).json({ success: false, message: 'State not found' });
+    }
+
+    const updated = await db.states.findByIdAndUpdate(state._id || state.id, {
+      status,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Sync associated State Admin status in users collection
+    const allUsers = Array.from(db.users || []);
+    const adminUser = allUsers.find(u =>
+      (u.state === state.name || u.stateId === (state.stateId || state.id || state._id)) &&
+      (u.role === 'State Admin' || (u.role || '').toLowerCase().includes('state admin'))
+    );
+    if (adminUser) {
+      await db.users.findByIdAndUpdate(adminUser._id || adminUser.id, {
+        status: status.toLowerCase() === 'active' ? 'active' : 'suspended',
+        updatedAt: new Date().toISOString()
+      });
     }
 
     return res.json({ success: true, message: `State status updated to ${status}`, state: updated });
@@ -747,23 +764,38 @@ async function addDistrictAdmin(req, res) {
   }
 }
 
-function updateDistrictStatus(req, res) {
+async function updateDistrictStatus(req, res) {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    let updated = null;
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
 
-    db.hierarchy.states.forEach(s => {
-      s.districts.forEach(d => {
-        if (d.id === id || d.name === id || d.code === id) {
-          d.status = status;
-          updated = d;
-        }
-      });
+    const district = await db.districts.findOne({
+      $or: [{ _id: id }, { id: id }, { districtId: id }, { name: id }, { code: id }]
     });
 
-    if (!updated) {
+    if (!district) {
       return res.status(404).json({ success: false, message: 'District not found' });
+    }
+
+    const updated = await db.districts.findByIdAndUpdate(district._id || district.id, {
+      status,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Sync associated District Admin status in users collection
+    const allUsers = Array.from(db.users || []);
+    const adminUser = allUsers.find(u =>
+      (u.district === district.name || u.districtId === (district.districtId || district.id || district._id)) &&
+      (u.role === 'District Admin' || (u.role || '').toLowerCase().includes('district admin'))
+    );
+    if (adminUser) {
+      await db.users.findByIdAndUpdate(adminUser._id || adminUser.id, {
+        status: status.toLowerCase() === 'active' ? 'active' : 'suspended',
+        updatedAt: new Date().toISOString()
+      });
     }
 
     return res.json({ success: true, message: `District status updated to ${status}`, district: updated });
@@ -1240,25 +1272,38 @@ async function addDivisionAdmin(req, res) {
   }
 }
 
-function updateDivisionStatus(req, res) {
+async function updateDivisionStatus(req, res) {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    let updated = null;
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
 
-    db.hierarchy.states.forEach(s => {
-      s.districts.forEach(d => {
-        d.divisions?.forEach(div => {
-          if (div.id === id || div.name === id) {
-            div.status = status;
-            updated = div;
-          }
-        });
-      });
+    const division = await db.divisions.findOne({
+      $or: [{ _id: id }, { id: id }, { divisionId: id }, { name: id }, { code: id }]
     });
 
-    if (!updated) {
+    if (!division) {
       return res.status(404).json({ success: false, message: 'Division not found' });
+    }
+
+    const updated = await db.divisions.findByIdAndUpdate(division._id || division.id, {
+      status,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Sync associated Division Admin status in users collection
+    const allUsers = Array.from(db.users || []);
+    const adminUser = allUsers.find(u =>
+      (u.division === division.name || u.divisionId === (division.divisionId || division.id || division._id)) &&
+      (u.role === 'Division Admin' || u.role === 'Divisional Admin' || (u.role || '').toLowerCase().includes('division admin'))
+    );
+    if (adminUser) {
+      await db.users.findByIdAndUpdate(adminUser._id || adminUser.id, {
+        status: status.toLowerCase() === 'active' ? 'active' : 'suspended',
+        updatedAt: new Date().toISOString()
+      });
     }
 
     return res.json({ success: true, message: `Division status updated to ${status}`, division: updated });
@@ -1616,16 +1661,36 @@ async function addPincodeAdmin(req, res) {
   }
 }
 
-function updatePincodeStatus(req, res) {
+async function updatePincodeStatus(req, res) {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
 
-    const allUsers = Array.from(db.users);
-    const user = allUsers.find(u => u.pincode === id && u.role === 'Pincode Admin');
-    if (user) {
-      user.status = status.toLowerCase();
-      db.users.update(user);
+    const pinDoc = await db.pincodes.findOne({
+      $or: [{ _id: id }, { id: id }, { code: id }, { pincode: id }]
+    });
+
+    if (pinDoc) {
+      await db.pincodes.findByIdAndUpdate(pinDoc._id || pinDoc.id, {
+        status,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    const pinCode = pinDoc?.code || pinDoc?.pincode || id;
+    const allUsers = Array.from(db.users || []);
+    const adminUser = allUsers.find(u =>
+      String(u.pincode) === String(pinCode) &&
+      (u.role === 'Pincode Admin' || (u.role || '').toLowerCase().includes('pincode admin'))
+    );
+    if (adminUser) {
+      await db.users.findByIdAndUpdate(adminUser._id || adminUser.id, {
+        status: status.toLowerCase() === 'active' ? 'active' : 'suspended',
+        updatedAt: new Date().toISOString()
+      });
     }
 
     return res.json({ success: true, message: `Pincode admin status updated to ${status}` });

@@ -666,7 +666,7 @@ const simulateApproval = async (req, res) => {
     if (db.kycRecords) {
       let existingKyc = db.kycRecords.find(k => String(k.managerId) === String(user._id) || k.id === `KYC-MGR-${user._id}`);
       if (!existingKyc) {
-        db.kycRecords.unshift({
+        await db.kycRecords.insertOne({
           id: `KYC-MGR-${user._id}`,
           type: 'Manager',
           managerId: String(user._id),
@@ -691,8 +691,10 @@ const simulateApproval = async (req, res) => {
           notes: `Direct registration approved by ${user.targetAdminRole || 'Regional Admin'}. Forwarded to KYC Team.`
         });
       } else {
-        existingKyc.status = 'Pending';
-        existingKyc.kycStatus = 'Pending Verification';
+        await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
+          status: 'Pending',
+          kycStatus: 'Pending Verification'
+        });
       }
     }
 
@@ -743,10 +745,12 @@ const simulateKyc = async (req, res) => {
     if (db.kycRecords) {
       let existingKyc = db.kycRecords.find(k => String(k.managerId) === String(user._id) || k.id === `KYC-MGR-${user._id}`);
       if (existingKyc) {
-        existingKyc.status = 'Approved';
-        existingKyc.kycStatus = 'Verified';
-        existingKyc.verifiedBy = 'KYC Compliance Officer';
-        existingKyc.verifiedDate = new Date().toISOString().split('T')[0];
+        await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
+          status: 'Approved',
+          kycStatus: 'Verified',
+          verifiedBy: 'KYC Compliance Officer',
+          verifiedDate: new Date().toISOString().split('T')[0]
+        });
       }
     }
 

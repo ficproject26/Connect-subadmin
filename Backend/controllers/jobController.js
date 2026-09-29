@@ -220,11 +220,15 @@ async function updateJobStatus(req, res) {
     const { id } = req.params;
     const { status, technicianName } = req.body;
 
+    let targetCollection = db.jobs;
     let job = await db.jobs.findById(id);
-    let isFromOrders = false;
     if (!job) {
       job = await db.orders.findById(id);
-      isFromOrders = true;
+      targetCollection = db.orders;
+    }
+    if (!job) {
+      job = await db.jobapplieds.findById(id);
+      targetCollection = db.jobapplieds;
     }
 
     if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
@@ -234,17 +238,13 @@ async function updateJobStatus(req, res) {
       return res.status(403).json({ success: false, message: 'Job outside your jurisdiction' });
     }
 
-    if (status) job.status = status;
-    if (technicianName) job.technicianName = technicianName;
-    job.updatedAt = new Date().toISOString();
+    const updates = { updatedAt: new Date().toISOString() };
+    if (status) updates.status = status;
+    if (technicianName) updates.technicianName = technicianName;
 
-    if (isFromOrders) {
-      await db.orders.update(job);
-    } else {
-      await db.jobs.update(job);
-    }
+    const updatedJob = await targetCollection.findByIdAndUpdate(job._id || job.id, updates);
 
-    return res.json({ success: true, message: 'Job status updated', job });
+    return res.json({ success: true, message: 'Job status updated', job: updatedJob || { ...job, ...updates } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to update job', error: error.message });
   }

@@ -61,7 +61,7 @@ exports.createShopVisit = async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    db.shopVisits.push(newVisit);
+    await db.shopVisits.insertOne(newVisit);
 
     return res.status(201).json({
       success: true,
@@ -204,13 +204,13 @@ exports.updateShopVisit = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Shop visit not found' });
     }
 
-    Object.assign(visit, req.body, { updatedAt: new Date().toISOString() });
-    db.shopVisits._persist();
+    const updatedData = { ...req.body, updatedAt: new Date().toISOString() };
+    const updated = await db.shopVisits.findByIdAndUpdate(visit._id || visit.id, updatedData);
 
     return res.json({
       success: true,
       message: 'Shop visit updated successfully',
-      data: visit
+      data: updated || { ...visit, ...updatedData }
     });
   } catch (err) {
     console.error('Failed to update shop visit:', err);

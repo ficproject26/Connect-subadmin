@@ -322,11 +322,10 @@ async function updateOrderStatus(req, res) {
       return res.status(403).json({ success: false, message: 'Order outside your jurisdiction' });
     }
 
-    order.status = status;
-    order.updatedAt = new Date().toISOString();
-    await db.orders.update(order);
+    const updates = { status, updatedAt: new Date().toISOString() };
+    const updatedOrder = await db.orders.findByIdAndUpdate(order._id || order.id, updates);
 
-    return res.json({ success: true, message: `Order status updated to ${status}`, order });
+    return res.json({ success: true, message: `Order status updated to ${status}`, order: updatedOrder || { ...order, ...updates } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to update order', error: error.message });
   }

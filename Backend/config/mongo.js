@@ -5,7 +5,10 @@ let db = null;
 
 async function getMongoDb() {
   if (db) return db;
-  const uri = process.env.MONGODB_URI || 'mongodb+srv://Connect-app:Connect123@cluster0.fzj1k5l.mongodb.net/test?retryWrites=true&w=majority';
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('MONGODB_URI environment variable is not defined.');
+  }
   try {
     if (!client) {
       client = new MongoClient(uri, { serverSelectionTimeoutMS: 20000, connectTimeoutMS: 20000 });
@@ -14,8 +17,8 @@ async function getMongoDb() {
     db = client.db();
     return db;
   } catch (err) {
-    console.warn('MongoDB Atlas connection error:', err.message);
-    return null;
+    console.error('[MongoDB Atlas] Connection failed:', err.message);
+    throw err;
   }
 }
 

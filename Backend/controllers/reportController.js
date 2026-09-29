@@ -416,7 +416,7 @@ const submitManagerReport = async (req, res) => {
     };
 
     if (db.submittedReports) {
-      db.submittedReports.push(newReport);
+      await db.submittedReports.insertOne(newReport);
     }
 
     return res.status(201).json({
@@ -629,14 +629,7 @@ const approveManagerReport = async (req, res) => {
       approvalRemarks: remarks || ''
     };
 
-    allReports[reportIndex] = updatedReport;
-    db.submittedReports = allReports;
-
-    // Persist to JSON file
-    const fs = require('fs');
-    const path = require('path');
-    const filePath = path.join(__dirname, '../data/submitted_reports.json');
-    fs.writeFileSync(filePath, JSON.stringify(allReports, null, 2), 'utf-8');
+    await db.submittedReports.findByIdAndUpdate(report._id || report.id, updatedReport);
 
     return res.json({
       success: true,
@@ -694,13 +687,7 @@ const rejectManagerReport = async (req, res) => {
       rejectionRemarks: remarks || 'Report rejected by supervisor.'
     };
 
-    allReports[reportIndex] = updatedReport;
-    db.submittedReports = allReports;
-
-    const fs = require('fs');
-    const path = require('path');
-    const filePath = path.join(__dirname, '../data/submitted_reports.json');
-    fs.writeFileSync(filePath, JSON.stringify(allReports, null, 2), 'utf-8');
+    await db.submittedReports.findByIdAndUpdate(report._id || report.id, updatedReport);
 
     return res.json({
       success: true,

@@ -302,11 +302,11 @@ async function updateBookingStatus(req, res) {
     const { id } = req.params;
     const { status, technicianAssigned, roomNumber } = req.body;
 
+    let targetCollection = db.bookings;
     let booking = await db.bookings.findById(id);
-    let isFromOrders = false;
     if (!booking) {
       booking = await db.orders.findById(id);
-      isFromOrders = true;
+      targetCollection = db.orders;
     }
 
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
@@ -316,18 +316,14 @@ async function updateBookingStatus(req, res) {
       return res.status(403).json({ success: false, message: 'Booking outside your jurisdiction' });
     }
 
-    if (status) booking.status = status;
-    if (technicianAssigned) booking.technicianAssigned = technicianAssigned;
-    if (roomNumber) booking.roomNumber = roomNumber;
-    booking.updatedAt = new Date().toISOString();
+    const updates = { updatedAt: new Date().toISOString() };
+    if (status) updates.status = status;
+    if (technicianAssigned) updates.technicianAssigned = technicianAssigned;
+    if (roomNumber) updates.roomNumber = roomNumber;
 
-    if (isFromOrders) {
-      await db.orders.update(booking);
-    } else {
-      await db.bookings.update(booking);
-    }
+    const updatedBooking = await targetCollection.findByIdAndUpdate(booking._id || booking.id, updates);
 
-    return res.json({ success: true, message: 'Booking updated successfully', booking });
+    return res.json({ success: true, message: 'Booking updated successfully', booking: updatedBooking || { ...booking, ...updates } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to update booking', error: error.message });
   }

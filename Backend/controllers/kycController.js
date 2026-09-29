@@ -13,7 +13,8 @@ async function getKYCRecords(req, res) {
         const mgrIdStr = String(mgr._id || mgr.id);
         const existing = db.kycRecords.find(k => String(k.managerId) === mgrIdStr || k.id === `KYC-MGR-${mgrIdStr}`);
         if (!existing) {
-          db.kycRecords.unshift({
+          await db.kycRecords.insertOne({
+            _id: `KYC-MGR-${mgrIdStr}`,
             id: `KYC-MGR-${mgrIdStr}`,
             type: 'Manager',
             managerId: mgrIdStr,
@@ -35,7 +36,9 @@ async function getKYCRecords(req, res) {
             kycStatus: 'Pending Verification',
             submittedDate: (mgr.createdAt || new Date().toISOString()).split('T')[0],
             documents: mgr.documents || {},
-            notes: `Manager registration approved by ${mgr.targetAdminRole || mgr.createdByRole || 'Admin'}. Forwarded to KYC Team.`
+            notes: `Manager registration approved by ${mgr.targetAdminRole || mgr.createdByRole || 'Admin'}. Forwarded to KYC Team.`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           });
         }
       }
@@ -74,7 +77,9 @@ async function processKYC(req, res) {
     const { id } = req.params;
     const { status, reason } = req.body; // status: 'Verified' | 'Rejected'
 
-    const record = db.kycRecords.find(k => k.id === id);
+    const record = await db.kycRecords.findOne({
+      $or: [{ _id: id }, { id: id }]
+    });
     if (!record) return res.status(404).json({ success: false, message: 'KYC record not found' });
 
     const scoped = filterByLocation([record], req.user);
@@ -82,10 +87,17 @@ async function processKYC(req, res) {
       return res.status(403).json({ success: false, message: 'Record outside your jurisdiction' });
     }
 
-    record.status = status;
-    record.verifiedBy = `${req.user.name} (${req.user.role})`;
-    record.verifiedDate = new Date().toISOString().split('T')[0];
-    if (reason) record.notes = reason;
+    const verifiedDate = new Date().toISOString().split('T')[0];
+    const verifiedBy = `${req.user.name} (${req.user.role})`;
+    const kycUpdates = {
+      status,
+      verifiedBy,
+      verifiedDate,
+      notes: reason || record.notes || '',
+      updatedAt: new Date().toISOString()
+    };
+
+    const updatedKyc = await db.kycRecords.findByIdAndUpdate(record._id || record.id, kycUpdates);
 
     // If this KYC record belongs to a manager, activate their account upon verification
     if (record.type === 'Manager' || record.managerId) {

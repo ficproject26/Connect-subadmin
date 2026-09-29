@@ -1,17 +1,5 @@
 const { db, filterByLocation } = require('../config/db');
 const notificationService = require('../services/notificationService');
-const fs = require('fs');
-const path = require('path');
-
-const ISSUES_FILE = path.join(__dirname, '../data/qc_issues.json');
-const TASKS_FILE = path.join(__dirname, '../data/qc_tasks.json');
-
-function persistIssues(issues) {
-  fs.writeFileSync(ISSUES_FILE, JSON.stringify(Array.from(db.qcIssues), null, 2), 'utf-8');
-}
-function persistTasks(tasks) {
-  fs.writeFileSync(TASKS_FILE, JSON.stringify(Array.from(db.qcTasks), null, 2), 'utf-8');
-}
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -139,8 +127,7 @@ const raiseQCIssue = async (req, res) => {
       ]
     };
 
-    db.qcIssues.push(issue);
-    persistIssues();
+    await db.qcIssues.insertOne(issue);
 
     try {
       notificationService.notifyQCIssue({ issue, user });
@@ -282,20 +269,17 @@ const createTask = async (req, res) => {
       ]
     };
 
-    db.qcTasks.push(task);
-    persistTasks();
+    await db.qcTasks.insertOne(task);
 
     // If linked to a QC Issue, update the issue's taskId and status
     if (qcIssueId) {
-      const issueIdx = db.qcIssues.findIndex(i => i._id === qcIssueId || i.id === qcIssueId);
-      if (issueIdx !== -1) {
-        db.qcIssues[issueIdx] = {
-          ...db.qcIssues[issueIdx],
+      const targetIssue = Array.from(db.qcIssues).find(i => i._id === qcIssueId || i.id === qcIssueId);
+      if (targetIssue) {
+        await db.qcIssues.findByIdAndUpdate(targetIssue._id || targetIssue.id, {
           taskId: task._id,
           status: 'Assigned',
           updatedAt: new Date().toISOString()
-        };
-        persistIssues();
+        });
       }
     }
 
@@ -546,16 +530,14 @@ const updateTaskStatus = async (req, res) => {
       };
       // If linked to an issue, resolve it
       if (task.qcIssueId) {
-        const issueIdx = db.qcIssues.findIndex(i => (i._id || i.id) === task.qcIssueId);
-        if (issueIdx !== -1) {
-          db.qcIssues[issueIdx] = { ...db.qcIssues[issueIdx], status: 'Resolved', updatedAt: new Date().toISOString() };
-          persistIssues();
+        const issue = Array.from(db.qcIssues).find(i => (i._id || i.id) === task.qcIssueId);
+        if (issue) {
+          await db.qcIssues.findByIdAndUpdate(issue._id || issue.id, { status: 'Resolved', updatedAt: new Date().toISOString() });
         }
       }
     }
 
-    db.qcTasks[idx] = updatedTask;
-    persistTasks();
+    await db.qcTasks.findByIdAndUpdate(task._id || task.id, updatedTask);
 
     // Dispatch real-time notification
     try {
@@ -605,10 +587,9 @@ const submitSuspendRequest = async (req, res) => {
     }
 
     const allTasks = Array.from(db.qcTasks);
-    const idx = allTasks.findIndex(t => t._id === req.params.id || t.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Task not found.' });
+    const task = allTasks.find(t => t._id === req.params.id || t.id === req.params.id);
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
 
-    const task = allTasks[idx];
     if (task.assignedManagerId !== (user._id || user.id)) {
       return res.status(403).json({ success: false, message: 'You can only suspend tasks assigned to you.' });
     }
@@ -643,8 +624,7 @@ const submitSuspendRequest = async (req, res) => {
       }]
     };
 
-    db.qcTasks[idx] = updatedTask;
-    persistTasks();
+    await db.qcTasks.findByIdAndUpdate(task._id || task.id, updatedTask);
 
     // Dispatch real-time notification
     try {
@@ -683,10 +663,9 @@ const reviewSuspendRequest = async (req, res) => {
     }
 
     const allTasks = Array.from(db.qcTasks);
-    const idx = allTasks.findIndex(t => t._id === req.params.id || t.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Task not found.' });
+    const task = allTasks.find(t => t._id === req.params.id || t.id === req.params.id);
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
 
-    const task = allTasks[idx];
     if (task.status !== 'Suspend Requested') {
       return res.status(400).json({ success: false, message: 'No pending suspend request for this task.' });
     }
@@ -714,8 +693,7 @@ const reviewSuspendRequest = async (req, res) => {
       }]
     };
 
-    db.qcTasks[idx] = updatedTask;
-    persistTasks();
+    await db.qcTasks.findByIdAndUpdate(task._id || task.id, updatedTask);
 
     // Dispatch real-time notification
     try {
@@ -789,10 +767,9 @@ const reviewTaskResolution = async (req, res) => {
     }
 
     const allTasks = Array.from(db.qcTasks);
-    const idx = allTasks.findIndex(t => t._id === req.params.id || t.id === req.params.id || t.taskNumber === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Task not found.' });
+    const task = allTasks.find(t => t._id === req.params.id || t.id === req.params.id || t.taskNumber === req.params.id);
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
 
-    const task = allTasks[idx];
     const isAccept = decision === 'accept' || decision === 'accepted';
     const newStatus = isAccept ? 'Closed' : 'Rework Required';
     const actionLabel = isAccept ? 'Resolved & Closed' : 'Rework Requested';
@@ -816,15 +793,13 @@ const reviewTaskResolution = async (req, res) => {
       }]
     };
 
-    db.qcTasks[idx] = updatedTask;
-    persistTasks();
+    await db.qcTasks.findByIdAndUpdate(task._id || task.id, updatedTask);
 
     // If linked to an issue, update issue status as well
     if (task.qcIssueId) {
-      const issueIdx = db.qcIssues.findIndex(i => (i._id || i.id) === task.qcIssueId);
-      if (issueIdx !== -1) {
-        const issue = db.qcIssues[issueIdx];
-        db.qcIssues[issueIdx] = {
+      const issue = Array.from(db.qcIssues).find(i => (i._id || i.id) === task.qcIssueId);
+      if (issue) {
+        const updatedIssue = {
           ...issue,
           status: isAccept ? 'Closed' : 'Assigned',
           adminReview: {
@@ -842,7 +817,7 @@ const reviewTaskResolution = async (req, res) => {
             notes: remarks || ''
           }]
         };
-        persistIssues();
+        await db.qcIssues.findByIdAndUpdate(issue._id || issue.id, updatedIssue);
       }
     }
 
@@ -883,10 +858,9 @@ const reviewIssueResolution = async (req, res) => {
     }
 
     const allIssues = Array.from(db.qcIssues);
-    const idx = allIssues.findIndex(i => i._id === req.params.id || i.id === req.params.id || i.issueNumber === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Issue not found.' });
+    const issue = allIssues.find(i => i._id === req.params.id || i.id === req.params.id || i.issueNumber === req.params.id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found.' });
 
-    const issue = allIssues[idx];
     const isAccept = decision === 'accept' || decision === 'accepted';
     const newIssueStatus = isAccept ? 'Closed' : 'Assigned';
     const actionLabel = isAccept ? 'Resolution Accepted' : 'Rework Requested';
@@ -910,15 +884,13 @@ const reviewIssueResolution = async (req, res) => {
       }]
     };
 
-    db.qcIssues[idx] = updatedIssue;
-    persistIssues();
+    await db.qcIssues.findByIdAndUpdate(issue._id || issue.id, updatedIssue);
 
     // If linked to a task, update task as well
     const taskId = issue.taskId;
-    const taskIdx = db.qcTasks.findIndex(t => (taskId && (t._id === taskId || t.id === taskId)) || t.qcIssueId === issue._id || t.qcIssueId === issue.id);
-    if (taskIdx !== -1) {
-      const task = db.qcTasks[taskIdx];
-      db.qcTasks[taskIdx] = {
+    const task = Array.from(db.qcTasks).find(t => (taskId && (t._id === taskId || t.id === taskId)) || t.qcIssueId === issue._id || t.qcIssueId === issue.id);
+    if (task) {
+      const updatedTask = {
         ...task,
         status: isAccept ? 'Completed' : 'Rework Required',
         adminReview: {
@@ -936,7 +908,7 @@ const reviewIssueResolution = async (req, res) => {
           notes: remarks || ''
         }]
       };
-      persistTasks();
+      await db.qcTasks.findByIdAndUpdate(task._id || task.id, updatedTask);
     }
 
     return res.json({

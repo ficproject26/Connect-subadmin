@@ -1,15 +1,8 @@
-const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { v4: uuidv4 } = require('uuid');
-const seed = require('../data/seedData');
 const { getMongoDb } = require('./mongo');
 const eventPublisher = require('../events/eventPublisher');
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
 
 function sanitizeQuery(query) {
   if (!query || typeof query !== 'object') return {};
@@ -22,96 +15,53 @@ function sanitizeQuery(query) {
 }
 
 /**
- * Collection represents a MongoDB Atlas-driven data store that also supports
- * seamless in-memory array operations for synchronous compatibility (find, filter, map, etc.)
- * while persisting all operations to MongoDB Atlas as the single source of truth.
+ * Collection represents a MongoDB Atlas-driven data store.
+ * MongoDB Atlas is the absolute single source of truth.
+ * The in-memory array maintains a live synchronized reflection of MongoDB records
+ * to guarantee backwards compatibility with synchronous array methods (find, filter, map, etc.)
+ * across all existing controllers and workflows.
  */
 class Collection extends Array {
   constructor(name, initialData = [], mongoCollectionName = null) {
     super();
     this.name = name;
     this.mongoName = mongoCollectionName || name;
-    this.filePath = path.join(DATA_DIR, `${name}.json`);
     this._mongoCol = null;
     this._isReady = false;
-    this._ensureFile(initialData);
-    this._load();
-    this._isReady = true;
-  }
-
-  _ensureFile(defaultData = []) {
-    if (!fs.existsSync(this.filePath)) {
-      try {
-        fs.writeFileSync(this.filePath, JSON.stringify(defaultData, null, 2), 'utf-8');
-      } catch (e) {}
-    }
-  }
-
-  _load() {
-    try {
-      if (fs.existsSync(this.filePath)) {
-        const content = fs.readFileSync(this.filePath, 'utf-8');
-        const items = JSON.parse(content || '[]');
-        this.length = 0;
-        this.push(...items);
-      }
-    } catch (err) {
-      console.error(`Error loading collection ${this.name}:`, err.message);
-    }
-  }
-
-  _persist() {
-    try {
-      const plainArray = Array.from(this);
-      fs.writeFileSync(this.filePath, JSON.stringify(plainArray, null, 2), 'utf-8');
-    } catch (err) {
-      // Silent backup persist
-    }
   }
 
   async initMongo(mongoDb) {
-    if (!mongoDb) return;
-    try {
-      this._mongoCol = mongoDb.collection(this.mongoName);
-      const docs = await this._mongoCol.find({}).toArray();
-      if (docs && docs.length > 0) {
-        this.length = 0;
-        super.push(...docs);
-        this._persist();
-        console.log(`[MongoDB] Connected & loaded ${docs.length} records for '${this.name}' (${this.mongoName})`);
-      } else if (this.length > 0) {
-        const cleanDocs = Array.from(this).map(d => ({
-          ...d,
-          _id: d._id ? String(d._id) : (d.id ? String(d.id) : uuidv4()),
-          id: d.id ? String(d.id) : (d._id ? String(d._id) : uuidv4())
-        }));
-        await this._mongoCol.insertMany(cleanDocs);
-        console.log(`[MongoDB] Initialized '${this.name}' with ${cleanDocs.length} seed records into MongoDB Atlas`);
-      }
-    } catch (err) {
-      console.warn(`[MongoDB] Sync warning for '${this.name}':`, err.message);
+    if (!mongoDb) {
+      throw new Error(`MongoDB client instance is required to initialize collection '${this.name}'`);
     }
+    this._mongoCol = mongoDb.collection(this.mongoName);
+    const projection = (this.mongoName === 'users' || this.mongoName === 'agents') ? { projection: { kycDocs: 0, kyc: 0 } } : {};
+    const docs = await this._mongoCol.find({}, projection).toArray();
+    this.length = 0;
+    if (docs && docs.length > 0) {
+      super.push(...docs);
+      console.log(`[MongoDB] Loaded ${docs.length} records for '${this.name}' (${this.mongoName})`);
+    } else {
+      console.log(`[MongoDB] Connected to empty collection '${this.name}' (${this.mongoName})`);
+    }
+    this._isReady = true;
   }
 
   async reloadFromMongo() {
     if (this._mongoCol) {
-      try {
-        const docs = await this._mongoCol.find({}).toArray();
-        this.length = 0;
+      const projection = (this.mongoName === 'users' || this.mongoName === 'agents') ? { projection: { kycDocs: 0, kyc: 0 } } : {};
+      const docs = await this._mongoCol.find({}, projection).toArray();
+      this.length = 0;
+      if (docs && docs.length > 0) {
         super.push(...docs);
-        this._persist();
-        return docs;
-      } catch (e) {
-        console.warn(`[MongoDB] Reload error for '${this.name}':`, e.message);
       }
+      return docs;
     }
     return Array.from(this);
   }
 
-  // Override mutating Array methods
   push(...items) {
     const res = super.push(...items);
-    this._persist();
     if (this._mongoCol && items.length > 0) {
       const docs = items.map(d => ({
         ...d,
@@ -119,13 +69,15 @@ class Collection extends Array {
         id: d.id ? String(d.id) : (d._id ? String(d._id) : uuidv4()),
         updatedAt: d.updatedAt || new Date().toISOString()
       }));
-      Promise.all(docs.map(doc => 
+      Promise.all(docs.map(doc =>
         this._mongoCol.updateOne(
           { $or: [{ _id: doc._id }, { id: doc.id }] },
           { $set: doc },
           { upsert: true }
-        ).catch(() => {})
-      )).catch(() => {});
+        )
+      )).catch(err => {
+        console.error(`[MongoDB] Async push error on '${this.name}':`, err.message);
+      });
     }
     if (this._isReady && items.length > 0) {
       if (items.length === 1) {
@@ -138,15 +90,11 @@ class Collection extends Array {
   }
 
   unshift(...items) {
-    const res = super.unshift(...items);
-    this._persist();
-    return res;
+    return this.push(...items);
   }
 
   splice(...args) {
-    const res = super.splice(...args);
-    this._persist();
-    return res;
+    return super.splice(...args);
   }
 
   async find(queryOrFn) {
@@ -154,40 +102,29 @@ class Collection extends Array {
       return super.find(queryOrFn);
     }
 
-    const query = queryOrFn || {};
-    const cleanQuery = sanitizeQuery(query);
-
+    const cleanQuery = sanitizeQuery(queryOrFn || {});
     if (this._mongoCol) {
-      try {
-        const docs = await this._mongoCol.find(cleanQuery).toArray();
-        return docs;
-      } catch (e) {}
+      return await this._mongoCol.find(cleanQuery).toArray();
     }
 
-    const results = Array.from(this).filter(item => {
+    return Array.from(this).filter(item => {
       for (const [key, val] of Object.entries(cleanQuery)) {
         if (val === undefined || val === null) continue;
         if (item[key] !== val) return false;
       }
       return true;
     });
-
-    return results;
   }
 
   async findOne(query = {}) {
-    const items = Array.from(this);
     if (typeof query === 'function') {
-      return items.find(query) || null;
+      return Array.from(this).find(query) || null;
     }
     const cleanQuery = sanitizeQuery(query);
     if (this._mongoCol) {
-      try {
-        const liveDoc = await this._mongoCol.findOne(cleanQuery);
-        if (liveDoc) return liveDoc;
-      } catch (e) {}
+      return await this._mongoCol.findOne(cleanQuery);
     }
-    return items.find(item => {
+    return Array.from(this).find(item => {
       for (const [key, val] of Object.entries(cleanQuery)) {
         if (item[key] !== val) return false;
       }
@@ -199,17 +136,17 @@ class Collection extends Array {
     if (!id) return null;
     const strId = String(id);
     if (this._mongoCol) {
-      try {
-        const liveDoc = await this._mongoCol.findOne({
-          $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }]
-        });
-        if (liveDoc) return liveDoc;
-      } catch (e) {}
+      return await this._mongoCol.findOne({
+        $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }]
+      });
     }
     return Array.from(this).find(item => String(item._id || item.id) === strId) || null;
   }
 
   async insertOne(doc) {
+    if (!this._mongoCol) {
+      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
+    }
     const genId = doc._id ? String(doc._id) : (doc.id ? String(doc.id) : uuidv4());
     const newDoc = {
       _id: genId,
@@ -221,24 +158,19 @@ class Collection extends Array {
     newDoc._id = String(newDoc._id);
     newDoc.id = String(newDoc.id);
 
+    // Persist to MongoDB as single source of truth
+    await this._mongoCol.updateOne(
+      { $or: [{ _id: newDoc._id }, { id: newDoc.id }] },
+      { $set: newDoc },
+      { upsert: true }
+    );
+
+    // Update in-memory mirror only after MongoDB write succeeds
     const existingIdx = this.findIndex(i => String(i._id) === newDoc._id || String(i.id) === newDoc.id);
     if (existingIdx >= 0) {
       this[existingIdx] = newDoc;
     } else {
       super.push(newDoc);
-    }
-    this._persist();
-
-    if (this._mongoCol) {
-      try {
-        await this._mongoCol.updateOne(
-          { $or: [{ _id: newDoc._id }, { id: newDoc.id }] },
-          { $set: newDoc },
-          { upsert: true }
-        );
-      } catch (err) {
-        console.error(`[MongoDB] Error inserting into ${this.name}:`, err.message);
-      }
     }
 
     if (this._isReady) {
@@ -252,7 +184,19 @@ class Collection extends Array {
     return newDoc;
   }
 
+  async create(doc) {
+    return this.insertOne(doc);
+  }
+
+  async save(doc) {
+    return this.insertOne(doc);
+  }
+
   async insertMany(docs) {
+    if (!this._mongoCol) {
+      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
+    }
+    if (!docs || docs.length === 0) return [];
     const newDocs = docs.map(doc => {
       const generated = doc._id ? String(doc._id) : (doc.id ? String(doc.id) : uuidv4());
       return {
@@ -263,22 +207,16 @@ class Collection extends Array {
         updatedAt: doc.updatedAt || new Date().toISOString()
       };
     });
-    super.push(...newDocs);
-    this._persist();
 
-    if (this._mongoCol && newDocs.length > 0) {
-      try {
-        await Promise.all(newDocs.map(d =>
-          this._mongoCol.updateOne(
-            { $or: [{ _id: d._id }, { id: d.id }] },
-            { $set: d },
-            { upsert: true }
-          )
-        ));
-      } catch (err) {
-        console.error(`[MongoDB] Error insertMany into ${this.name}:`, err.message);
-      }
-    }
+    await Promise.all(newDocs.map(d =>
+      this._mongoCol.updateOne(
+        { $or: [{ _id: d._id }, { id: d.id }] },
+        { $set: d },
+        { upsert: true }
+      )
+    ));
+
+    super.push(...newDocs);
 
     if (this._isReady && newDocs.length > 0) {
       eventPublisher.publishBatchEvent(this.name, 'batch_created', newDocs).catch(() => {});
@@ -292,39 +230,35 @@ class Collection extends Array {
   }
 
   async updateOne(query, update) {
-    const index = Array.from(this).findIndex(item => {
-      for (const [key, val] of Object.entries(query)) {
-        if (item[key] !== val) return false;
-      }
-      return true;
-    });
-
+    if (!this._mongoCol) {
+      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
+    }
+    const cleanQuery = sanitizeQuery(query);
     const patch = update.$set ? update.$set : update;
-    let updated = null;
-    if (index !== -1) {
-      updated = {
-        ...this[index],
-        ...patch,
-        updatedAt: new Date().toISOString()
-      };
-      this[index] = updated;
-      this._persist();
-    }
+    const updatedAt = new Date().toISOString();
 
-    if (this._mongoCol) {
-      try {
-        const cleanQuery = sanitizeQuery(query);
-        await this._mongoCol.updateOne(cleanQuery, { $set: { ...patch, updatedAt: new Date().toISOString() } });
-      } catch (err) {
-        console.error(`[MongoDB] Error updateOne in ${this.name}:`, err.message);
+    await this._mongoCol.updateOne(cleanQuery, { $set: { ...patch, updatedAt } });
+    const updated = await this._mongoCol.findOne(cleanQuery);
+
+    if (updated) {
+      const index = Array.from(this).findIndex(item => {
+        for (const [key, val] of Object.entries(query)) {
+          if (item[key] !== val) return false;
+        }
+        return true;
+      });
+      if (index !== -1) {
+        this[index] = updated;
+      } else {
+        super.push(updated);
       }
-    }
 
-    if (this._isReady && updated) {
-      eventPublisher.publishEntityEvent(this.name, 'updated', updated, updated._id || updated.id).catch(() => {});
-      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
-        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
-        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
+      if (this._isReady) {
+        eventPublisher.publishEntityEvent(this.name, 'updated', updated, updated._id || updated.id).catch(() => {});
+        if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+          if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+          eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
+        }
       }
     }
 
@@ -332,37 +266,31 @@ class Collection extends Array {
   }
 
   async findByIdAndUpdate(id, update) {
+    if (!this._mongoCol) {
+      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
+    }
     const strId = String(id);
-    const index = Array.from(this).findIndex(item => String(item._id || item.id) === strId);
-
+    const filter = { $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }] };
     const patch = update.$set ? update.$set : update;
-    let updated = null;
-    if (index !== -1) {
-      updated = {
-        ...this[index],
-        ...patch,
-        updatedAt: new Date().toISOString()
-      };
-      this[index] = updated;
-      this._persist();
-    }
+    const updatedAt = new Date().toISOString();
 
-    if (this._mongoCol) {
-      try {
-        await this._mongoCol.updateOne(
-          { $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }] },
-          { $set: { ...patch, updatedAt: new Date().toISOString() } }
-        );
-      } catch (err) {
-        console.error(`[MongoDB] Error findByIdAndUpdate in ${this.name}:`, err.message);
+    await this._mongoCol.updateOne(filter, { $set: { ...patch, updatedAt } });
+    const updated = await this._mongoCol.findOne(filter);
+
+    if (updated) {
+      const index = Array.from(this).findIndex(item => String(item._id || item.id) === strId);
+      if (index !== -1) {
+        this[index] = updated;
+      } else {
+        super.push(updated);
       }
-    }
 
-    if (this._isReady && updated) {
-      eventPublisher.publishEntityEvent(this.name, 'updated', updated, strId).catch(() => {});
-      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
-        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
-        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
+      if (this._isReady) {
+        eventPublisher.publishEntityEvent(this.name, 'updated', updated, strId).catch(() => {});
+        if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+          if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+          eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
+        }
       }
     }
 
@@ -377,6 +305,12 @@ class Collection extends Array {
   }
 
   async deleteOne(query) {
+    if (!this._mongoCol) {
+      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
+    }
+    const cleanQuery = sanitizeQuery(query);
+    const res = await this._mongoCol.deleteOne(cleanQuery);
+
     const index = Array.from(this).findIndex(item => {
       for (const [key, val] of Object.entries(query)) {
         if (item[key] !== val) return false;
@@ -386,16 +320,6 @@ class Collection extends Array {
 
     if (index !== -1) {
       this.splice(index, 1);
-      this._persist();
-    }
-
-    if (this._mongoCol) {
-      try {
-        const cleanQuery = sanitizeQuery(query);
-        await this._mongoCol.deleteOne(cleanQuery);
-      } catch (err) {
-        console.error(`[MongoDB] Error deleteOne in ${this.name}:`, err.message);
-      }
     }
 
     if (this._isReady) {
@@ -407,108 +331,75 @@ class Collection extends Array {
       }
     }
 
-    return { deletedCount: index !== -1 ? 1 : 0 };
+    return { deletedCount: res.deletedCount || (index !== -1 ? 1 : 0) };
+  }
+
+  async delete(query) {
+    return this.deleteOne(query);
+  }
+
+  async deleteMany(query) {
+    if (!this._mongoCol) {
+      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
+    }
+    const cleanQuery = sanitizeQuery(query);
+    const res = await this._mongoCol.deleteMany(cleanQuery);
+    await this.reloadFromMongo();
+    return { deletedCount: res.deletedCount };
   }
 
   async count(query = {}) {
+    if (this._mongoCol) {
+      return await this._mongoCol.countDocuments(sanitizeQuery(query));
+    }
     const items = await this.find(query);
     return items.length;
   }
 
   async clear() {
     this.length = 0;
-    this._persist();
     if (this._mongoCol) {
-      try {
-        await this._mongoCol.deleteMany({});
-      } catch (e) {}
+      await this._mongoCol.deleteMany({});
     }
   }
 }
 
-// Instantiate database collections mapped to MongoDB Atlas collections
+// Instantiate database collections mapped directly to MongoDB Atlas collections (zero mock/seed data)
 const usersCollection = new Collection('users', [], 'users');
-const statesCollection = new Collection('states', seed.hierarchy?.states || [], 'states');
+const statesCollection = new Collection('states', [], 'states');
 const districtsCollection = new Collection('districts', [], 'districts');
 const divisionsCollection = new Collection('divisions', [], 'divisions');
 const pincodesCollection = new Collection('pincodes', [], 'pincodes');
-const vendorsCollection = new Collection('vendors', seed.vendors || [], 'vendors');
+const vendorsCollection = new Collection('vendors', [], 'vendors');
 const auditLogsCollection = new Collection('audit_logs', [], 'auditlogs');
 const shopVisitsCollection = new Collection('shop_visits', [], 'fieldvisits');
 const submittedReportsCollection = new Collection('submitted_reports', [], 'reports');
 const qcIssuesCollection = new Collection('qc_issues', [], 'qc_issues');
 const qcTasksCollection = new Collection('qc_tasks', [], 'tasks');
-const agentsCollection = new Collection('agents', seed.agents || [], 'agents');
+const agentsCollection = new Collection('agents', [], 'agents');
 const notificationsCollection = new Collection('notifications', [], 'notifications');
-const customersCollection = new Collection('customers', seed.customers || [], 'customers');
-const vendorPaymentsCollection = new Collection('payments', seed.vendorPayments || [], 'payments');
-const ordersCollection = new Collection('orders', seed.orders || [], 'orders');
-const bookingsCollection = new Collection('bookings', seed.bookings || [], 'bookings');
-const jobsCollection = new Collection('jobs', seed.jobs || [], 'jobs');
-const techniciansCollection = new Collection('technicians', seed.technicians || [], 'technicians');
-const executivesCollection = new Collection('executives', seed.executives || [], 'executives');
-const supportTeamCollection = new Collection('support_team', seed.supportTeam || [], 'supportteams');
-const agentPaymentsCollection = new Collection('agent_payments', seed.agentPayments || [], 'payrollrecords');
-const agentActivitiesCollection = new Collection('agent_activities', seed.agentActivities || [], 'agentactivities');
-const kycRecordsCollection = new Collection('kyc_records', seed.kycRecords || [], 'kyc_records');
-const qualityCheckRecordsCollection = new Collection('quality_check_records', seed.qualityCheckRecords || [], 'quality_check_records');
+const customersCollection = new Collection('customers', [], 'customers');
+const vendorPaymentsCollection = new Collection('payments', [], 'payments');
+const ordersCollection = new Collection('orders', [], 'orders');
+const bookingsCollection = new Collection('bookings', [], 'bookings');
+const jobsCollection = new Collection('jobs', [], 'jobs');
+const techniciansCollection = new Collection('technicians', [], 'technicians');
+const executivesCollection = new Collection('executives', [], 'executives');
+const supportTeamCollection = new Collection('support_team', [], 'supportteams');
+const agentPaymentsCollection = new Collection('agent_payments', [], 'payrollrecords');
+const agentActivitiesCollection = new Collection('agent_activities', [], 'agentactivities');
+const kycRecordsCollection = new Collection('kyc_records', [], 'kyc_records');
+const qualityCheckRecordsCollection = new Collection('quality_check_records', [], 'quality_check_records');
 const managersCollection = new Collection('managers', [], 'managers');
 const cardholdersCollection = new Collection('cardholders', [], 'cardholders');
 const membershipOrdersCollection = new Collection('membership_orders', [], 'membership_orders');
-const deliveryPartnersCollection = new Collection('delivery_partners', seed.deliveryPartners || [], 'delivery_partners');
+const deliveryPartnersCollection = new Collection('delivery_partners', [], 'delivery_partners');
 const subscriptionsCollection = new Collection('subscriptions', [], 'subscriptions');
 const subscriptionPaymentsCollection = new Collection('subscription_payments', [], 'subscriptionpayments');
 const deliveryStatusHistoryCollection = new Collection('delivery_status_history', [], 'delivery_status_history');
 const settlementsCollection = new Collection('settlements', [], 'settlements');
 const productsCollection = new Collection('products', [], 'products');
 const jobappliedsCollection = new Collection('jobapplieds', [], 'jobapplieds');
-
-// Harmonize demo admins and manager users into unified usersCollection
-function initUsers() {
-  const existingUsers = Array.from(usersCollection);
-  const existingEmails = new Set(existingUsers.map(u => (u.email || '').toLowerCase()));
-
-  for (const admin of seed.admins) {
-    if (!existingEmails.has(admin.email.toLowerCase())) {
-      const stateId = admin.state === 'Tamil Nadu' ? 'state_tn' : null;
-      const districtId = admin.district === 'Salem' ? 'dist_salem' : null;
-      let divisionId = null;
-      if (admin.division === 'Salem North') divisionId = 'div_dist_salem_urban';
-      let pincodeId = null;
-      if (admin.pincode === '636001') pincodeId = 'pin_636001';
-      if (admin.pincode === '636002') pincodeId = 'pin_636002';
-
-      usersCollection.push({
-        _id: admin.id,
-        id: admin.id,
-        name: admin.name,
-        email: admin.email,
-        mobile: admin.phone.replace(/[^0-9]/g, '').slice(-10),
-        phone: admin.phone,
-        passwordHash: admin.passwordHash,
-        role: admin.role,
-        level: admin.role === 'State Admin' ? 1 : admin.role === 'District Admin' ? 2 : admin.role === 'Divisional Admin' ? 3 : 4,
-        state: admin.state,
-        district: admin.district,
-        division: admin.division,
-        pincode: admin.pincode,
-        stateId,
-        districtId,
-        divisionId,
-        pincodeId,
-        regionId: stateId,
-        status: 'active',
-        avatar: admin.avatar,
-        avatarUrl: admin.avatar,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      existingEmails.add(admin.email.toLowerCase());
-    }
-  }
-}
-
-initUsers();
 
 // Full database store
 const db = {
@@ -549,10 +440,10 @@ const db = {
   jobapplieds: jobappliedsCollection,
 
   get admins() {
-    return Array.from(usersCollection).filter(u => 
-      u.role === 'State Admin' || 
-      u.role === 'District Admin' || 
-      u.role === 'Divisional Admin' || 
+    return Array.from(usersCollection).filter(u =>
+      u.role === 'State Admin' ||
+      u.role === 'District Admin' ||
+      u.role === 'Divisional Admin' ||
       u.role === 'Division Admin' ||
       u.role === 'Pincode Admin' ||
       u.role === 'Super Admin' ||
@@ -561,8 +452,8 @@ const db = {
     );
   },
 
-  hierarchy: JSON.parse(JSON.stringify(seed.hierarchy)),
-  pincodeDetails: JSON.parse(JSON.stringify(seed.pincodeDetails))
+  hierarchy: { states: [] },
+  pincodeDetails: {}
 };
 
 // Build hierarchy exclusively from Admin Pincode Management collections (single source of truth)
@@ -577,9 +468,9 @@ function syncHierarchyFromDatabase() {
       const sId = String(s._id || s.id || s.stateId);
       const sName = (s.name || '').trim();
 
-      const distList = rawDistricts.filter(d => 
-        String(d.stateId) === sId || 
-        String(d.stateId) === String(s._id) || 
+      const distList = rawDistricts.filter(d =>
+        String(d.stateId) === sId ||
+        String(d.stateId) === String(s._id) ||
         (d.state && d.state.toLowerCase() === sName.toLowerCase())
       );
 
@@ -594,9 +485,9 @@ function syncHierarchyFromDatabase() {
           const dId = String(d._id || d.id || d.districtId);
           const dName = (d.name || '').trim();
 
-          const divList = rawDivisions.filter(v => 
-            String(v.districtId) === dId || 
-            String(v.districtId) === String(d._id) || 
+          const divList = rawDivisions.filter(v =>
+            String(v.districtId) === dId ||
+            String(v.districtId) === String(d._id) ||
             (v.district && v.district.toLowerCase() === dName.toLowerCase())
           );
 
@@ -613,9 +504,9 @@ function syncHierarchyFromDatabase() {
               const vId = String(v._id || v.id || v.divisionId);
               const vName = (v.name || '').trim();
 
-              const pinList = rawPincodes.filter(p => 
-                String(p.divisionId) === vId || 
-                String(p.divisionId) === String(v._id) || 
+              const pinList = rawPincodes.filter(p =>
+                String(p.divisionId) === vId ||
+                String(p.divisionId) === String(v._id) ||
                 (p.division && p.division.toLowerCase() === vName.toLowerCase())
               );
 
@@ -647,10 +538,8 @@ function syncHierarchyFromDatabase() {
   };
 }
 
-syncHierarchyFromDatabase();
-
 /**
- * Connect all collections to MongoDB Atlas
+ * Connect all collections to MongoDB Atlas as the single source of truth
  */
 let initPromise = null;
 function initDatabase() {
@@ -659,8 +548,7 @@ function initDatabase() {
     try {
       const mongoDb = await getMongoDb();
       if (!mongoDb) {
-        console.warn('[Database] MongoDB Atlas not available, operating in resilient local mode.');
-        return false;
+        throw new Error('Failed to obtain MongoDB Atlas database instance.');
       }
 
       const collections = [
@@ -703,7 +591,6 @@ function initDatabase() {
 
       await Promise.all(collections.map(col => col.initMongo(mongoDb)));
 
-      initUsers();
       syncHierarchyFromDatabase();
 
       // Ensure performance indexes in MongoDB Atlas
@@ -729,15 +616,16 @@ function initDatabase() {
       console.log('✅ [Database] All collections connected to MongoDB Atlas as single source of truth.');
       return true;
     } catch (err) {
-      console.error('[Database] MongoDB Atlas initialization failed:', err.message);
-      return false;
+      initPromise = null;
+      console.error('[Database] MongoDB Atlas initialization error:', err.message);
+      throw err;
     }
   })();
   return initPromise;
 }
 
 // Trigger database initialization
-initDatabase().catch(e => console.warn('[Database] Auto-init:', e.message));
+initDatabase().catch(e => console.error('[Database] Auto-init error:', e.message));
 
 /**
  * Normalize division names for reliable comparison (e.g. "Hosur Division" -> "hosur")
