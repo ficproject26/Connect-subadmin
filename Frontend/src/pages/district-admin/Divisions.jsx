@@ -35,7 +35,9 @@ import {
   Truck,
   Wrench,
   Award,
-  CreditCard
+  CreditCard,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import { getDivisionsForDistrict, syncTerritoryFromAdmin } from '../../utils/indiaPostalData';
 
@@ -82,6 +84,7 @@ export function DistrictDivisions() {
 
   const [divisions, setDivisions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [selectedDivision, setSelectedDivision] = useState(null);
   const [allPincodes, setAllPincodes] = useState([]);
@@ -149,29 +152,55 @@ export function DistrictDivisions() {
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
+      const params = {};
+      if (user?.district) params.district = user.district;
+      if (user?.districtId) params.districtId = user.districtId;
+      if (user?.state) params.state = user.state;
+      if (user?.stateId) params.stateId = user.stateId;
+
+      console.log('[DistrictDivisions] Fetching divisions for District Admin:', {
+        adminId: user?.id || user?._id,
+        role: user?.role,
+        district: user?.district,
+        districtId: user?.districtId,
+        params
+      });
+
       const [res, pinRes] = await Promise.all([
-        dataService.getDivisions(),
-        dataService.getPincodes().catch(() => ({ success: false }))
+        dataService.getDivisions(params),
+        dataService.getPincodes(params).catch(() => ({ success: false }))
       ]);
-      if (res.success) {
+
+      console.log('[DistrictDivisions] Divisions response:', res);
+
+      if (res?.success) {
+        let list = Array.isArray(res.divisions) ? res.divisions : [];
         const districtName = (user?.district || '').toLowerCase();
-        let list = res.divisions || [];
         if (districtName) {
           list = list.filter(
-            d => (d.districtName || d.district || '').toLowerCase() === districtName
+            d => (d.districtName || d.district || '').toLowerCase() === districtName ||
+              (user.districtId && String(d.districtId || '').toLowerCase() === String(user.districtId).toLowerCase())
           );
         }
         setAllDistrictDivisions(list);
-        // Only show divisions with registered admins
-        const registered = list.filter(d => d.adminName && d.adminName.toLowerCase() !== 'unassigned' && d.adminName.trim() !== '-' && d.adminName.trim() !== '');
-        setDivisions(registered);
+        // Display all real divisions under the district (including unassigned)
+        setDivisions(list);
+        setError(null);
+      } else {
+        const errMsg = res?.message || 'Failed to retrieve divisions from the database.';
+        console.error('[DistrictDivisions] API error:', errMsg);
+        setError(errMsg);
+        setDivisions([]);
       }
-      if (pinRes.success && pinRes.pincodes) {
+      if (pinRes?.success && Array.isArray(pinRes.pincodes)) {
         setAllPincodes(pinRes.pincodes);
       }
     } catch (e) {
-      console.error(e);
+      console.error('[DistrictDivisions] Load exception:', e);
+      setError(e.message || 'Network error while loading divisions.');
+      setDivisions([]);
     } finally {
       setLoading(false);
     }
@@ -867,6 +896,26 @@ export function DistrictDivisions() {
           <span>Add Division Admin</span>
         </button>
       </div>
+
+      {/* Error state banner */}
+      {error && !loading && (
+        <div className="p-4 rounded-xl border border-rose-500/40 bg-rose-50/80 dark:bg-rose-950/40 flex items-center justify-between gap-3 text-rose-700 dark:text-rose-300">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+            <div className="text-xs">
+              <span className="font-bold">Error loading division data:</span> {error}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadData}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
 
       <DataTable
         title="Divisions Directory"

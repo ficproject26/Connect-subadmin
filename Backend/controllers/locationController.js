@@ -375,12 +375,18 @@ const getDivisions = async (req, res) => {
     let divisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
 
     if (queryDistrictId) {
-      divisions = divisions.filter(v => String(v.districtId) === String(queryDistrictId));
+      divisions = divisions.filter(v => 
+        String(v.districtId) === String(queryDistrictId) || 
+        (queryDistrict && (v.district || v.districtName || '').toLowerCase() === String(queryDistrict).toLowerCase())
+      );
     } else if (queryDistrict) {
       const distObj = Array.from(db.districts || []).find(d => d.name?.toLowerCase() === queryDistrict.toLowerCase());
-      if (distObj) {
-        divisions = divisions.filter(v => String(v.districtId) === String(distObj._id || distObj.id || distObj.districtId) || (v.district && v.district.toLowerCase() === queryDistrict.toLowerCase()));
-      }
+      const distId = distObj ? String(distObj._id || distObj.id || distObj.districtId) : null;
+      divisions = divisions.filter(v => 
+        (distId && String(v.districtId) === distId) || 
+        (v.district && v.district.toLowerCase() === queryDistrict.toLowerCase()) ||
+        (v.districtName && v.districtName.toLowerCase() === queryDistrict.toLowerCase())
+      );
     }
 
     if (user && user.role) {
@@ -411,6 +417,8 @@ const getPincodes = async (req, res) => {
 
     const queryDivId = divisionId || user?.divisionId;
     const queryDiv = division || user?.division;
+    const queryDistId = districtId || user?.districtId;
+    const queryDist = district || user?.district;
 
     let pincodes = Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
 
@@ -418,9 +426,18 @@ const getPincodes = async (req, res) => {
       pincodes = pincodes.filter(p => String(p.divisionId) === String(queryDivId));
     } else if (queryDiv) {
       const divObj = Array.from(db.divisions || []).find(v => v.name?.toLowerCase() === queryDiv.toLowerCase());
-      if (divObj) {
-        pincodes = pincodes.filter(p => String(p.divisionId) === String(divObj._id || divObj.id || divObj.divisionId) || (p.division && p.division.toLowerCase() === queryDiv.toLowerCase()));
-      }
+      const divId = divObj ? String(divObj._id || divObj.id || divObj.divisionId) : null;
+      pincodes = pincodes.filter(p => 
+        (divId && String(p.divisionId) === divId) || 
+        (p.division && p.division.toLowerCase() === queryDiv.toLowerCase()) ||
+        (p.divisionName && p.divisionName.toLowerCase() === queryDiv.toLowerCase())
+      );
+    }
+
+    if (queryDistId) {
+      pincodes = pincodes.filter(p => String(p.districtId) === String(queryDistId));
+    } else if (queryDist) {
+      pincodes = pincodes.filter(p => (p.district || p.districtName || '').toLowerCase() === queryDist.toLowerCase());
     }
 
     if (user && user.role) {

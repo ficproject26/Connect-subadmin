@@ -102,12 +102,6 @@ export function StatePincodes() {
 
       let list = (res?.pincodes && Array.isArray(res.pincodes)) ? res.pincodes : [];
 
-      // Filter only registered pincode administrators
-      list = list.filter(p => {
-        const name = p.adminName || p.assignedAdmin || p.admin;
-        return name && name !== 'Unassigned' && name !== '-';
-      });
-
       if (districtFilter) {
         list = list.filter(p => {
           const pDist = (p.district || p.districtName || '').toLowerCase();

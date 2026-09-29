@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
@@ -23,13 +24,19 @@ import {
   Truck,
   Wrench,
   Award,
-  CreditCard
+  CreditCard,
+  AlertTriangle,
+  RotateCcw,
+  Filter
 } from 'lucide-react';
 
 export function StateDivisions() {
   const { isDark } = useTheme();
+  const { user: authUser } = useAuth();
   const [divisions, setDivisions] = useState([]);
+  const [availableDistricts, setAvailableDistricts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [selectedDivision, setSelectedDivision] = useState(null);
   const [allPincodes, setAllPincodes] = useState([]);
@@ -61,35 +68,69 @@ export function StateDivisions() {
   };
 
   const districtFilter = searchParams.get('district');
+  const districtIdFilter = searchParams.get('districtId');
   const stateFilter = searchParams.get('state');
+  const stateIdFilter = searchParams.get('stateId');
+  const divisionFilter = searchParams.get('division');
+  const divisionIdFilter = searchParams.get('divisionId');
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = {};
+      if (districtIdFilter) params.districtId = districtIdFilter;
       if (districtFilter) params.district = districtFilter;
+      if (stateIdFilter) params.stateId = stateIdFilter;
       if (stateFilter) params.state = stateFilter;
+      if (divisionIdFilter) params.divisionId = divisionIdFilter;
+      if (divisionFilter) params.division = divisionFilter;
 
-      const [res, pinRes] = await Promise.all([
+      // Ensure state scoping if user is not Super Admin
+      if (!params.state && authUser?.state && authUser.state.toLowerCase() !== 'all india') {
+        params.state = authUser.state;
+      }
+      if (!params.stateId && authUser?.stateId) {
+        params.stateId = authUser.stateId;
+      }
+
+      console.log('[StateDivisions] Querying real divisions with params:', params, 'User territory:', {
+        role: authUser?.role,
+        id: authUser?.id || authUser?._id,
+        state: authUser?.state,
+        district: authUser?.district
+      });
+
+      const [res, pinRes, distRes] = await Promise.all([
         dataService.getDivisions(params),
-        dataService.getPincodes(params).catch(() => ({ success: false }))
+        dataService.getPincodes(params).catch(() => ({ success: false })),
+        dataService.getDistricts({ state: params.state || authUser?.state }).catch(() => ({ success: false }))
       ]);
-      if (res.success) {
-        let list = res.divisions || [];
-        if (districtFilter) {
-          list = list.filter(d => (d.districtName || d.district || '').toLowerCase() === districtFilter.toLowerCase());
-        }
-        // Only show divisions with registered admins
-        list = list.filter(d => d.adminName && d.adminName.toLowerCase() !== 'unassigned' && d.adminName.trim() !== '-' && d.adminName.trim() !== '');
+
+      console.log('[StateDivisions] API Response divisions:', res);
+
+      if (distRes?.success && Array.isArray(distRes.districts)) {
+        setAvailableDistricts(distRes.districts);
+      }
+
+      if (res?.success) {
+        const list = Array.isArray(res.divisions) ? res.divisions : [];
+        console.log(`[StateDivisions] Loaded ${list.length} divisions from database`);
         setDivisions(list);
+        setError(null);
       } else {
+        const errMsg = res?.message || 'Failed to retrieve divisions from the database.';
+        console.error('[StateDivisions] API error:', errMsg);
+        setError(errMsg);
         setDivisions([]);
       }
-      if (pinRes.success && pinRes.pincodes) {
+
+      if (pinRes?.success && Array.isArray(pinRes.pincodes)) {
         setAllPincodes(pinRes.pincodes);
       }
     } catch (e) {
-      console.error(e);
+      console.error('[StateDivisions] Load exception:', e);
+      setError(e.message || 'Network error while retrieving division records.');
       setDivisions([]);
     } finally {
       setLoading(false);
@@ -98,7 +139,7 @@ export function StateDivisions() {
 
   useEffect(() => {
     loadData();
-  }, [districtFilter, stateFilter]);
+  }, [districtFilter, districtIdFilter, stateFilter, stateIdFilter, divisionFilter, divisionIdFilter, authUser?.state]);
 
   const handleToggleStatus = async (row) => {
     const currentStatus = row.status || 'Active';
@@ -234,6 +275,21 @@ export function StateDivisions() {
     }
   ];
 
+  const handleDistrictSelect = (e) => {
+    const distName = e.target.value;
+    if (!distName) {
+      setSearchParams({});
+    } else {
+      const matched = availableDistricts.find(d => (d.name || '').toLowerCase() === distName.toLowerCase());
+      const newParams = { district: distName };
+      if (matched && (matched.id || matched._id)) {
+        newParams.districtId = matched.id || matched._id;
+      }
+      if (stateFilter) newParams.state = stateFilter;
+      setSearchParams(newParams);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -243,12 +299,12 @@ export function StateDivisions() {
               <button
                 type="button"
                 onClick={() => setSearchParams({})}
-                className={`p-1 rounded-lg border transition ${
+                className={`p-1 rounded-lg border transition cursor-pointer ${
                   isDark
                     ? 'hover:bg-slate-800 text-slate-400 hover:text-white border-slate-700'
                     : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900 border-slate-200'
                 }`}
-                title="Show all divisions"
+                title="Show all divisions across State"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
@@ -266,21 +322,73 @@ export function StateDivisions() {
           </p>
         </div>
 
-        {/* Drill down Breadcrumb */}
-        <div className={`flex items-center gap-2 text-xs border rounded-xl px-3 py-1.5 font-mono ${
-          isDark
-            ? 'bg-slate-800/80 border-slate-700 text-slate-400'
-            : 'bg-slate-100 border-slate-200 text-slate-600'
-        }`}>
-          <span>State</span>
-          <span>&rarr;</span>
-          <span className="font-bold">{districtFilter || 'Districts'}</span>
-          <span>&rarr;</span>
-          <span className="text-blue-600 font-bold">Divisions</span>
-          <span>&rarr;</span>
-          <span>Pincodes</span>
+        {/* Drill down Breadcrumb & District Filter Dropdown */}
+        <div className="flex flex-wrap items-center gap-2">
+          {availableDistricts.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                aria-label="Filter divisions by district"
+                value={districtFilter || ''}
+                onChange={handleDistrictSelect}
+                className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-slate-200'
+                    : 'bg-white border-slate-300 text-slate-700'
+                }`}
+              >
+                <option value="">All Districts ({availableDistricts.length})</option>
+                {availableDistricts.map(d => (
+                  <option key={d.id || d._id || d.name} value={d.name}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className={`flex items-center gap-2 text-xs border rounded-xl px-3 py-1.5 font-mono ${
+            isDark
+              ? 'bg-slate-800/80 border-slate-700 text-slate-400'
+              : 'bg-slate-100 border-slate-200 text-slate-600'
+          }`}>
+            <Link to="/state-admin/dashboard" className="hover:text-blue-600 hover:underline">State</Link>
+            <span>&rarr;</span>
+            <Link to="/state-admin/districts" className="hover:text-blue-600 hover:underline">
+              {districtFilter || 'Districts'}
+            </Link>
+            <span>&rarr;</span>
+            <span className="text-blue-600 font-bold">Divisions</span>
+            <span>&rarr;</span>
+            <Link 
+              to={districtFilter ? `/state-admin/pincodes?district=${encodeURIComponent(districtFilter)}` : '/state-admin/pincodes'} 
+              className="hover:text-blue-600 hover:underline"
+            >
+              Pincodes
+            </Link>
+          </div>
         </div>
       </div>
+
+      {/* Error state banner */}
+      {error && !loading && (
+        <div className="p-4 rounded-xl border border-rose-500/40 bg-rose-50/80 dark:bg-rose-950/40 flex items-center justify-between gap-3 text-rose-700 dark:text-rose-300">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+            <div className="text-xs">
+              <span className="font-bold">Error loading division data:</span> {error}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadData}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
 
       <DataTable
         title={districtFilter ? `Divisions in ${districtFilter}` : "Divisions Directory"}

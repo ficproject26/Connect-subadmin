@@ -156,19 +156,20 @@ export function DivisionalPincodes() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const params = {};
+      if (user?.division) params.division = user.division;
+      if (user?.divisionId) params.divisionId = user.divisionId;
+      if (user?.district) params.district = user.district;
+      if (user?.districtId) params.districtId = user.districtId;
+      if (user?.state) params.state = user.state;
+
       const [res, mgrRes, agentRes] = await Promise.all([
-        dataService.getPincodes(),
+        dataService.getPincodes(params),
         dataService.getManagers().catch(() => ({ subordinates: [] })),
         dataService.getAgents().catch(() => ({ agents: [] }))
       ]);
 
-      let list = (res?.success && res.pincodes?.length > 0) ? res.pincodes : FALLBACK_DIVISIONAL_PINCODES;
-
-      // Filter only registered pincode administrators
-      list = list.filter(p => {
-        const name = p.adminName || p.assignedAdmin || p.admin;
-        return name && name !== 'Unassigned' && name !== '-';
-      });
+      let list = (res?.success && Array.isArray(res.pincodes)) ? res.pincodes : [];
 
       if (divisionName) {
         const normDiv = divisionName.toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
