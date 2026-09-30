@@ -550,6 +550,9 @@ const approveManager = async (req, res) => {
     Object.assign(manager, approveUpdates);
 
     await db.users.findByIdAndUpdate(manager._id || manager.id, approveUpdates);
+    if (db.managers) {
+      await db.managers.findByIdAndUpdate(manager._id || manager.id, approveUpdates).catch(() => {});
+    }
 
     // Audit log entry
     await db.auditLogs.insertOne({
@@ -616,6 +619,9 @@ const rejectManager = async (req, res) => {
     Object.assign(manager, rejectUpdates);
 
     await db.users.findByIdAndUpdate(manager._id || manager.id, rejectUpdates);
+    if (db.managers) {
+      await db.managers.findByIdAndUpdate(manager._id || manager.id, rejectUpdates).catch(() => {});
+    }
 
     // Audit log entry
     await db.auditLogs.insertOne({
@@ -895,9 +901,13 @@ const addManager = async (req, res) => {
       : district ? `${district} District` 
       : `${state} Jurisdiction`;
 
+    const rolePrefix = mgrRole === 'state_manager' ? 'STM' : mgrRole === 'district_manager' ? 'DTM' : mgrRole === 'division_manager' ? 'DIV' : 'PIN';
+    const managerId = req.body.managerId || (`MGR-${rolePrefix}-${Date.now().toString().slice(-6)}`);
+
     const newManager = {
       _id: newId,
       id: newId,
+      managerId,
       name: mgrName,
       email: mgrEmail,
       mobile: mgrMobile,
@@ -958,6 +968,9 @@ const addManager = async (req, res) => {
     };
 
     await db.users.insertOne(newManager);
+    if (db.managers) {
+      await db.managers.insertOne(newManager).catch(() => {});
+    }
 
     // Audit log
     await db.auditLogs.insertOne({
