@@ -21,7 +21,7 @@ export function DistrictJobs() {
     setLoading(true);
     try {
       const res = await dataService.getJobs();
-      if (res.success) setJobs(res.jobs);
+      if (res.success) setJobs(res.jobs || res.data || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -68,7 +68,7 @@ export function DistrictJobs() {
             App ID: {row.id}
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-            {row.applicationDate || row.createdAt || '2026-03-05 10:30 AM'}
+            {row.applicationDate || row.createdAt || '-'}
           </div>
         </div>
       )

@@ -4,7 +4,7 @@ const { db, filterByLocation } = require('../config/db');
 function getExecutives(req, res) {
   try {
     let scoped = filterByLocation(db.executives, req.user);
-    return res.json({ success: true, count: scoped.length, executives: scoped });
+    return res.json({ success: true, count: scoped.length, executives: scoped, data: scoped });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch executives', error: error.message });
   }
@@ -13,7 +13,7 @@ function getExecutives(req, res) {
 function getSupportTeam(req, res) {
   try {
     let scoped = filterByLocation(db.supportTeam, req.user);
-    return res.json({ success: true, count: scoped.length, tickets: scoped });
+    return res.json({ success: true, count: scoped.length, tickets: scoped, data: scoped });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch support team', error: error.message });
   }
@@ -738,7 +738,7 @@ async function advanceAgentActivity(req, res) {
 function getDeliveryPartners(req, res) {
   try {
     let scoped = filterByLocation(Array.from(db.deliveryPartners || []), req.user);
-    return res.json({ success: true, count: scoped.length, deliveryPartners: scoped });
+    return res.json({ success: true, count: scoped.length, deliveryPartners: scoped, data: scoped });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch delivery partners', error: error.message });
   }

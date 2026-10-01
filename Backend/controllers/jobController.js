@@ -1,4 +1,5 @@
 const { db, filterByLocation } = require('../config/db');
+const { getComprehensiveVendorDirectory } = require('../utils/vendorDirectory');
 
 function formatJobDate(dateVal) {
   if (!dateVal) return '-';
@@ -35,7 +36,7 @@ function getPincodeDirectory() {
   return pinMap;
 }
 
-function normalizeJob(item, pinMap, vendorMap) {
+function normalizeJob(item, pinMap, vendorDir) {
   if (!item) return null;
 
   const jobId = String(item.id || item._id || item.jobId || item.order_number || '');
@@ -48,7 +49,7 @@ function normalizeJob(item, pinMap, vendorMap) {
     if (pinMatch) pincode = pinMatch[0];
   }
 
-  const pinGeo = pinMap.get(pincode) || {};
+  const pinGeo = (pinMap && pincode) ? (pinMap.get(pincode) || {}) : {};
   let state = item.state || item.stateName || pinGeo.state || '';
   let district = item.district || item.districtName || pinGeo.district || '';
   let division = item.division || item.divisionName || pinGeo.division || '';
@@ -74,14 +75,39 @@ function normalizeJob(item, pinMap, vendorMap) {
   }
 
   if (!state) {
-    state = customerAddress.toLowerCase().includes('karnataka') ? 'Karnataka' : 'Tamil Nadu';
+    if (customerAddress.toLowerCase().includes('karnataka')) state = 'Karnataka';
+    else if (customerAddress.toLowerCase().includes('tamil nadu')) state = 'Tamil Nadu';
   }
 
-  // Vendor / Company Lookup
+  // Vendor / Company Lookup via comprehensive vendor directory
   const vendorKey = String(item.vendor_id || item.vendorId || '').trim();
-  const matchedVendor = vendorKey ? vendorMap.get(vendorKey) : null;
-  const vendorName = matchedVendor ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName) : (item.vendorName || item.company || 'Enterprise Partner');
-  const vendorId = matchedVendor ? (matchedVendor._id || matchedVendor.id || matchedVendor.vendorId) : (vendorKey || 'Not provided');
+  let matchedVendor = null;
+  if (vendorDir && vendorKey) {
+    matchedVendor = vendorDir.get(vendorKey) ||
+      vendorDir.get(`vendor_${vendorKey}`) ||
+      vendorDir.get(vendorKey.replace(/^vendor_/, '')) ||
+      null;
+  }
+
+  const vendorName = matchedVendor
+    ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName)
+    : (item.vendorName || item.company || 'Enterprise Partner');
+
+  const vendorId = matchedVendor
+    ? (matchedVendor._id || matchedVendor.id || matchedVendor.vendorId)
+    : (vendorKey || 'Not provided');
+
+  const vendorState = matchedVendor?.state || '';
+  const vendorDistrict = matchedVendor?.district || '';
+  const vendorDivision = matchedVendor?.division || '';
+  const vendorPincode = matchedVendor?.pincode || '';
+
+  // Fallback territory from vendor if customer location is missing
+  if (!state && vendorState) state = vendorState;
+  if (!district && vendorDistrict) district = vendorDistrict;
+  if (!division && vendorDivision) division = vendorDivision;
+  if (!pincode && vendorPincode) pincode = vendorPincode;
+  if (!state) state = 'Tamil Nadu';
 
   const createdDateStr = item.created_at || item.createdAt || item.postedDate || item.date;
 
@@ -96,6 +122,10 @@ function normalizeJob(item, pinMap, vendorMap) {
     vendorName,
     company: vendorName,
     vendorId,
+    vendorState,
+    vendorDistrict,
+    vendorDivision,
+    vendorPincode,
     customerName: item.customer_name || item.customerName || item.candidateName || item.memberName || 'Candidate',
     candidateName: item.customer_name || item.customerName || item.candidateName || item.memberName || 'Candidate',
     candidateEmail: item.candidateEmail || item.customerEmail || item.email || 'Not provided',
@@ -121,7 +151,10 @@ function normalizeJob(item, pinMap, vendorMap) {
 
 function getJobs(req, res) {
   try {
-    // 1. Gather all job applications and job postings
+    const pinMap = getPincodeDirectory();
+    const vendorDir = getComprehensiveVendorDirectory();
+
+    // 1. Gather all job applications and job postings from real MongoDB collections
     const rawJobs = Array.from(db.jobs || []);
     const orderJobs = Array.from(db.orders || []).filter(o =>
       o.type === 'Job' || String(o.id || o.order_number || '').startsWith('JOB')
@@ -147,45 +180,27 @@ function getJobs(req, res) {
       }
     });
 
-    // 2. Geographic scoping at the backend/database level based on logged-in user's territory
-    let scoped = filterByLocation(combined, req.user);
+    // 2. Normalize FIRST so all territory fields (state, district, division, pincode) are fully resolved
+    const normalizedJobs = combined.map(j => normalizeJob(j, pinMap, vendorDir)).filter(Boolean);
 
-    const pinMap = getPincodeDirectory();
+    // 3. Geographic scoping at the backend/database level based on logged-in user's territory
+    let scoped = filterByLocation(normalizedJobs, req.user);
 
-    // Fast vendor map
-    const vendorMap = new Map();
-    Array.from(db.vendors || []).forEach(v => {
-      const vId = String(v._id || v.id || '').trim();
-      if (vId) vendorMap.set(vId, v);
-    });
-    Array.from(db.settlements || []).forEach(s => {
-      const vId = String(s.vendorId || s._id || s.id || '').trim();
-      if (vId) {
-        const existing = vendorMap.get(vId) || {};
-        vendorMap.set(vId, {
-          ...existing,
-          businessName: existing.businessName || existing.name || s.vendorBusinessName,
-          vendorBusinessName: s.vendorBusinessName || existing.businessName,
-          _id: vId,
-          id: vId
-        });
-      }
-    });
-
-    const normalizedJobs = scoped.map(j => normalizeJob(j, pinMap, vendorMap)).filter(Boolean);
-
-    const { search, priority, status } = req.query;
-    let filtered = normalizedJobs;
+    const { search, status } = req.query;
+    let filtered = scoped;
 
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
       filtered = filtered.filter(j =>
         (j.title && j.title.toLowerCase().includes(q)) ||
         (j.customerName && j.customerName.toLowerCase().includes(q)) ||
+        (j.candidateName && j.candidateName.toLowerCase().includes(q)) ||
         (j.vendorName && j.vendorName.toLowerCase().includes(q)) ||
         (j.id && j.id.toLowerCase().includes(q)) ||
+        (j.orderNumber && j.orderNumber.toLowerCase().includes(q)) ||
         (j.pincode && j.pincode.includes(q)) ||
-        (j.district && j.district.toLowerCase().includes(q))
+        (j.district && j.district.toLowerCase().includes(q)) ||
+        (j.division && j.division.toLowerCase().includes(q))
       );
     }
 
@@ -209,7 +224,7 @@ function getJobs(req, res) {
 function getTechnicians(req, res) {
   try {
     let scoped = filterByLocation(Array.from(db.technicians || []), req.user);
-    return res.json({ success: true, count: scoped.length, technicians: scoped });
+    return res.json({ success: true, count: scoped.length, technicians: scoped, data: scoped });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch technicians', error: error.message });
   }
@@ -233,7 +248,11 @@ async function updateJobStatus(req, res) {
 
     if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
 
-    const scoped = filterByLocation([job], req.user);
+    const pinMap = getPincodeDirectory();
+    const vendorDir = getComprehensiveVendorDirectory();
+    const normalized = normalizeJob(job, pinMap, vendorDir);
+
+    const scoped = filterByLocation([normalized || job], req.user);
     if (scoped.length === 0) {
       return res.status(403).json({ success: false, message: 'Job outside your jurisdiction' });
     }
@@ -244,7 +263,11 @@ async function updateJobStatus(req, res) {
 
     const updatedJob = await targetCollection.findByIdAndUpdate(job._id || job.id, updates);
 
-    return res.json({ success: true, message: 'Job status updated', job: updatedJob || { ...job, ...updates } });
+    return res.json({
+      success: true,
+      message: 'Job status updated',
+      job: updatedJob || { ...job, ...updates }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to update job', error: error.message });
   }

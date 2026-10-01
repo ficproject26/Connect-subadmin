@@ -24,7 +24,7 @@ export function DistrictTechnicians() {
     setLoading(true);
     try {
       const res = await dataService.getTechnicians();
-      if (res.success) setTechs(res.technicians || []);
+      if (res.success) setTechs(res.technicians || res.data || []);
     } catch (e) {
       console.error(e);
     } finally {

@@ -23,7 +23,7 @@ export function StateTechnicians() {
     try {
       const res = await dataService.getTechnicians();
       if (res.success) {
-        setTechs(res.technicians || []);
+        setTechs(res.technicians || res.data || []);
       }
     } catch (e) {
       console.error(e);

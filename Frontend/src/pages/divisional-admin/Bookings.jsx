@@ -18,7 +18,7 @@ export function DivisionalBookings() {
     setLoading(true);
     try {
       const res = await dataService.getBookings();
-      if (res.success) setBookings(res.bookings);
+      if (res.success) setBookings(res.bookings || res.data || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -70,7 +70,7 @@ export function DivisionalBookings() {
         const isCardMember = tier && !['normal', 'standard', 'customer', 'none'].includes(String(tier).toLowerCase());
         const normalizedTier = isCardMember ? (tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()) : null;
 
-        const baseCharge = Number(row.charge) || 1200;
+        const baseCharge = Number(row.charge) || Number(row.totalAmount) || Number(row.finalAmount) || 0;
         const discountRate = normalizedTier === 'Diamond' ? 0.20 : normalizedTier === 'Gold' ? 0.15 : normalizedTier === 'Silver' ? 0.10 : 0;
         const discountAmount = Math.round(baseCharge * discountRate);
         const netPayable = baseCharge - discountAmount;

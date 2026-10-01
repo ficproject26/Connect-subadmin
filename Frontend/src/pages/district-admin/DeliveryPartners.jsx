@@ -28,7 +28,7 @@ export function DistrictDeliveryPartners() {
     dataService.getDeliveryPartners()
       .then(res => {
         if (isMounted) {
-          setPartners(res.deliveryPartners || []);
+          setPartners(res.deliveryPartners || res.data || []);
           setLoading(false);
         }
       })
