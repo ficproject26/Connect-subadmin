@@ -1,4 +1,5 @@
 const { db, filterByLocation } = require('../config/db');
+const { resolveAdminTerritory, isEntityInAdminTerritory } = require('../utils/permissions');
 
 // Helper to format ISO date string into readable date
 function formatBookingDate(dateVal) {
@@ -45,7 +46,7 @@ function normalizeBooking(item, pinMap, vendorMap, historyMap, matchedVendorArg)
 
   // Vendor Lookup
   const vendorKey = String(item.vendor_id || item.vendorId || '').trim();
-  const matchedVendor = matchedVendorArg || (vendorKey ? (vendorMap instanceof Map ? vendorMap.get(vendorKey) : null) : null);
+  const matchedVendor = matchedVendorArg || (vendorKey ? (vendorMap instanceof Map ? (vendorMap.get(vendorKey) || vendorMap.get(vendorKey.toLowerCase())) : null) : null);
 
   const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName) : (item.vendorBusinessName || item.vendorName || item.hotelName || item.businessName || 'Merchant Enterprise');
   const vendorName = matchedVendor ? (matchedVendor.vendorName || matchedVendor.name || vendorBusinessName) : (item.vendorName || vendorBusinessName);
@@ -57,49 +58,33 @@ function normalizeBooking(item, pinMap, vendorMap, historyMap, matchedVendorArg)
   const vendorDistrict = matchedVendor ? matchedVendor.district : '';
   const vendorDivision = matchedVendor ? matchedVendor.division : '';
   const vendorPincode = matchedVendor ? matchedVendor.pincode : '';
+  const vendorStateId = matchedVendor?.stateId || item.vendorStateId || null;
+  const vendorDistrictId = matchedVendor?.districtId || item.vendorDistrictId || null;
+  const vendorDivisionId = matchedVendor?.divisionId || item.vendorDivisionId || null;
+  const vendorPincodeId = matchedVendor?.pincodeId || item.vendorPincodeId || null;
 
-  // Geographic coordinates
+  // Geographic coordinates - VENDOR / BUSINESS TERRITORY IS SOURCE OF TRUTH (Part 10)
+  let state = vendorState || '';
+  let district = vendorDistrict || '';
+  let division = vendorDivision || '';
+  let pincode = vendorPincode || '';
+
+  // If vendor territory is incomplete, enrich from vendor's postal pincode
+  if (pincode && (!state || !district || !division)) {
+    const vPinGeo = pinMap.get(pincode) || {};
+    if (!state) state = vPinGeo.state || '';
+    if (!district) district = vPinGeo.district || '';
+    if (!division) division = vPinGeo.division || '';
+  }
+
+  // Fallback to item territory if vendor was completely unassigned
+  if (!state && item.state) state = item.state;
+  if (!district && item.district) district = item.district;
+  if (!division && item.division) division = item.division;
+  if (!pincode && (item.pincode || item.deliveryPincode)) pincode = item.pincode || item.deliveryPincode;
+  if (!state) state = 'Tamil Nadu';
+
   const customerAddress = item.customer_address || item.customerAddress || item.address || '';
-  let pincode = String(item.pincode || item.deliveryPincode || vendorPincode || '').trim();
-  if (!pincode && customerAddress) {
-    const pinMatch = customerAddress.match(/\b\d{6}\b/);
-    if (pinMatch) pincode = pinMatch[0];
-  }
-
-  const pinGeo = pinMap.get(pincode) || {};
-  let state = item.state || item.stateName || pinGeo.state || vendorState || '';
-  let district = item.district || item.districtName || pinGeo.district || vendorDistrict || '';
-  let division = item.division || item.divisionName || pinGeo.division || vendorDivision || '';
-
-  if (!district && customerAddress) {
-    const addrUpper = customerAddress.toUpperCase();
-    if (addrUpper.includes('SALEM')) district = 'Salem';
-    else if (addrUpper.includes('DINDIGUL')) district = 'Dindigul';
-    else if (addrUpper.includes('ERODE')) district = 'Erode';
-    else if (addrUpper.includes('KRISHNAGIRI')) district = 'Krishnagiri';
-    else if (addrUpper.includes('DHARMAPURI')) district = 'Dharmapuri';
-    else if (addrUpper.includes('NAMAKKAL')) district = 'Namakkal';
-    else if (addrUpper.includes('TIRUPPUR') || addrUpper.includes('TIRUPUR')) district = 'Tiruppur';
-    else if (addrUpper.includes('COIMBATORE')) district = 'Coimbatore';
-    else if (addrUpper.includes('BANGALORE') || addrUpper.includes('BENGALURU')) district = 'Bengaluru Urban';
-  }
-
-  if (!division && customerAddress) {
-    const addrUpper = customerAddress.toUpperCase();
-    if (addrUpper.includes('THALAIVASAL')) division = 'Thalaivasal';
-    else if (addrUpper.includes('ATTUR')) division = 'Attur';
-    else if (addrUpper.includes('SALEM NORTH')) division = 'Salem North';
-    else if (addrUpper.includes('BOMMANAHALLI')) division = 'Bengaluru South';
-    else if (addrUpper.includes('HOSUR')) division = 'Hosur';
-  }
-
-  if (!state) {
-    if (customerAddress.toLowerCase().includes('karnataka') && !district.includes('salem') && !district.includes('dindigul')) {
-      state = 'Karnataka';
-    } else {
-      state = vendorState || 'Tamil Nadu';
-    }
-  }
 
   // Booking Type & Service / Room Specifications
   const rawType = item.type || item.bookingType || item.category || 'Stay';
@@ -185,11 +170,19 @@ function normalizeBooking(item, pinMap, vendorMap, historyMap, matchedVendorArg)
     district,
     division,
     pincode,
-    // Vendor location fields (used for territory-based filtering fallback)
+    stateId: item.stateId || vendorStateId || null,
+    districtId: item.districtId || vendorDistrictId || null,
+    divisionId: item.divisionId || vendorDivisionId || null,
+    pincodeId: item.pincodeId || vendorPincodeId || null,
+    // Vendor location fields (used for territory-based filtering)
     vendorState,
     vendorDistrict,
     vendorDivision,
     vendorPincode,
+    vendorStateId,
+    vendorDistrictId,
+    vendorDivisionId,
+    vendorPincodeId,
     vendorLocation,
     vendorPhone,
     vendorEmail,
@@ -244,13 +237,33 @@ function getBookings(req, res) {
 
     // 1. Gather all legitimate booking records from db.bookings and db.orders
     // Strictly restrict to SERVICE, STAY, TRAVEL (never product orders)
-    const rawBookings = Array.from(db.bookings || []);
+    // 1. Territory Data Validation & Authentication Check (Part 16)
+    const territory = resolveAdminTerritory(req.user);
+    if (!territory.isValid) {
+      return res.json({
+        success: true,
+        count: 0,
+        total: 0,
+        bookings: [],
+        data: [],
+        message: territory.message
+      });
+    }
+
+    // 2. Gather all legitimate booking records from db.bookings and db.orders
+    // Strictly restrict to SERVICES, STAY, TRAVEL (never Products, Food, Daily Needs, Job - Part 7)
+    const rawBookings = Array.from(db.bookings || []).filter(b => {
+      const t = String(b.type || b.category || b.bookingType || '').toLowerCase();
+      const isProductOrFoodOrJob = t.includes('product') || t.includes('food') || t.includes('daily needs') || t.includes('job');
+      return !isProductOrFoodOrJob;
+    });
+
     const orderBookings = Array.from(db.orders || []).filter(o => {
       const t = String(o.type || o.category || '').toLowerCase();
       const isBookingType = t === 'stay' || t === 'services' || t === 'service' || t === 'travel';
-      const isBookingId = String(o.id || o.order_number || '').toUpperCase().startsWith('BKG');
-      const isProductOrFood = t === 'products' || t === 'food' || t === 'daily needs' || t === 'job';
-      return (isBookingType || isBookingId) && !isProductOrFood;
+      const isBookingId = String(o.id || o.order_number || o._id || '').toUpperCase().startsWith('BKG');
+      const isProductOrFoodOrJob = t.includes('product') || t.includes('food') || t.includes('daily needs') || t.includes('job');
+      return (isBookingType || isBookingId) && !isProductOrFoodOrJob;
     });
 
     const combined = [...rawBookings];
@@ -263,51 +276,15 @@ function getBookings(req, res) {
       }
     });
 
-    // 2. Normalize and enrich all bookings with full vendor & territory data FIRST
+    // 3. Normalize and enrich all bookings with full vendor & territory data
     const normalizedBookings = combined.map(b => {
       const vendorKey = String(b.vendor_id || b.vendorId || '').trim();
       const matchedVendor = vendorDir.findVendor(vendorKey);
       return normalizeBooking(b, pinMap, vendorDir.vendorMap, historyMap, matchedVendor);
     }).filter(Boolean);
 
-    // 3. Strictly enforce territory-based access control based on user jurisdiction
-    let scoped = filterByLocation(normalizedBookings, req.user);
-
-    // Also support vendor territory match for State / District / Division admins
-    if (req.user && req.user.role) {
-      const uRole = String(req.user.role).toLowerCase();
-      const uState = (req.user.state || '').trim().toLowerCase();
-      const uDist = (req.user.district || '').trim().toLowerCase();
-      const uDiv = (req.user.division || '').trim().toLowerCase().replace(/\s+division$/i, '');
-      const uPin = (req.user.pincode || '').trim();
-
-      if (!uRole.includes('super admin') && !uRole.includes('admin') && uState && uState !== 'all india') {
-        scoped = normalizedBookings.filter(b => {
-          // Record belongs to user territory if either service/customer location OR vendor location matches
-          const bState = String(b.state || '').trim().toLowerCase();
-          const vState = String(b.vendorState || '').trim().toLowerCase();
-          const stateMatch = bState === uState || vState === uState;
-
-          if (uRole.includes('state')) return stateMatch;
-
-          const bDist = String(b.district || '').trim().toLowerCase();
-          const vDist = String(b.vendorDistrict || '').trim().toLowerCase();
-          const distMatch = stateMatch && (bDist === uDist || vDist === uDist);
-
-          if (uRole.includes('district')) return distMatch;
-
-          const bDiv = String(b.division || '').trim().toLowerCase().replace(/\s+division$/i, '');
-          const vDiv = String(b.vendorDivision || '').trim().toLowerCase().replace(/\s+division$/i, '');
-          const divMatch = distMatch && (bDiv === uDiv || vDiv === uDiv);
-
-          if (uRole.includes('division') || uRole.includes('divisional')) return divMatch;
-
-          const bPin = String(b.pincode || '').trim();
-          const vPin = String(b.vendorPincode || '').trim();
-          return divMatch && (bPin === uPin || vPin === uPin);
-        });
-      }
-    }
+    // 4. Strictly enforce territory-based access control based on user jurisdiction (Part 9, 10)
+    let scoped = normalizedBookings.filter(b => isEntityInAdminTerritory(b, territory));
 
     const { search, status, type } = req.query;
     let filtered = scoped;
@@ -320,7 +297,8 @@ function getBookings(req, res) {
         (b.vendorName && b.vendorName.toLowerCase().includes(q)) ||
         (b.service && b.service.toLowerCase().includes(q)) ||
         (b.pincode && b.pincode.includes(q)) ||
-        (b.district && b.district.toLowerCase().includes(q))
+        (b.district && b.district.toLowerCase().includes(q)) ||
+        (b.division && b.division.toLowerCase().includes(q))
       );
     }
 

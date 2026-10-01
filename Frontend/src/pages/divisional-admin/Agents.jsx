@@ -99,7 +99,7 @@ export function DivisionalAgents() {
       accessor: 'walletBalance',
       render: (row) => (
         <span className="font-mono font-bold text-slate-900 dark:text-amber-300 text-xs">
-          ₹{row.walletBalance?.toLocaleString()}
+          ₹{(Number(row.walletBalance) || 0).toLocaleString()}
         </span>
       )
     },

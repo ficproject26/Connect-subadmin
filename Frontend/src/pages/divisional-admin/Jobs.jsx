@@ -16,12 +16,21 @@ export function DivisionalJobs() {
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const loadData = async () => {
     setLoading(true);
+    setErrorMessage('');
     try {
       const res = await dataService.getJobs();
-      if (res.success) setJobs(res.jobs || res.data || []);
+      if (res.success) {
+        setJobs(res.jobs || res.data || []);
+        if (res.message && res.message.includes('Territory assignment is incomplete')) {
+          setErrorMessage(res.message);
+        }
+      } else if (res.message) {
+        setErrorMessage(res.message);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -235,6 +244,13 @@ export function DivisionalJobs() {
         </div>
       </div>
 
+      {errorMessage && (
+        <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
+          <span>⚠️</span>
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       <DataTable
         title="Division Applications Board"
         subtitle="Customer applications for vendor job vacancies"
@@ -242,6 +258,7 @@ export function DivisionalJobs() {
         data={jobs}
         loading={loading}
         onRefresh={loadData}
+        emptyMessage={errorMessage || "No job applications found under this territory."}
         onRowClick={(row) => {
           setSelectedApplication(row);
           setShowDetailsModal(true);

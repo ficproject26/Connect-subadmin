@@ -203,6 +203,7 @@ export function DistrictAgents({ level = 'district' }) {
   const totalOnboardingsSum = agents.reduce((acc, a) => acc + (Number(a.vendorOnboardings) || 0), 0);
   const totalWalletSum = agents.reduce((acc, a) => acc + (Number(a.walletBalance) || 0), 0);
   const totalReferralsSum = agents.reduce((acc, a) => acc + (Number(a.totalReferrals) || 0), 0);
+  const totalEarnedSum = agents.reduce((acc, a) => acc + (Number(a.totalEarned ?? a.earnings ?? a.disbursedAmount) || 0), 0);
 
   // Filtered agents based on territory locking and selection
   const filteredAgents = useMemo(() => {

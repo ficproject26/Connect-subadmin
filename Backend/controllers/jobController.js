@@ -1,5 +1,6 @@
 const { db, filterByLocation } = require('../config/db');
 const { getComprehensiveVendorDirectory } = require('../utils/vendorDirectory');
+const { resolveAdminTerritory, isEntityInAdminTerritory } = require('../utils/permissions');
 
 function formatJobDate(dateVal) {
   if (!dateVal) return '-';
@@ -42,51 +43,17 @@ function normalizeJob(item, pinMap, vendorDir) {
   const jobId = String(item.id || item._id || item.jobId || item.order_number || '');
   const jobTitle = item.jobTitle || item.title || item.product_details || 'Job Opening';
 
-  const customerAddress = item.customer_address || item.customerAddress || item.address || item.location || '';
-  let pincode = String(item.pincode || item.deliveryPincode || '').trim();
-  if (!pincode && customerAddress) {
-    const pinMatch = customerAddress.match(/\b\d{6}\b/);
-    if (pinMatch) pincode = pinMatch[0];
-  }
-
-  const pinGeo = (pinMap && pincode) ? (pinMap.get(pincode) || {}) : {};
-  let state = item.state || item.stateName || pinGeo.state || '';
-  let district = item.district || item.districtName || pinGeo.district || '';
-  let division = item.division || item.divisionName || pinGeo.division || '';
-
-  if (!district && customerAddress) {
-    const addrUpper = customerAddress.toUpperCase();
-    if (addrUpper.includes('SALEM')) district = 'Salem';
-    else if (addrUpper.includes('ERODE')) district = 'Erode';
-    else if (addrUpper.includes('KRISHNAGIRI')) district = 'Krishnagiri';
-    else if (addrUpper.includes('DHARMAPURI')) district = 'Dharmapuri';
-    else if (addrUpper.includes('NAMAKKAL')) district = 'Namakkal';
-    else if (addrUpper.includes('TIRUPPUR') || addrUpper.includes('TIRUPUR')) district = 'Tiruppur';
-    else if (addrUpper.includes('COIMBATORE')) district = 'Coimbatore';
-    else if (addrUpper.includes('BANGALORE') || addrUpper.includes('BENGALURU')) district = 'Bengaluru Urban';
-  }
-
-  if (!division && customerAddress) {
-    const addrUpper = customerAddress.toUpperCase();
-    if (addrUpper.includes('THALAIVASAL')) division = 'Thalaivasal';
-    else if (addrUpper.includes('ATTUR')) division = 'Attur';
-    else if (addrUpper.includes('SALEM NORTH')) division = 'Salem North';
-    else if (addrUpper.includes('HOSUR')) division = 'Hosur';
-  }
-
-  if (!state) {
-    if (customerAddress.toLowerCase().includes('karnataka')) state = 'Karnataka';
-    else if (customerAddress.toLowerCase().includes('tamil nadu')) state = 'Tamil Nadu';
-  }
-
   // Vendor / Company Lookup via comprehensive vendor directory
   const vendorKey = String(item.vendor_id || item.vendorId || '').trim();
   let matchedVendor = null;
   if (vendorDir && vendorKey) {
-    matchedVendor = vendorDir.get(vendorKey) ||
-      vendorDir.get(`vendor_${vendorKey}`) ||
-      vendorDir.get(vendorKey.replace(/^vendor_/, '')) ||
-      null;
+    if (typeof vendorDir.findVendor === 'function') {
+      matchedVendor = vendorDir.findVendor(vendorKey);
+    } else if (vendorDir.vendorMap instanceof Map) {
+      matchedVendor = vendorDir.vendorMap.get(vendorKey) || vendorDir.vendorMap.get(vendorKey.toLowerCase());
+    } else if (typeof vendorDir.get === 'function') {
+      matchedVendor = vendorDir.get(vendorKey);
+    }
   }
 
   const vendorName = matchedVendor
@@ -101,14 +68,33 @@ function normalizeJob(item, pinMap, vendorDir) {
   const vendorDistrict = matchedVendor?.district || '';
   const vendorDivision = matchedVendor?.division || '';
   const vendorPincode = matchedVendor?.pincode || '';
+  const vendorStateId = matchedVendor?.stateId || item.vendorStateId || null;
+  const vendorDistrictId = matchedVendor?.districtId || item.vendorDistrictId || null;
+  const vendorDivisionId = matchedVendor?.divisionId || item.vendorDivisionId || null;
+  const vendorPincodeId = matchedVendor?.pincodeId || item.vendorPincodeId || null;
 
-  // Fallback territory from vendor if customer location is missing
-  if (!state && vendorState) state = vendorState;
-  if (!district && vendorDistrict) district = vendorDistrict;
-  if (!division && vendorDivision) division = vendorDivision;
-  if (!pincode && vendorPincode) pincode = vendorPincode;
+  // Geographic coordinates - VENDOR TERRITORY IS SOURCE OF TRUTH (Part 11 & 12)
+  let state = vendorState || '';
+  let district = vendorDistrict || '';
+  let division = vendorDivision || '';
+  let pincode = vendorPincode || '';
+
+  // If vendor territory incomplete, enrich from vendor's postal pincode
+  if (pincode && (!state || !district || !division)) {
+    const vPinGeo = pinMap.get(pincode) || {};
+    if (!state) state = vPinGeo.state || '';
+    if (!district) district = vPinGeo.district || '';
+    if (!division) division = vPinGeo.division || '';
+  }
+
+  // Fallback to item territory if vendor was completely unassigned
+  if (!state && item.state) state = item.state;
+  if (!district && item.district) district = item.district;
+  if (!division && item.division) division = item.division;
+  if (!pincode && (item.pincode || item.deliveryPincode)) pincode = item.pincode || item.deliveryPincode;
   if (!state) state = 'Tamil Nadu';
 
+  const customerAddress = item.customer_address || item.customerAddress || item.address || item.location || '';
   const createdDateStr = item.created_at || item.createdAt || item.postedDate || item.date;
 
   return {
@@ -126,6 +112,10 @@ function normalizeJob(item, pinMap, vendorDir) {
     vendorDistrict,
     vendorDivision,
     vendorPincode,
+    vendorStateId,
+    vendorDistrictId,
+    vendorDivisionId,
+    vendorPincodeId,
     customerName: item.customer_name || item.customerName || item.candidateName || item.memberName || 'Candidate',
     candidateName: item.customer_name || item.customerName || item.candidateName || item.memberName || 'Candidate',
     candidateEmail: item.candidateEmail || item.customerEmail || item.email || 'Not provided',
@@ -140,6 +130,10 @@ function normalizeJob(item, pinMap, vendorDir) {
     district,
     division,
     pincode,
+    stateId: item.stateId || vendorStateId || null,
+    districtId: item.districtId || vendorDistrictId || null,
+    divisionId: item.divisionId || vendorDivisionId || null,
+    pincodeId: item.pincodeId || vendorPincodeId || null,
     jobType: item.jobType || (jobTitle.toLowerCase().includes('senior') ? 'Full-Time' : 'Regular'),
     category: (jobTitle.toLowerCase().includes('developer') || jobTitle.toLowerCase().includes('engineer')) ? 'IT' : 'Operations',
     status: item.status || 'applied',
@@ -154,10 +148,23 @@ function getJobs(req, res) {
     const pinMap = getPincodeDirectory();
     const vendorDir = getComprehensiveVendorDirectory();
 
-    // 1. Gather all job applications and job postings from real MongoDB collections
+    // 1. Territory Data Validation & Authentication Check (Part 16)
+    const territory = resolveAdminTerritory(req.user);
+    if (!territory.isValid) {
+      return res.json({
+        success: true,
+        count: 0,
+        total: 0,
+        jobs: [],
+        data: [],
+        message: territory.message
+      });
+    }
+
+    // 2. Gather all job applications and job postings from real MongoDB collections
     const rawJobs = Array.from(db.jobs || []);
     const orderJobs = Array.from(db.orders || []).filter(o =>
-      o.type === 'Job' || String(o.id || o.order_number || '').startsWith('JOB')
+      String(o.type || o.category || '').toLowerCase() === 'job' || String(o.id || o.order_number || '').startsWith('JOB')
     );
     const appliedJobs = Array.from(db.jobapplieds || []);
 
@@ -180,11 +187,11 @@ function getJobs(req, res) {
       }
     });
 
-    // 2. Normalize FIRST so all territory fields (state, district, division, pincode) are fully resolved
+    // 3. Normalize FIRST so all territory fields are strictly vendor/business territory (Part 11, 12)
     const normalizedJobs = combined.map(j => normalizeJob(j, pinMap, vendorDir)).filter(Boolean);
 
-    // 3. Geographic scoping at the backend/database level based on logged-in user's territory
-    let scoped = filterByLocation(normalizedJobs, req.user);
+    // 4. Territory scoping at backend level based on logged-in user's territory (Part 11, 12)
+    let scoped = normalizedJobs.filter(j => isEntityInAdminTerritory(j, territory));
 
     const { search, status } = req.query;
     let filtered = scoped;

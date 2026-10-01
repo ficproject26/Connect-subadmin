@@ -94,7 +94,7 @@ export function PincodeAgents() {
       accessor: 'walletBalance',
       render: (row) => (
         <span className="font-mono font-bold text-amber-500 dark:text-amber-300 text-sm">
-          ₹{row.walletBalance?.toLocaleString()}
+          ₹{(Number(row.walletBalance) || 0).toLocaleString()}
         </span>
       )
     },
@@ -102,7 +102,7 @@ export function PincodeAgents() {
       header: 'Total Earned',
       accessor: 'totalEarned',
       render: (row) => (
-        <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{row.totalEarned?.toLocaleString()}</span>
+        <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{(Number(row.totalEarned) || 0).toLocaleString()}</span>
       )
     },
     {

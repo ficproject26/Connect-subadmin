@@ -225,9 +225,10 @@ export function StateAgents({ level = 'state' }) {
 
   // KPI Calculations
   const totalAgentsCount = agents.length;
-  const totalReferralsSum = agents.reduce((acc, a) => acc + (a.totalReferrals || 0), 0);
-  const totalOnboardingsSum = agents.reduce((acc, a) => acc + (a.vendorOnboardings || 0), 0);
-  const totalWalletSum = agents.reduce((acc, a) => acc + (a.walletBalance || 0), 0);
+  const totalReferralsSum = agents.reduce((acc, a) => acc + (Number(a.totalReferrals) || 0), 0);
+  const totalOnboardingsSum = agents.reduce((acc, a) => acc + (Number(a.vendorOnboardings) || 0), 0);
+  const totalWalletSum = agents.reduce((acc, a) => acc + (Number(a.walletBalance) || 0), 0);
+  const totalEarnedSum = agents.reduce((acc, a) => acc + (Number(a.totalEarned ?? a.earnings ?? a.disbursedAmount) || 0), 0);
   // Filtered agents based on territory locking and selection
   const filteredAgents = useMemo(() => {
     let list = agents;
@@ -608,7 +609,7 @@ export function StateAgents({ level = 'state' }) {
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Wallet Hold</span>
             <Wallet className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">₹{totalWalletSum.toLocaleString()}</div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">₹{(totalWalletSum || 0).toLocaleString()}</div>
           <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">Eligible for payout</div>
         </div>
 
@@ -617,7 +618,7 @@ export function StateAgents({ level = 'state' }) {
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Disbursed</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">₹{totalEarnedSum.toLocaleString()}</div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">₹{(totalEarnedSum || 0).toLocaleString()}</div>
           <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">Cumulative earnings</div>
         </div>
       </div>

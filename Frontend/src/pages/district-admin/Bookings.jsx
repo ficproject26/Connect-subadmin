@@ -14,12 +14,21 @@ export function DistrictBookings() {
   const [loading, setLoading] = useState(true);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const loadData = async () => {
     setLoading(true);
+    setErrorMessage('');
     try {
       const res = await dataService.getBookings();
-      if (res.success) setBookings(res.bookings || res.data || []);
+      if (res.success) {
+        setBookings(res.bookings || res.data || []);
+        if (res.message && res.message.includes('Territory assignment is incomplete')) {
+          setErrorMessage(res.message);
+        }
+      } else if (res.message) {
+        setErrorMessage(res.message);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -118,6 +127,13 @@ export function DistrictBookings() {
         <p className="text-xs text-slate-500 dark:text-slate-400">Customer repair and installation bookings in this District.</p>
       </div>
 
+      {errorMessage && (
+        <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
+          <span>⚠️</span>
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       <DataTable
         title="District Service Bookings"
         subtitle="Tracking technician dispatch and execution"
@@ -125,6 +141,7 @@ export function DistrictBookings() {
         data={bookings}
         loading={loading}
         onRefresh={loadData}
+        emptyMessage={errorMessage || "No bookings found under this territory."}
         onRowClick={(booking) => {
           setSelectedBooking(booking);
           setShowDetailsModal(true);
