@@ -5,10 +5,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
 
-  // Use relative base so assets work when loaded via file:// in Electron.
-  // The web build on Vercel/Nginx already resolves '/' correctly, so '.'
-  // works for both file:// (Electron) and rooted HTTP deployments.
-  base: './',
+  // Use '/' for web deployments so deep routes (/state-admin/dashboard, etc.) resolve assets correctly.
+  // Use './' only when explicitly building for Electron via ELECTRON=true.
+  base: process.env.ELECTRON === 'true' ? './' : '/',
 
   server: {
     host: true,

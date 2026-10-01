@@ -13,8 +13,8 @@
 
     "electron:dev": "cross-env ELECTRON_DEV=true electron .",
     "electron:start": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && cross-env ELECTRON_DEV=true electron .\"",
-    "electron:build": "npm run build && electron-builder --win",
-    "dist": "npm run build && electron-builder --win --publish never"
+    "electron:build": "cross-env ELECTRON=true npm run build && electron-builder --win",
+    "dist": "cross-env ELECTRON=true npm run build && electron-builder --win --publish never"
   },
   "dependencies": {
     "clsx": "^2.1.1",
