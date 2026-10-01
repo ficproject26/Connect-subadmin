@@ -37,8 +37,10 @@ import {
   Award,
   CreditCard,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Lock
 } from 'lucide-react';
+import { extractTerritoryName, safeString, safeLowerCase } from '../../utils/territoryHelper';
 import { getDivisionsForDistrict, syncTerritoryFromAdmin } from '../../utils/indiaPostalData';
 
 const STEPS = [
@@ -191,11 +193,11 @@ export function DistrictDivisions() {
 
       if (res?.success) {
         let list = Array.isArray(res.divisions) ? res.divisions : [];
-        const districtName = (user?.district || '').toLowerCase();
+        const districtName = safeLowerCase(extractTerritoryName(user?.district));
         if (districtName) {
           list = list.filter(
-            d => (d.districtName || d.district || '').toLowerCase() === districtName ||
-              (user.districtId && String(d.districtId || '').toLowerCase() === String(user.districtId).toLowerCase())
+            d => safeLowerCase(extractTerritoryName(d.districtName || d.district)) === districtName ||
+              (user.districtId && safeLowerCase(d.districtId) === safeLowerCase(user.districtId))
           );
         }
         setAllDistrictDivisions(list);
@@ -625,12 +627,18 @@ export function DistrictDivisions() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FieldInput label="Assigned State">
-                <input type="text" className={`${inputCls} opacity-70 cursor-not-allowed`}
-                  value={form.assignedState} readOnly />
+                <div className="relative">
+                  <input type="text" className={`${inputCls} bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold opacity-90 cursor-not-allowed pr-9`}
+                    value={extractTerritoryName(form.assignedState || user?.state || 'Tamil Nadu')} disabled readOnly />
+                  <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                </div>
               </FieldInput>
               <FieldInput label="Assigned District">
-                <input type="text" className={`${inputCls} opacity-70 cursor-not-allowed`}
-                  value={form.assignedDistrict} readOnly />
+                <div className="relative">
+                  <input type="text" className={`${inputCls} bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold opacity-90 cursor-not-allowed pr-9`}
+                    value={extractTerritoryName(form.assignedDistrict || user?.district || '')} disabled readOnly />
+                  <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                </div>
               </FieldInput>
               <div className="sm:col-span-2">
                 <FieldInput label="Division Name" required>

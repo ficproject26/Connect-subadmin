@@ -5,6 +5,7 @@ import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { useTheme } from '../../context/ThemeContext';
+import { safeString, safeLowerCase, extractTerritoryName, extractPincode } from '../../utils/territoryHelper';
 import { 
   Layers, 
   ArrowRight, 
@@ -44,26 +45,33 @@ export function StateDivisions() {
   const navigate = useNavigate();
 
   const getAdminDetails = (row) => {
-    const adminName = row.adminName || row.assignedAdmin || 'Unassigned';
+    const rawName = extractTerritoryName(row.name || row.divisionName || row.division);
+    const rawDist = extractTerritoryName(row.districtName || row.district);
+    const rawState = extractTerritoryName(row.state || row.stateName, 'Tamil Nadu');
+    const adminName = extractTerritoryName(row.adminName || row.assignedAdmin, 'Unassigned');
+    const pincodesList = Array.isArray(row.pincodes)
+      ? row.pincodes.map(p => extractPincode(p)).filter(Boolean)
+      : [];
+
     return {
-      id: row.adminId || `ADM-DIV-${row.id || '001'}`,
-      employeeCode: row.employeeCode || '-',
+      id: safeString(row.adminId || `ADM-DIV-${row.id || '001'}`),
+      employeeCode: safeString(row.employeeCode, '-'),
       name: adminName,
-      email: row.adminEmail || '-',
-      phone: row.adminPhone || '-',
+      email: safeString(row.adminEmail, '-'),
+      phone: safeString(row.adminPhone, '-'),
       emergencyPhone: '-',
-      division: row.name || row.divisionName || '-',
-      code: row.id || (row.name ? `DIV-${row.name.slice(0, 3).toUpperCase()}` : '-'),
-      district: row.districtName || row.district || '-',
-      state: row.state || row.stateName || 'Tamil Nadu',
-      pincodesCount: row.pincodes?.length || row.pincodesCount || 0,
-      pincodes: row.pincodes || [],
-      status: row.status || 'Active',
-      joinedDate: row.joinedDate || '-',
-      qualification: row.qualification || '-',
-      experience: row.experience || '-',
-      specialization: row.specialization || '-',
-      address: row.address || `Divisional Office, ${row.name || ''}, ${row.districtName || ''}`
+      division: rawName || '-',
+      code: safeString(row.id || (rawName ? `DIV-${rawName.slice(0, 3).toUpperCase()}` : '-')),
+      district: rawDist || '-',
+      state: rawState,
+      pincodesCount: pincodesList.length || Number(row.pincodesCount || 0),
+      pincodes: pincodesList,
+      status: safeString(row.status || 'Active'),
+      joinedDate: safeString(row.joinedDate, '-'),
+      qualification: safeString(row.qualification, '-'),
+      experience: safeString(row.experience, '-'),
+      specialization: safeString(row.specialization, '-'),
+      address: safeString(row.address || `Divisional Office, ${rawName}, ${rawDist}`)
     };
   };
 
@@ -107,11 +115,12 @@ export function StateDivisions() {
       if (divisionFilter) params.division = divisionFilter;
 
       // Ensure state scoping if user is not Super Admin
-      if (!params.state && authUser?.state && authUser.state.toLowerCase() !== 'all india') {
-        params.state = authUser.state;
+      const userState = safeString(authUser?.state);
+      if (!params.state && userState && safeLowerCase(userState) !== 'all india') {
+        params.state = userState;
       }
       if (!params.stateId && authUser?.stateId) {
-        params.stateId = authUser.stateId;
+        params.stateId = safeString(authUser.stateId);
       }
 
       console.log('[StateDivisions] Querying real divisions with params:', params, 'User territory:', {
@@ -162,7 +171,7 @@ export function StateDivisions() {
   }, [districtFilter, districtIdFilter, stateFilter, stateIdFilter, divisionFilter, divisionIdFilter, authUser?.state]);
 
   const handleToggleStatus = async (row) => {
-    const currentStatus = row.status || 'Active';
+    const currentStatus = safeString(row.status || 'Active');
     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
 
     // Optimistically update status in local state
@@ -184,28 +193,32 @@ export function StateDivisions() {
   const columns = [
     {
       header: 'DIVISION NAME / ID',
-      accessor: 'name',
-      render: (row) => (
-        <div className="flex items-center gap-2.5">
-          <div className={`p-2 rounded-lg border ${
-            isDark ? 'bg-cyan-950/80 border-cyan-700/50 text-cyan-400' : 'bg-blue-50 border-blue-100 text-blue-600'
-          }`}>
-            <Layers className="w-4 h-4" />
+      accessor: (row) => extractTerritoryName(row.name || row.divisionName || row.division),
+      render: (row) => {
+        const divName = extractTerritoryName(row.name || row.divisionName || row.division);
+        const divId = safeString(row.id || row._id || row.divisionId);
+        return (
+          <div className="flex items-center gap-2.5">
+            <div className={`p-2 rounded-lg border ${
+              isDark ? 'bg-cyan-950/80 border-cyan-700/50 text-cyan-400' : 'bg-blue-50 border-blue-100 text-blue-600'
+            }`}>
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <div className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>{divName}</div>
+              <div className={`text-[11px] font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ID: {divId}</div>
+            </div>
           </div>
-          <div>
-            <div className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>{row.name}</div>
-            <div className={`text-[11px] font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>ID: {row.id}</div>
-          </div>
-        </div>
-      )
+        );
+      }
     },
     {
       header: 'ADMINS NAME',
-      accessor: (row) => row.adminName || 'Unassigned',
+      accessor: (row) => extractTerritoryName(row.adminName || row.assignedAdmin, 'Unassigned'),
       render: (row) => {
         const isAssigned = Boolean(row.adminId && row.adminName && row.adminName !== 'Unassigned');
-        const adminName = isAssigned ? row.adminName : 'Unassigned';
-        const adminEmail = isAssigned && row.adminEmail && row.adminEmail !== '-' ? row.adminEmail : '-';
+        const adminName = extractTerritoryName(isAssigned ? row.adminName : 'Unassigned');
+        const adminEmail = isAssigned && row.adminEmail && row.adminEmail !== '-' ? safeString(row.adminEmail) : '-';
         return (
           <div className="flex items-center gap-2.5">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
@@ -213,7 +226,7 @@ export function StateDivisions() {
                 ? (isDark ? 'bg-indigo-950/80 text-cyan-300 border border-indigo-800/60' : 'bg-blue-100 text-blue-700 border border-blue-200')
                 : (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700' : 'bg-slate-100 text-slate-400 border border-slate-200')
             }`}>
-              {adminName[0]}
+              {(adminName || 'U')[0]}
             </div>
             <div>
               <div className={`font-bold text-xs ${isDark ? 'text-white' : 'text-slate-900'}`}>
@@ -229,11 +242,11 @@ export function StateDivisions() {
     },
     {
       header: 'ASSIGNED PINCODES',
-      accessor: (row) => row.pincodes?.length || 0,
+      accessor: (row) => Array.isArray(row.pincodes) ? row.pincodes.length : (row.pincodesCount || 0),
       className: 'text-center',
       render: (row) => {
-        const pinCount = row.pincodes?.length || 0;
-        const tooltipDetails = row.pincodes?.join(', ');
+        const pinCount = Array.isArray(row.pincodes) ? row.pincodes.length : (row.pincodesCount || 0);
+        const tooltipDetails = Array.isArray(row.pincodes) ? row.pincodes.map(p => extractPincode(p)).join(', ') : '';
 
         return (
           <div className="flex items-center justify-center py-1" title={tooltipDetails ? `Pincodes: ${tooltipDetails}` : ''}>
@@ -250,9 +263,10 @@ export function StateDivisions() {
     },
     {
       header: 'STATUS',
-      accessor: 'status',
+      accessor: (row) => safeString(row.status || 'Active'),
       render: (row) => {
-        const isActive = (row.status || 'Active') === 'Active';
+        const statusStr = safeString(row.status || 'Active');
+        const isActive = statusStr === 'Active';
         return (
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
             isActive
@@ -264,7 +278,7 @@ export function StateDivisions() {
                 : 'bg-rose-50 text-rose-700 border-rose-200'
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-            {isActive ? 'Active' : 'Inactive'}
+            {statusStr}
           </span>
         );
       }
@@ -278,9 +292,9 @@ export function StateDivisions() {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              const sName = row.stateName || row.state || stateFilter || 'Tamil Nadu';
-              const dName = row.districtName || row.district || districtFilter || '';
-              const divName = row.name || row.divisionName || '';
+              const sName = extractTerritoryName(row.stateName || row.state || stateFilter, 'Tamil Nadu');
+              const dName = extractTerritoryName(row.districtName || row.district || districtFilter);
+              const divName = extractTerritoryName(row.name || row.divisionName || row.division);
               navigate(`/state-admin/pincodes?state=${encodeURIComponent(sName)}&district=${encodeURIComponent(dName)}&division=${encodeURIComponent(divName)}`);
             }}
             className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
@@ -303,7 +317,7 @@ export function StateDivisions() {
     if (!distName) {
       setSearchParams({});
     } else {
-      const matched = availableDistricts.find(d => (d.name || '').toLowerCase() === distName.toLowerCase());
+      const matched = availableDistricts.find(d => safeLowerCase(d.name) === safeLowerCase(distName));
       const newParams = { district: distName };
       if (matched && (matched.id || matched._id)) {
         newParams.districtId = matched.id || matched._id;
@@ -490,15 +504,23 @@ export function StateDivisions() {
       <Modal
         isOpen={!!selectedAdmin}
         onClose={() => { setSelectedAdmin(null); setSelectedDivision(null); }}
-        title={selectedDivision ? `${selectedDivision.name} Division - Admin Profile & Operational Details` : "Division Administrator Profile & Details"}
+        title={selectedDivision ? `${extractTerritoryName(selectedDivision.name)} Division - Admin Profile & Operational Details` : "Division Administrator Profile & Details"}
         maxWidth="max-w-4xl"
       >
         {selectedAdmin && (() => {
-          const div = selectedDivision || divisions.find(d => d.name?.toLowerCase() === selectedAdmin.division?.toLowerCase() || d.id === selectedAdmin.code);
+          const div = selectedDivision || divisions.find(d => 
+            safeLowerCase(d.name) === safeLowerCase(selectedAdmin.division) || 
+            String(d.id || d._id) === String(selectedAdmin.code || selectedAdmin.id)
+          );
+          const divName = extractTerritoryName(div ? (div.name || div.divisionName || div.division) : selectedAdmin.division);
           const divisionPincodes = div ? (
             (allPincodes && allPincodes.length > 0)
-              ? allPincodes.filter(p => (p.division || p.divisionName)?.toLowerCase().replace(/\s+division/g, '') === (div.name || '').toLowerCase().replace(/\s+division/g, ''))
-              : (div.pincodes || []).map(pin => ({ pincode: pin, areaName: `${div.name} Hub`, adminName: 'Assigned', status: 'Active' }))
+              ? allPincodes.filter(p => {
+                  const pDiv = safeLowerCase(p.division || p.divisionName).replace(/\s+division/g, '');
+                  const targetDiv = safeLowerCase(divName).replace(/\s+division/g, '');
+                  return pDiv === targetDiv;
+                })
+              : (div.pincodes || []).map(pin => ({ pincode: extractPincode(pin), areaName: `${divName} Hub`, adminName: 'Assigned', status: 'Active' }))
           ) : [];
 
           const workforceMetrics = div ? [
@@ -638,15 +660,15 @@ export function StateDivisions() {
                       </div>
                       <div>
                         <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                          {div.name} Division Operations & Territory Breakdown
+                          {extractTerritoryName(div.name)} Division Operations & Territory Breakdown
                         </h4>
                         <div className="text-xs text-slate-500 font-mono mt-0.5">
-                          ID: {div.id} • Parent District: <span className="font-semibold text-slate-800 dark:text-slate-200">{div.districtName || div.district}</span> • State: {div.stateName || div.state || 'Tamil Nadu'}
+                          ID: {safeString(div.id || div._id)} • Parent District: <span className="font-semibold text-slate-800 dark:text-slate-200">{extractTerritoryName(div.districtName || div.district)}</span> • State: {extractTerritoryName(div.stateName || div.state, 'Tamil Nadu')}
                         </div>
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900/50 shrink-0">
-                      {div.status || 'Active'}
+                      {safeString(div.status || 'Active')}
                     </span>
                   </div>
 
@@ -682,12 +704,12 @@ export function StateDivisions() {
                       <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-emerald-600" />
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                          Pincodes under {div.name} Division ({divisionPincodes.length})
+                          Pincodes under {extractTerritoryName(div.name)} Division ({divisionPincodes.length})
                         </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => navigate(`/state-admin/pincodes?division=${encodeURIComponent(div.name)}`)}
+                        onClick={() => navigate(`/state-admin/pincodes?division=${encodeURIComponent(extractTerritoryName(div.name))}`)}
                         className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
                       >
                         <span>Open Pincodes Module</span>
@@ -700,15 +722,15 @@ export function StateDivisions() {
                           {divisionPincodes.map((pin, idx) => (
                             <div key={idx} className={`p-2.5 rounded-lg border flex items-center justify-between ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                               <div>
-                                <div className="font-mono font-bold text-slate-900 dark:text-white">PIN: {pin.pincode}</div>
-                                <div className="text-[10px] text-slate-500 truncate max-w-[140px]">{pin.areaName || pin.area || 'Zone Hub'}</div>
+                                <div className="font-mono font-bold text-slate-900 dark:text-white">PIN: {extractPincode(pin.pincode)}</div>
+                                <div className="text-[10px] text-slate-500 truncate max-w-[140px]">{safeString(pin.areaName || pin.area || 'Zone Hub')}</div>
                               </div>
                               <div className="text-right">
                                 <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold block truncate max-w-[90px]">
-                                  {pin.adminName || pin.assignedAdmin || 'Assigned'}
+                                  {extractTerritoryName(pin.adminName || pin.assignedAdmin, 'Assigned')}
                                 </span>
                                 <span className="text-[9px] px-1.5 py-0.2 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400">
-                                  {pin.status || 'Active'}
+                                  {safeString(pin.status || 'Active')}
                                 </span>
                               </div>
                             </div>
@@ -716,7 +738,7 @@ export function StateDivisions() {
                         </div>
                       ) : (
                         <div className="text-xs text-slate-400 p-2 text-center">
-                          No pincodes registered under {div.name} Division yet.
+                          No pincodes registered under {extractTerritoryName(div.name)} Division yet.
                         </div>
                       )}
                     </div>

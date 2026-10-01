@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
@@ -23,7 +23,7 @@ export function DistrictDeliveryPartners() {
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let isMounted = true;
     dataService.getDeliveryPartners()
       .then(res => {

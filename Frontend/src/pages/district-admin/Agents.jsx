@@ -9,6 +9,8 @@ import { AgentHierarchyBanner } from '../../components/AgentHierarchyBanner';
 import { AgentActivityFlowModal } from '../../components/AgentActivityFlowModal';
 import { AgentDetailsModal } from '../../components/AgentDetailsModal';
 import { InitiateVendorOnboardingModal } from '../../components/InitiateVendorOnboardingModal';
+import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
+import { getTerritoryLocking, safeString, safeLowerCase } from '../../utils/territoryHelper';
 import { 
   UserPlus, 
   Phone, 
@@ -99,12 +101,39 @@ export function DistrictAgents({ level = 'district' }) {
 
   const config = LEVEL_CONFIGS[activeLevel] || (isDivisionalAdmin ? LEVEL_CONFIGS.divisional : LEVEL_CONFIGS.district);
 
+  // Deriving role-based territory locking
+  const locking = useMemo(() => getTerritoryLocking(user), [user]);
+
   // View tabs: 'roster' | 'activities' | 'tree'
   const [activeTab, setActiveTab] = useState('roster');
 
   const [agents, setAgents] = useState(config.defaultData);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [territoryTree, setTerritoryTree] = useState([]);
+
+  // Territory hierarchy filter state
+  const [selectedFilterState, setSelectedFilterState] = useState(locking.defaultState || '');
+  const [selectedFilterDistrict, setSelectedFilterDistrict] = useState(locking.defaultDistrict || '');
+  const [selectedFilterDivision, setSelectedFilterDivision] = useState(divisionFilterParam || locking.defaultDivision || '');
+  const [selectedFilterPincode, setSelectedFilterPincode] = useState(locking.defaultPincode || '');
+
+  // Synchronize locked territory filter state from authenticated user
+  useEffect(() => {
+    if (locking.stateLocked && locking.defaultState) setSelectedFilterState(locking.defaultState);
+    if (locking.districtLocked && locking.defaultDistrict) setSelectedFilterDistrict(locking.defaultDistrict);
+    if (locking.divisionLocked && locking.defaultDivision) setSelectedFilterDivision(locking.defaultDivision);
+    if (locking.pincodeLocked && locking.defaultPincode) setSelectedFilterPincode(locking.defaultPincode);
+  }, [locking]);
+
+  // Fetch territory hierarchy tree for cascading dropdowns
+  useEffect(() => {
+    dataService.getTerritoryHierarchy().then(res => {
+      if (res?.success && Array.isArray(res.hierarchy)) {
+        setTerritoryTree(res.hierarchy);
+      }
+    }).catch(console.error);
+  }, []);
 
   // Filters for activities
   const [stageFilter, setStageFilter] = useState('');
@@ -120,13 +149,16 @@ export function DistrictAgents({ level = 'district' }) {
     setLoading(true);
     try {
       const params = { level: activeLevel };
-      if (isDivisionalAdmin) {
-        if (division) params.division = division;
-        if (district && district !== '-') params.district = district;
-      } else {
-        if (district && district !== '-') params.district = district;
-        if (divisionFilterParam) params.division = divisionFilterParam;
-      }
+      const reqState = locking.stateLocked ? locking.defaultState : selectedFilterState;
+      const reqDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || (district !== '-' ? district : ''));
+      const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam || division);
+      const reqPincode = locking.pincodeLocked ? locking.defaultPincode : selectedFilterPincode;
+
+      if (reqState) params.state = reqState;
+      if (reqDistrict) params.district = reqDistrict;
+      if (reqDivision) params.division = reqDivision;
+      if (reqPincode) params.pincode = reqPincode;
+
       const res = await dataService.getAgents(params);
       if (res.success && res.agents) {
         setAgents(res.agents);
@@ -134,7 +166,7 @@ export function DistrictAgents({ level = 'district' }) {
         setAgents([]);
       }
 
-      const actParams = isDivisionalAdmin ? { division } : { district: district !== '-' ? district : '' };
+      const actParams = isDivisionalAdmin ? { division: reqDivision || division } : { district: reqDistrict || (district !== '-' ? district : '') };
       const actRes = await dataService.getAgentActivities(actParams);
       if (actRes.success && actRes.activities) {
         setActivities(actRes.activities);
@@ -152,7 +184,7 @@ export function DistrictAgents({ level = 'district' }) {
 
   useEffect(() => {
     loadData();
-  }, [activeLevel, district, division, divisionFilterParam]);
+  }, [activeLevel, district, division, divisionFilterParam, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, locking]);
 
   const handleAdvanceStage = async (activityId, notes) => {
     try {
@@ -171,6 +203,21 @@ export function DistrictAgents({ level = 'district' }) {
   const totalOnboardingsSum = agents.reduce((acc, a) => acc + (Number(a.vendorOnboardings) || 0), 0);
   const totalWalletSum = agents.reduce((acc, a) => acc + (Number(a.walletBalance) || 0), 0);
   const totalReferralsSum = agents.reduce((acc, a) => acc + (Number(a.totalReferrals) || 0), 0);
+
+  // Filtered agents based on territory locking and selection
+  const filteredAgents = useMemo(() => {
+    let list = agents;
+    const effState = locking.stateLocked ? locking.defaultState : selectedFilterState;
+    const effDistrict = locking.districtLocked ? locking.defaultDistrict : selectedFilterDistrict;
+    const effDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam);
+    const effPincode = locking.pincodeLocked ? locking.defaultPincode : selectedFilterPincode;
+
+    if (effState) list = list.filter(a => safeLowerCase(a.state || a.assignedState || a.stateName) === safeLowerCase(effState));
+    if (effDistrict) list = list.filter(a => safeLowerCase(a.district || a.assignedDistrict || a.districtName) === safeLowerCase(effDistrict));
+    if (effDivision) list = list.filter(a => safeLowerCase(a.division || a.assignedDivision || a.divisionName) === safeLowerCase(effDivision));
+    if (effPincode) list = list.filter(a => safeString(a.pincode || a.assignedPincode || a.pincodeCode) === safeString(effPincode));
+    return list;
+  }, [agents, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, divisionFilterParam]);
 
   // Filtered activities
   const filteredActivities = useMemo(() => {
@@ -486,16 +533,36 @@ export function DistrictAgents({ level = 'district' }) {
 
       {/* Tab 1: Agent Directory Table */}
       {activeTab === 'roster' && (
-        <DataTable
-          title={config.tableTitle}
-          subtitle={config.tableSubtitle}
-          columns={columns}
-          data={agents}
-          loading={loading}
-          onRefresh={loadData}
-          searchPlaceholder={`Search ${config.title.toLowerCase()} by name, email, phone...`}
-          exportFileName={config.exportFile}
-        />
+        <div className="space-y-4">
+          <TerritoryHierarchyFilter
+            selectedState={selectedFilterState}
+            onStateChange={(st) => setSelectedFilterState(st)}
+            selectedDistrict={selectedFilterDistrict}
+            onDistrictChange={(dt) => setSelectedFilterDistrict(dt)}
+            selectedDivision={selectedFilterDivision}
+            onDivisionChange={(dv) => setSelectedFilterDivision(dv)}
+            selectedPincode={selectedFilterPincode}
+            onPincodeChange={(pin) => setSelectedFilterPincode(pin)}
+            onClear={() => {
+              if (!locking.stateLocked) setSelectedFilterState('');
+              if (!locking.districtLocked) setSelectedFilterDistrict('');
+              if (!locking.divisionLocked) setSelectedFilterDivision('');
+              if (!locking.pincodeLocked) setSelectedFilterPincode('');
+            }}
+            territoryTree={territoryTree}
+          />
+
+          <DataTable
+            title={config.tableTitle}
+            subtitle={config.tableSubtitle}
+            columns={columns}
+            data={filteredAgents}
+            loading={loading}
+            onRefresh={loadData}
+            searchPlaceholder={`Search ${config.title.toLowerCase()} by name, email, phone...`}
+            exportFileName={config.exportFile}
+          />
+        </div>
       )}
 
       {/* Tab 2: Activity Flow Workflow Table */}

@@ -13,7 +13,7 @@ async function reloadTerritoryCollections() {
 }
 
 // Build complete hierarchical tree: State -> District -> Division -> Pincode
-async function buildCompleteHierarchy(scopeUser = null) {
+async function buildCompleteHierarchy(scopeUser = null, assignedOnly = false) {
   await reloadTerritoryCollections();
 
   const rawStates = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
@@ -153,102 +153,104 @@ async function buildCompleteHierarchy(scopeUser = null) {
     }
   }
 
-  // Prune unassigned geographic data: only branches with assigned users/admins/agents/managers must be present
-  const allPersonnel = [
-    ...Array.from(db.users || []).filter(u => u.status !== 'inactive').map(u => ({
-      state: u.state || u.territory?.state,
-      stateId: u.stateId || u.territory?.stateId,
-      district: u.district || u.territory?.district,
-      districtId: u.districtId || u.territory?.districtId,
-      division: u.division || u.territory?.division,
-      divisionId: u.divisionId || u.territory?.divisionId,
-      pincode: u.pincode || u.territory?.pincode,
-      pincodeId: u.pincodeId || u.territory?.pincodeId,
-    })),
-    ...Array.from(db.agents || []).filter(a => a.status !== 'inactive').map(a => ({
-      state: a.state || a.territory?.state,
-      stateId: a.stateId || a.territory?.stateId,
-      district: a.district || a.territory?.district,
-      districtId: a.districtId || a.territory?.districtId,
-      division: a.division || a.territory?.division,
-      divisionId: a.divisionId || a.territory?.divisionId,
-      pincode: a.pincode || a.territory?.pincode,
-      pincodeId: a.pincodeId || a.territory?.pincodeId,
-    })),
-    ...Array.from(db.managers || []).filter(m => m.status !== 'inactive').map(m => ({
-      state: m.state || m.stateName,
-      stateId: m.stateId,
-      district: m.district || m.districtName,
-      districtId: m.districtId,
-      division: m.division || m.divisionName,
-      divisionId: m.divisionId,
-      pincode: m.pincode,
-      pincodeId: m.pincodeId,
-    }))
-  ];
+  // Only prune unassigned branches if assignedOnly is explicitly requested
+  if (assignedOnly) {
+    const allPersonnel = [
+      ...Array.from(db.users || []).filter(u => u.status !== 'inactive').map(u => ({
+        state: u.state || u.territory?.state,
+        stateId: u.stateId || u.territory?.stateId,
+        district: u.district || u.territory?.district,
+        districtId: u.districtId || u.territory?.districtId,
+        division: u.division || u.territory?.division,
+        divisionId: u.divisionId || u.territory?.divisionId,
+        pincode: u.pincode || u.territory?.pincode,
+        pincodeId: u.pincodeId || u.territory?.pincodeId,
+      })),
+      ...Array.from(db.agents || []).filter(a => a.status !== 'inactive').map(a => ({
+        state: a.state || a.territory?.state,
+        stateId: a.stateId || a.territory?.stateId,
+        district: a.district || a.territory?.district,
+        districtId: a.districtId || a.territory?.districtId,
+        division: a.division || a.territory?.division,
+        divisionId: a.divisionId || a.territory?.divisionId,
+        pincode: a.pincode || a.territory?.pincode,
+        pincodeId: a.pincodeId || a.territory?.pincodeId,
+      })),
+      ...Array.from(db.managers || []).filter(m => m.status !== 'inactive').map(m => ({
+        state: m.state || m.stateName,
+        stateId: m.stateId,
+        district: m.district || m.districtName,
+        districtId: m.districtId,
+        division: m.division || m.divisionName,
+        divisionId: m.divisionId,
+        pincode: m.pincode,
+        pincodeId: m.pincodeId,
+      }))
+    ];
 
-  const hasAssignmentInState = (s) => {
-    const sName = (s.name || '').trim().toLowerCase();
-    const sId = String(s.id || s._id || s.stateId || '').trim().toLowerCase();
-    return allPersonnel.some(p => 
-      (sId && String(p.stateId || '').toLowerCase() === sId) ||
-      (sName && (p.state || '').trim().toLowerCase() === sName)
-    );
-  };
+    const hasAssignmentInState = (s) => {
+      const sName = (s.name || '').trim().toLowerCase();
+      const sId = String(s.id || s._id || s.stateId || '').trim().toLowerCase();
+      return allPersonnel.some(p => 
+        (sId && String(p.stateId || '').toLowerCase() === sId) ||
+        (sName && (p.state || '').trim().toLowerCase() === sName)
+      );
+    };
 
-  const hasAssignmentInDist = (d) => {
-    const dName = (d.name || '').trim().toLowerCase();
-    const dId = String(d.id || d._id || d.districtId || '').trim().toLowerCase();
-    return allPersonnel.some(p => 
-      (dId && String(p.districtId || '').toLowerCase() === dId) ||
-      (dName && (p.district || '').trim().toLowerCase() === dName)
-    );
-  };
+    const hasAssignmentInDist = (d) => {
+      const dName = (d.name || '').trim().toLowerCase();
+      const dId = String(d.id || d._id || d.districtId || '').trim().toLowerCase();
+      return allPersonnel.some(p => 
+        (dId && String(p.districtId || '').toLowerCase() === dId) ||
+        (dName && (p.district || '').trim().toLowerCase() === dName)
+      );
+    };
 
-  const hasAssignmentInDiv = (v) => {
-    const vName = (v.name || '').trim().toLowerCase();
-    const vId = String(v.id || v._id || v.divisionId || '').trim().toLowerCase();
-    return allPersonnel.some(p => 
-      (vId && String(p.divisionId || '').toLowerCase() === vId) ||
-      (vName && (p.division || '').trim().toLowerCase() === vName)
-    );
-  };
+    const hasAssignmentInDiv = (v) => {
+      const vName = (v.name || '').trim().toLowerCase();
+      const vId = String(v.id || v._id || v.divisionId || '').trim().toLowerCase();
+      return allPersonnel.some(p => 
+        (vId && String(p.divisionId || '').toLowerCase() === vId) ||
+        (vName && (p.division || '').trim().toLowerCase() === vName)
+      );
+    };
 
-  const hasAssignmentInPin = (p) => {
-    const pCode = String(p.code || p.pincode || p).trim();
-    const pId = String(p.id || p._id || '').trim().toLowerCase();
-    return allPersonnel.some(p => 
-      (pId && String(p.pincodeId || '').toLowerCase() === pId) ||
-      (pCode && String(p.pincode || '').trim() === pCode)
-    );
-  };
+    const hasAssignmentInPin = (p) => {
+      const pCode = String(p.code || p.pincode || p).trim();
+      const pId = String(p.id || p._id || '').trim().toLowerCase();
+      return allPersonnel.some(p => 
+        (pId && String(p.pincodeId || '').toLowerCase() === pId) ||
+        (pCode && String(p.pincode || '').trim() === pCode)
+      );
+    };
 
-  fullHierarchy = fullHierarchy.map(s => {
-    const prunedDistricts = (s.districts || []).map(d => {
-      const prunedDivisions = (d.divisions || []).map(v => {
-        const prunedPins = (v.rawPincodes || []).filter(p => hasAssignmentInPin(p));
-        const prunedPinCodes = prunedPins.map(p => p.code);
-        const divHasAssign = hasAssignmentInDiv(v) || prunedPins.length > 0;
-        return divHasAssign ? {
-          ...v,
-          pincodes: prunedPinCodes,
-          rawPincodes: prunedPins
+    fullHierarchy = fullHierarchy.map(s => {
+      const prunedDistricts = (s.districts || []).map(d => {
+        const prunedDivisions = (d.divisions || []).map(v => {
+          const prunedPins = (v.rawPincodes || []).filter(p => hasAssignmentInPin(p));
+          const prunedPinCodes = prunedPins.map(p => p.code);
+          const divHasAssign = hasAssignmentInDiv(v) || prunedPins.length > 0;
+          return divHasAssign ? {
+            ...v,
+            pincodes: prunedPinCodes,
+            rawPincodes: prunedPins
+          } : null;
+        }).filter(Boolean);
+
+        const distHasAssign = hasAssignmentInDist(d) || prunedDivisions.length > 0;
+        return distHasAssign ? {
+          ...d,
+          divisions: prunedDivisions
         } : null;
       }).filter(Boolean);
 
-      const distHasAssign = hasAssignmentInDist(d) || prunedDivisions.length > 0;
-      return distHasAssign ? {
-        ...d,
-        divisions: prunedDivisions
+      const stateHasAssign = hasAssignmentInState(s) || prunedDistricts.length > 0;
+      return stateHasAssign ? {
+        ...s,
+        districts: prunedDistricts
       } : null;
     }).filter(Boolean);
-
-    const stateHasAssign = hasAssignmentInState(s) || prunedDistricts.length > 0;
-    return stateHasAssign ? {
-      ...s,
-      districts: prunedDistricts
-    } : null;
-  }).filter(Boolean);
+  }
 
   return fullHierarchy;
 }
@@ -256,7 +258,8 @@ async function buildCompleteHierarchy(scopeUser = null) {
 // GET /api/territory/hierarchy or /api/hierarchy
 const getHierarchy = async (req, res) => {
   try {
-    const hierarchy = await buildCompleteHierarchy(req.user);
+    const assignedOnly = req.query.assignedOnly === 'true';
+    const hierarchy = await buildCompleteHierarchy(req.user, assignedOnly);
     res.json({
       success: true,
       hierarchy,
@@ -325,34 +328,36 @@ const getDistricts = async (req, res) => {
         }
       }
 
-      // Filter: Only include districts that have at least one assigned Admin, Agent, or Manager
-      const allUsers = Array.from(db.users || []);
-      const allManagers = Array.from(db.managers || []);
-      const allAgents = Array.from(db.agents || []);
+      // Filter: Only include districts that have at least one assigned Admin, Agent, or Manager if explicitly requested
+      if (req.query.assignedOnly === 'true') {
+        const allUsers = Array.from(db.users || []);
+        const allManagers = Array.from(db.managers || []);
+        const allAgents = Array.from(db.agents || []);
 
-      districts = districts.filter(d => {
-        const dName = (d.name || '').trim().toLowerCase();
-        const dId = String(d._id || d.id || d.districtId || '').toLowerCase();
+        districts = districts.filter(d => {
+          const dName = (d.name || '').trim().toLowerCase();
+          const dId = String(d._id || d.id || d.districtId || '').toLowerCase();
 
-        const hasUser = allUsers.some(u => {
-          const uDist = (u.district || u.territory?.district || '').trim().toLowerCase();
-          const isDistMatch = uDist === dName || String(u.districtId || u.territory?.districtId || '').toLowerCase() === dId;
-          const r = (u.role || '').toLowerCase();
-          return isDistMatch && (r.includes('admin') || r.includes('agent') || r.includes('manager'));
+          const hasUser = allUsers.some(u => {
+            const uDist = (u.district || u.territory?.district || '').trim().toLowerCase();
+            const isDistMatch = uDist === dName || String(u.districtId || u.territory?.districtId || '').toLowerCase() === dId;
+            const r = (u.role || '').toLowerCase();
+            return isDistMatch && (r.includes('admin') || r.includes('agent') || r.includes('manager'));
+          });
+
+          const hasManager = allManagers.some(m => {
+            const mDist = (m.districtName || m.district || m.territory?.district || '').trim().toLowerCase();
+            return mDist === dName || String(m.districtId || m.territory?.districtId || '').toLowerCase() === dId;
+          });
+
+          const hasAgent = allAgents.some(a => {
+            const aDist = (a.district || a.territory?.district || '').trim().toLowerCase();
+            return aDist === dName || String(a.districtId || a.territory?.districtId || '').toLowerCase() === dId;
+          });
+
+          return hasUser || hasManager || hasAgent;
         });
-
-        const hasManager = allManagers.some(m => {
-          const mDist = (m.districtName || m.district || m.territory?.district || '').trim().toLowerCase();
-          return mDist === dName || String(m.districtId || m.territory?.districtId || '').toLowerCase() === dId;
-        });
-
-        const hasAgent = allAgents.some(a => {
-          const aDist = (a.district || a.territory?.district || '').trim().toLowerCase();
-          return aDist === dName || String(a.districtId || a.territory?.districtId || '').toLowerCase() === dId;
-        });
-
-        return hasUser || hasManager || hasAgent;
-      });
+      }
     }
 
     res.json({ success: true, data: districts, districts });

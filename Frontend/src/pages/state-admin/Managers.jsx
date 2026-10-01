@@ -8,6 +8,8 @@ import { StatusBadge } from '../../components/Badge';
 import { ManagerApprovalModal } from '../../components/ManagerApprovalModal';
 import { Modal } from '../../components/Modal';
 import { useTheme } from '../../context/ThemeContext';
+import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
+import { getTerritoryLocking, safeString, safeLowerCase, extractTerritoryName, extractPincode } from '../../utils/territoryHelper';
 import {
   UserCog,
   Phone,
@@ -42,7 +44,8 @@ import {
   List as ListIcon,
   Upload,
   X,
-  ArrowRight
+  ArrowRight,
+  Lock
 } from 'lucide-react';
 import { ALL_INDIAN_STATES, getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/indiaPostalData';
 
@@ -248,14 +251,43 @@ export function StateManagers({ level }) {
     }
   };
 
+  // Deriving role-based territory locking
+  const locking = useMemo(() => getTerritoryLocking(effectiveUser), [effectiveUser]);
+
+  const [selectedFilterState, setSelectedFilterState] = useState(queryState || locking.defaultState || '');
+  const [selectedFilterDistrict, setSelectedFilterDistrict] = useState(queryDistrict || locking.defaultDistrict || '');
+  const [selectedFilterDivision, setSelectedFilterDivision] = useState(queryDivision || locking.defaultDivision || '');
+  const [selectedFilterPincode, setSelectedFilterPincode] = useState(queryPincode || locking.defaultPincode || '');
+
+  // Synchronize locked territory filter state from authenticated user
+  useEffect(() => {
+    if (locking.stateLocked && locking.defaultState) {
+      setSelectedFilterState(locking.defaultState);
+    }
+    if (locking.districtLocked && locking.defaultDistrict) {
+      setSelectedFilterDistrict(locking.defaultDistrict);
+    }
+    if (locking.divisionLocked && locking.defaultDivision) {
+      setSelectedFilterDivision(locking.defaultDivision);
+    }
+    if (locking.pincodeLocked && locking.defaultPincode) {
+      setSelectedFilterPincode(locking.defaultPincode);
+    }
+  }, [locking]);
+
   const loadData = async () => {
     setLoading(true);
     try {
+      const reqState = locking.stateLocked ? locking.defaultState : (selectedFilterState || queryState);
+      const reqDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || queryDistrict);
+      const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || queryDivision);
+      const reqPincode = locking.pincodeLocked ? locking.defaultPincode : (selectedFilterPincode || queryPincode);
+
       const qParams = { level: activeLevel };
-      if (queryState) qParams.state = queryState;
-      if (queryDistrict) qParams.district = queryDistrict;
-      if (queryDivision) qParams.division = queryDivision;
-      if (queryPincode) qParams.pincode = queryPincode;
+      if (reqState) qParams.state = reqState;
+      if (reqDistrict) qParams.district = reqDistrict;
+      if (reqDivision) qParams.division = reqDivision;
+      if (reqPincode) qParams.pincode = reqPincode;
 
       const [res, allRes] = await Promise.all([
         dataService.getManagers(qParams),
@@ -285,54 +317,27 @@ export function StateManagers({ level }) {
   useEffect(() => {
     loadData();
     loadTerritoryTree();
-  }, [activeLevel, location.search]);
-
-  const [selectedFilterState, setSelectedFilterState] = useState(queryState || '');
-  const [selectedFilterDistrict, setSelectedFilterDistrict] = useState(queryDistrict || '');
-  const [selectedFilterDivision, setSelectedFilterDivision] = useState(queryDivision || '');
-  const [selectedFilterPincode, setSelectedFilterPincode] = useState(queryPincode || '');
-
-  const availableFilterStates = useMemo(() => {
-    return territoryTree || [];
-  }, [territoryTree]);
-
-  const availableFilterDistricts = useMemo(() => {
-    if (!selectedFilterState) return [];
-    const matchedState = territoryTree.find(s => (s.name || '').toLowerCase() === selectedFilterState.toLowerCase());
-    return matchedState?.districts || [];
-  }, [territoryTree, selectedFilterState]);
-
-  const availableFilterDivisions = useMemo(() => {
-    if (!selectedFilterDistrict) return [];
-    const matchedDist = availableFilterDistricts.find(d => (d.name || '').toLowerCase() === selectedFilterDistrict.toLowerCase());
-    return matchedDist?.divisions || [];
-  }, [availableFilterDistricts, selectedFilterDistrict]);
-
-  const availableFilterPincodes = useMemo(() => {
-    if (!selectedFilterDivision) return [];
-    const matchedDiv = availableFilterDivisions.find(v => (v.name || '').toLowerCase() === selectedFilterDivision.toLowerCase());
-    return matchedDiv?.rawPincodes || (matchedDiv?.pincodes || []).map(p => ({ id: p, code: p, name: p }));
-  }, [availableFilterDivisions, selectedFilterDivision]);
+  }, [activeLevel, location.search, locking]);
 
   // Filtered managers based on status tab and hierarchy query
   const filteredManagers = useMemo(() => {
     let list = managers;
-    const effectiveState = selectedFilterState || queryState;
-    const effectiveDistrict = selectedFilterDistrict || queryDistrict;
-    const effectiveDivision = selectedFilterDivision || queryDivision;
-    const effectivePincode = selectedFilterPincode || queryPincode;
+    const effectiveState = locking.stateLocked ? locking.defaultState : (selectedFilterState || queryState);
+    const effectiveDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || queryDistrict);
+    const effectiveDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || queryDivision);
+    const effectivePincode = locking.pincodeLocked ? locking.defaultPincode : (selectedFilterPincode || queryPincode);
 
     if (effectiveState) {
-      list = list.filter(m => (m.state || m.assignedState || m.stateName || '').toLowerCase() === effectiveState.toLowerCase());
+      list = list.filter(m => safeLowerCase(m.state || m.assignedState || m.stateName) === safeLowerCase(effectiveState));
     }
     if (effectiveDistrict) {
-      list = list.filter(m => (m.district || m.assignedDistrict || m.districtName || '').toLowerCase() === effectiveDistrict.toLowerCase());
+      list = list.filter(m => safeLowerCase(m.district || m.assignedDistrict || m.districtName) === safeLowerCase(effectiveDistrict));
     }
     if (effectiveDivision) {
-      list = list.filter(m => (m.division || m.assignedDivision || m.divisionName || '').toLowerCase() === effectiveDivision.toLowerCase());
+      list = list.filter(m => safeLowerCase(m.division || m.assignedDivision || m.divisionName) === safeLowerCase(effectiveDivision));
     }
     if (effectivePincode) {
-      list = list.filter(m => String(m.pincode || m.assignedPincode || '').trim() === String(effectivePincode).trim());
+      list = list.filter(m => safeString(m.pincode || m.assignedPincode || m.pincodeCode) === safeString(effectivePincode));
     }
     if (statusFilter === 'pending') {
       return list.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval');
@@ -341,7 +346,7 @@ export function StateManagers({ level }) {
       return list.filter(m => m.status === 'active');
     }
     return list;
-  }, [managers, statusFilter, queryState, queryDistrict, queryDivision, queryPincode, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode]);
+  }, [managers, statusFilter, queryState, queryDistrict, queryDivision, queryPincode, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, locking]);
 
   const totalCount = managers.length;
   const pendingCount = managers.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval').length;
@@ -435,23 +440,39 @@ export function StateManagers({ level }) {
 
   const openAddManager = (prefill = {}) => {
     const roleToUse = prefill.role || designatedRole;
-    const stateToUse = prefill.assignedState || effectiveUser?.state || user?.state || (territoryTree[0]?.name || 'Tamil Nadu');
-    const matchedState = territoryTree.find(s => s.name?.toLowerCase() === stateToUse.toLowerCase());
+    const stateToUse = locking.stateLocked
+      ? (locking.defaultState || 'Tamil Nadu')
+      : (prefill.assignedState || effectiveUser?.state || user?.state || (territoryTree[0]?.name || 'Tamil Nadu'));
+    const matchedState = territoryTree.find(s => s.name?.toLowerCase() === stateToUse?.toLowerCase());
     const stateIdToUse = prefill.assignedStateId || (matchedState ? String(matchedState.id || matchedState._id) : '');
+
+    const districtToUse = locking.districtLocked
+      ? (locking.defaultDistrict || '')
+      : (prefill.assignedDistrict || (isStateAdmin ? '' : (effectiveUser?.district || user?.district || '')));
+
+    const divisionToUse = locking.divisionLocked
+      ? (locking.defaultDivision || '')
+      : (prefill.assignedDivision || ((isStateAdmin || isDistrictAdmin) ? '' : (effectiveUser?.division || user?.division || '')));
+
+    const pincodeToUse = locking.pincodeLocked
+      ? (locking.defaultPincode || '')
+      : (prefill.assignedPincode || (isPincodeAdmin ? (effectiveUser?.pincode || user?.pincode || '') : ''));
 
     setForm({
       ...EMPTY_MGR_FORM,
       role: roleToUse,
       assignedState: stateToUse,
       assignedStateId: stateIdToUse,
-      assignedDistrict: prefill.assignedDistrict || (isStateAdmin ? '' : (effectiveUser?.district || user?.district || '')),
+      assignedDistrict: districtToUse,
       assignedDistrictId: prefill.assignedDistrictId || '',
-      assignedDivision: prefill.assignedDivision || ((isStateAdmin || isDistrictAdmin) ? '' : (effectiveUser?.division || user?.division || '')),
+      assignedDivision: divisionToUse,
       assignedDivisionId: prefill.assignedDivisionId || '',
-      assignedPincode: prefill.assignedPincode || (isPincodeAdmin ? (effectiveUser?.pincode || user?.pincode || '') : ''),
+      assignedPincode: pincodeToUse,
       assignedPincodeId: prefill.assignedPincodeId || '',
       state: stateToUse,
-      district: prefill.assignedDistrict || effectiveUser?.district || user?.district || '',
+      district: districtToUse,
+      division: divisionToUse,
+      pincode: pincodeToUse,
       status: 'active'
     });
     setCurrentStep(1);
@@ -499,31 +520,25 @@ export function StateManagers({ level }) {
 
     setAddLoading(true);
     try {
+      const stateVal = locking.stateLocked ? locking.defaultState : (form.assignedState || form.state || 'Tamil Nadu');
+      const districtVal = locking.districtLocked ? locking.defaultDistrict : (form.assignedDistrict || form.district || '');
+      const divisionVal = locking.divisionLocked ? locking.defaultDivision : (form.assignedDivision || form.division || '');
+      const pincodeVal = locking.pincodeLocked ? locking.defaultPincode : (form.assignedPincode || form.pincode || '');
+
       const payload = {
         name: form.fullName.trim(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
         role: form.role,
-        assignedState: form.assignedState || user?.state || 'Tamil Nadu',
+        state: stateVal,
+        assignedState: stateVal,
         assignedStateId: form.assignedStateId || '',
         stateId: form.assignedStateId || '',
-        assignedDistrict: form.assignedDistrict || user?.district || '',
-        assignedDistrictId: form.assignedDistrictId || '',
-        districtId: form.assignedDistrictId || '',
-        assignedDivision: form.assignedDivision || user?.division || '',
-        assignedDivisionId: form.assignedDivisionId || '',
-        divisionId: form.assignedDivisionId || '',
-        assignedPincode: form.assignedPincode || user?.pincode || '',
-        assignedPincodeId: form.assignedPincodeId || '',
-        pincodeId: form.assignedPincodeId || '',
         dob: form.dob,
         gender: form.gender,
         doorStreet: form.doorStreet,
         area: form.area,
         city: form.city,
-        state: form.state || form.assignedState || user?.state || 'Tamil Nadu',
-        district: form.district || form.assignedDistrict || user?.district || '',
-        pincode: form.pincode || form.assignedPincode || '',
         aadharNumber: form.aadharNumber,
         panNumber: form.panNumber,
         accountHolderName: form.accountHolderName || form.fullName.trim(),
@@ -535,6 +550,27 @@ export function StateManagers({ level }) {
         loginId: form.loginId.trim(),
         password: form.password
       };
+
+      if (form.role === 'district_manager' || form.role === 'division_manager' || form.role === 'pincode_manager') {
+        payload.district = districtVal;
+        payload.assignedDistrict = districtVal;
+        payload.assignedDistrictId = form.assignedDistrictId || '';
+        payload.districtId = form.assignedDistrictId || '';
+      }
+
+      if (form.role === 'division_manager' || form.role === 'pincode_manager') {
+        payload.division = divisionVal;
+        payload.assignedDivision = divisionVal;
+        payload.assignedDivisionId = form.assignedDivisionId || '';
+        payload.divisionId = form.assignedDivisionId || '';
+      }
+
+      if (form.role === 'pincode_manager') {
+        payload.pincode = pincodeVal;
+        payload.assignedPincode = pincodeVal;
+        payload.assignedPincodeId = form.assignedPincodeId || '';
+        payload.pincodeId = form.assignedPincodeId || '';
+      }
 
       const res = await dataService.addManager(payload);
       if (res.success) {
@@ -863,7 +899,18 @@ export function StateManagers({ level }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <FieldInput label="Assigned State" required>
-                {isSuperAdmin ? (
+                {locking.stateLocked ? (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      disabled
+                      readOnly
+                      className={`${inputCls} opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold pr-9`}
+                      value={form.assignedState || locking.defaultState || 'Tamil Nadu'}
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                  </div>
+                ) : (
                   <select
                     className={inputCls}
                     value={form.assignedStateId || form.assignedState}
@@ -887,25 +934,22 @@ export function StateManagers({ level }) {
                       <option key={s.id || s.name} value={s.id || s.name}>{s.name}</option>
                     ))}
                   </select>
-                ) : (
-                  <input
-                    type="text"
-                    disabled
-                    className={`${inputCls} opacity-80 cursor-not-allowed bg-slate-100 dark:bg-slate-800 font-semibold`}
-                    value={form.assignedState || user?.state || 'Tamil Nadu'}
-                  />
                 )}
               </FieldInput>
 
               {form.role !== 'state_manager' && (
                 <FieldInput label="Assigned District" required={form.role !== 'state_manager'}>
-                  {(isDistrictAdmin || isDivisionalAdmin || isPincodeAdmin) ? (
-                    <input
-                      type="text"
-                      disabled
-                      className={`${inputCls} opacity-80 cursor-not-allowed bg-slate-100 dark:bg-slate-800 font-semibold`}
-                      value={form.assignedDistrict || user?.district || ''}
-                    />
+                  {locking.districtLocked ? (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        disabled
+                        readOnly
+                        className={`${inputCls} opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold pr-9`}
+                        value={form.assignedDistrict || locking.defaultDistrict || ''}
+                      />
+                      <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    </div>
                   ) : dynamicDistricts.length > 0 ? (
                     <select
                       className={inputCls}
@@ -942,13 +986,17 @@ export function StateManagers({ level }) {
 
               {(form.role === 'division_manager' || form.role === 'pincode_manager') && (
                 <FieldInput label="Assigned Division" required>
-                  {isDivisionalAdmin || isPincodeAdmin ? (
-                    <input
-                      type="text"
-                      disabled
-                      className={`${inputCls} opacity-80 cursor-not-allowed bg-slate-100 dark:bg-slate-800 font-semibold`}
-                      value={form.assignedDivision || user?.division || ''}
-                    />
+                  {locking.divisionLocked ? (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        disabled
+                        readOnly
+                        className={`${inputCls} opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold pr-9`}
+                        value={form.assignedDivision || locking.defaultDivision || ''}
+                      />
+                      <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    </div>
                   ) : dynamicDivisions.length > 0 ? (
                     <select
                       className={inputCls}
@@ -983,13 +1031,17 @@ export function StateManagers({ level }) {
 
               {form.role === 'pincode_manager' && (
                 <FieldInput label="Assigned Pincode" required>
-                  {isPincodeAdmin ? (
-                    <input
-                      type="text"
-                      disabled
-                      className={`${inputCls} opacity-80 cursor-not-allowed bg-slate-100 dark:bg-slate-800 font-semibold`}
-                      value={form.assignedPincode || user?.pincode || ''}
-                    />
+                  {locking.pincodeLocked ? (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        disabled
+                        readOnly
+                        className={`${inputCls} opacity-90 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold pr-9`}
+                        value={form.assignedPincode || locking.defaultPincode || ''}
+                      />
+                      <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    </div>
                   ) : dynamicPincodes.length > 0 ? (
                     <select
                       className={inputCls}
@@ -2285,131 +2337,23 @@ export function StateManagers({ level }) {
       {viewTab === 'list' && (
         <div className="space-y-4">
           {/* Dynamic Territory Hierarchy Filter Toolbar (State -> District -> Division -> Pincode) */}
-          <div className={`p-4 rounded-2xl border ${
-            isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200'
-          } shadow-sm space-y-2.5`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-blue-500" />
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Territory Hierarchy Filter
-                </span>
-              </div>
-              {(selectedFilterState || selectedFilterDistrict || selectedFilterDivision || selectedFilterPincode) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedFilterState('');
-                    setSelectedFilterDistrict('');
-                    setSelectedFilterDivision('');
-                    setSelectedFilterPincode('');
-                  }}
-                  className="text-xs font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer transition"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Clear Filters</span>
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* 1. State Filter */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                  State
-                </label>
-                <select
-                  value={selectedFilterState}
-                  onChange={(e) => {
-                    setSelectedFilterState(e.target.value);
-                    setSelectedFilterDistrict('');
-                    setSelectedFilterDivision('');
-                    setSelectedFilterPincode('');
-                  }}
-                  className={`w-full text-xs px-3 py-2 rounded-xl border font-medium transition cursor-pointer ${
-                    isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-700'
-                  }`}
-                >
-                  <option value="">All States ({availableFilterStates.length})</option>
-                  {availableFilterStates.map(s => (
-                    <option key={s.id || s._id || s.name} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 2. District Filter */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                  District
-                </label>
-                <select
-                  value={selectedFilterDistrict}
-                  disabled={!selectedFilterState && availableFilterDistricts.length === 0}
-                  onChange={(e) => {
-                    setSelectedFilterDistrict(e.target.value);
-                    setSelectedFilterDivision('');
-                    setSelectedFilterPincode('');
-                  }}
-                  className={`w-full text-xs px-3 py-2 rounded-xl border font-medium transition cursor-pointer ${
-                    !selectedFilterState && availableFilterDistricts.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-700'}`}
-                >
-                  <option value="">{selectedFilterState ? `All Districts (${availableFilterDistricts.length})` : 'Select State First'}</option>
-                  {availableFilterDistricts.map(d => (
-                    <option key={d.id || d._id || d.name} value={d.name}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 3. Division Filter */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                  Division
-                </label>
-                <select
-                  value={selectedFilterDivision}
-                  disabled={!selectedFilterDistrict}
-                  onChange={(e) => {
-                    setSelectedFilterDivision(e.target.value);
-                    setSelectedFilterPincode('');
-                  }}
-                  className={`w-full text-xs px-3 py-2 rounded-xl border font-medium transition cursor-pointer ${
-                    !selectedFilterDistrict ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-700'}`}
-                >
-                  <option value="">{selectedFilterDistrict ? `All Divisions (${availableFilterDivisions.length})` : 'Select District First'}</option>
-                  {availableFilterDivisions.map(v => (
-                    <option key={v.id || v._id || v.name} value={v.name}>{v.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 4. Pincode Filter */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                  Pincode
-                </label>
-                <select
-                  value={selectedFilterPincode}
-                  disabled={!selectedFilterDivision}
-                  onChange={(e) => setSelectedFilterPincode(e.target.value)}
-                  className={`w-full text-xs px-3 py-2 rounded-xl border font-medium transition cursor-pointer ${
-                    !selectedFilterDivision ? 'opacity-50 cursor-not-allowed' : ''
-                  } ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-700'}`}
-                >
-                  <option value="">{selectedFilterDivision ? `All Pincodes (${availableFilterPincodes.length})` : 'Select Division First'}</option>
-                  {availableFilterPincodes.map(p => {
-                    const pCode = String(p.code || p.pincode || p);
-                    return (
-                      <option key={p.id || pCode} value={pCode}>
-                        PIN: {pCode} {p.name && p.name !== pCode ? `(${p.name})` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            </div>
-          </div>
+          <TerritoryHierarchyFilter
+            selectedState={selectedFilterState}
+            onStateChange={(st) => setSelectedFilterState(st)}
+            selectedDistrict={selectedFilterDistrict}
+            onDistrictChange={(dt) => setSelectedFilterDistrict(dt)}
+            selectedDivision={selectedFilterDivision}
+            onDivisionChange={(dv) => setSelectedFilterDivision(dv)}
+            selectedPincode={selectedFilterPincode}
+            onPincodeChange={(pin) => setSelectedFilterPincode(pin)}
+            onClear={() => {
+              if (!locking.stateLocked) setSelectedFilterState('');
+              if (!locking.districtLocked) setSelectedFilterDistrict('');
+              if (!locking.divisionLocked) setSelectedFilterDivision('');
+              if (!locking.pincodeLocked) setSelectedFilterPincode('');
+            }}
+            territoryTree={territoryTree}
+          />
 
           <DataTable
             title={config.tableTitle}
