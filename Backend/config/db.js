@@ -35,8 +35,7 @@ class Collection extends Array {
       throw new Error(`MongoDB client instance is required to initialize collection '${this.name}'`);
     }
     this._mongoCol = mongoDb.collection(this.mongoName);
-    const projection = (this.mongoName === 'users' || this.mongoName === 'agents') ? { projection: { kycDocs: 0, kyc: 0 } } : {};
-    const docs = await this._mongoCol.find({}, projection).toArray();
+    const docs = await this._mongoCol.find({}).toArray();
     this.length = 0;
     if (docs && docs.length > 0) {
       super.push(...docs);
@@ -49,8 +48,7 @@ class Collection extends Array {
 
   async reloadFromMongo() {
     if (this._mongoCol) {
-      const projection = (this.mongoName === 'users' || this.mongoName === 'agents') ? { projection: { kycDocs: 0, kyc: 0 } } : {};
-      const docs = await this._mongoCol.find({}, projection).toArray();
+      const docs = await this._mongoCol.find({}).toArray();
       this.length = 0;
       if (docs && docs.length > 0) {
         super.push(...docs);

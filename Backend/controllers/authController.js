@@ -251,17 +251,19 @@ const login = async (req, res) => {
     const rawRole = (user.role || '').toLowerCase().replace(/_/g, ' ').trim();
     const levelStr = String(user.level || user.adminLevel || user.adminRole || '').toLowerCase().replace(/_/g, ' ').trim();
 
-    if (rawRole === 'admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Pincode Admin', 'Super Admin'].includes(user.role)) {
-      if (levelStr.includes('pincode') || rawRole.includes('pincode') || levelStr === 'branch-admin') {
+    if (rawRole === 'admin' || rawRole === 'super admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'].includes(user.role)) {
+      if (user.pincode || user.assignedPincode || levelStr.includes('pincode') || rawRole.includes('pincode')) {
         normalizedRole = 'Pincode Admin';
-      } else if (levelStr.includes('divis') || rawRole.includes('divis')) {
+      } else if (user.division || user.assignedDivision || levelStr.includes('divis') || rawRole.includes('divis')) {
         normalizedRole = 'Divisional Admin';
-      } else if (levelStr.includes('dist') || rawRole.includes('dist')) {
+      } else if (user.district || user.assignedDistrict || levelStr.includes('dist') || rawRole.includes('dist')) {
         normalizedRole = 'District Admin';
-      } else if (levelStr.includes('state') || rawRole.includes('state')) {
+      } else if (user.state || user.assignedState || levelStr.includes('state') || rawRole.includes('state')) {
         normalizedRole = 'State Admin';
+      } else if (levelStr.includes('super') || rawRole.includes('super')) {
+        normalizedRole = 'Super Admin';
       } else {
-        normalizedRole = 'Pincode Admin';
+        normalizedRole = 'Super Admin';
       }
     }
 
@@ -327,15 +329,19 @@ const getMe = async (req, res) => {
             const rawRole = (mongoUser.role || '').toLowerCase().replace(/_/g, ' ').trim();
             const levelStr = String(mongoUser.level || mongoUser.adminLevel || mongoUser.adminRole || '').toLowerCase().replace(/_/g, ' ').trim();
 
-            if (rawRole === 'admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Pincode Admin', 'Super Admin'].includes(mongoUser.role)) {
-              if (levelStr.includes('pincode') || rawRole.includes('pincode') || levelStr === 'branch-admin') {
+            if (rawRole === 'admin' || rawRole === 'super admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'].includes(mongoUser.role)) {
+              if (mongoUser.pincode || mongoUser.assignedPincode || levelStr.includes('pincode') || rawRole.includes('pincode')) {
                 normalizedRole = 'Pincode Admin';
-              } else if (levelStr.includes('divis') || rawRole.includes('divis')) {
+              } else if (mongoUser.division || mongoUser.assignedDivision || levelStr.includes('divis') || rawRole.includes('divis')) {
                 normalizedRole = 'Divisional Admin';
-              } else if (levelStr.includes('dist') || rawRole.includes('dist')) {
+              } else if (mongoUser.district || mongoUser.assignedDistrict || levelStr.includes('dist') || rawRole.includes('dist')) {
                 normalizedRole = 'District Admin';
-              } else if (levelStr.includes('state') || rawRole.includes('state')) {
+              } else if (mongoUser.state || mongoUser.assignedState || levelStr.includes('state') || rawRole.includes('state')) {
                 normalizedRole = 'State Admin';
+              } else if (levelStr.includes('super') || rawRole.includes('super')) {
+                normalizedRole = 'Super Admin';
+              } else {
+                normalizedRole = 'Super Admin';
               }
             }
 
@@ -459,6 +465,11 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide all required fields: Full Name, Email, Mobile, Password, and Role.' });
     }
 
+    const kycErr = validateKycDocuments(req.body);
+    if (kycErr) {
+      return res.status(400).json({ success: false, message: kycErr });
+    }
+
     if (!['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(role)) {
       return res.status(400).json({ success: false, message: 'Invalid manager role selected.' });
     }
@@ -573,7 +584,31 @@ const register = async (req, res) => {
       dob: dob || null,
       gender: gender || null,
       address: address ? address.trim() : null,
-      documents: documents || {},
+      aadharNumber: (req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+      panNumber: (req.body.panNumber || '').toString().trim().toUpperCase() || null,
+      aadharPhoto: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+      panPhoto: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+      documents: {
+        aadharNumber: (req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+        panNumber: (req.body.panNumber || '').toString().trim().toUpperCase() || null,
+        aadharUrl: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+        aadharFileName: req.body.aadharFileName || 'Aadhaar_Document',
+        panUrl: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+        panFileName: req.body.panFileName || 'PAN_Document',
+        bankUrl: req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankUrl || null,
+        bankFileName: req.body.bankFileName || 'Bank_Passbook',
+        signatureUrl: req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null,
+        signatureFileName: req.body.signatureFileName || 'Specimen_Signature',
+        passportUrl: req.body.passportUrl || req.body.documents?.passportUrl || null,
+        passportFileName: req.body.passportFileName || 'Passport_Document'
+      },
+      kycDocs: {
+        aadhaarFront: { url: req.body.aadharUrl || req.body.aadharPhoto || null, name: req.body.aadharFileName || 'Aadhaar_Document' },
+        panCard: { url: req.body.panUrl || req.body.panPhoto || null, name: req.body.panFileName || 'PAN_Document' },
+        bankPassbook: { url: req.body.bankUrl || req.body.bankPhoto || null, name: req.body.bankFileName || 'Bank_Passbook' },
+        signature: { url: req.body.signatureUrl || req.body.signaturePhoto || null, name: req.body.signatureFileName || 'Specimen_Signature' },
+        passport: { url: req.body.passportUrl || null, name: req.body.passportFileName || 'Passport_Document' }
+      },
       declarationAccepted: !!declarationAccepted,
       kycStatus: 'pending_verification',
       state: stateName,

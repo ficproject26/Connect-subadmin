@@ -379,6 +379,20 @@ export function Sidebar({ isOpen, setIsOpen }) {
     ];
   }
 
+  // Build a display label that respects the raw role stored in the DB,
+  // so a State Admin whose raw role = "State Admin" shows STATE ADMIN (not SUPER ADMIN).
+  const getRoleDisplayLabel = () => {
+    const raw = (user?.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+    if (raw === 'super admin' || raw === 'main admin' || raw === 'superadmin') return 'SUPER ADMIN';
+    if (raw === 'state admin' || raw === 'stateadmin') return 'STATE ADMIN';
+    if (raw === 'district admin' || raw === 'districtadmin') return 'DISTRICT ADMIN';
+    if (raw === 'division admin' || raw === 'divisional admin') return 'DIVISION ADMIN';
+    if (raw === 'pincode admin' || raw === 'pincodeadmin') return 'PINCODE ADMIN';
+    if (raw.includes('manager')) return 'MANAGER';
+    // Fallback to the normalised role
+    return (role || 'ADMIN').toUpperCase();
+  };
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -405,7 +419,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
                 FORGE INDIA
               </h1>
               <span className="text-[10px] text-[#FED766] font-bold tracking-wider uppercase mt-1 block">
-                {role === 'Super Admin' || role === 'Main Admin' ? 'SUPER ADMIN' : role === 'State Admin' ? 'STATE ADMIN' : role === 'District Admin' ? 'DISTRICT ADMIN' : (role === 'Divisional Admin' || role === 'Division Admin') ? 'DIVISION ADMIN' : role === 'Pincode Admin' ? 'PINCODE ADMIN' : (role || 'ADMIN').toUpperCase()}
+                {getRoleDisplayLabel()}
               </span>
             </div>
           </div>

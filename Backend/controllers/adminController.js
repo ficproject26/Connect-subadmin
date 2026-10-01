@@ -7,7 +7,7 @@ const {
   getPincodesForDivision,
   ALL_INDIAN_STATES
 } = require('../data/indiaPostalData');
-const { validateBankAndAddress } = require('../utils/validation');
+const { validateBankAndAddress, validateKycDocuments } = require('../utils/validation');
 
 // Explicit Sub-Admin capacity limits per jurisdiction
 const SUB_ADMIN_LIMITS = {
@@ -188,6 +188,11 @@ async function addStateAdmin(req, res) {
       return res.status(400).json({ success: false, message: valErr });
     }
 
+    const kycErr = validateKycDocuments(req.body);
+    if (kycErr) {
+      return res.status(400).json({ success: false, message: kycErr });
+    }
+
     if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
       return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
     }
@@ -266,8 +271,31 @@ async function addStateAdmin(req, res) {
       dob: dob || null,
       address: address || null,
       city: city || null,
-      aadharNumber: aadharNumber || null,
-      panNumber: panNumber || null,
+      aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+      panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+      aadharPhoto: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+      panPhoto: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+      documents: {
+        aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+        panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+        aadharUrl: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+        aadharFileName: req.body.aadharFileName || 'Aadhaar_Document',
+        panUrl: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+        panFileName: req.body.panFileName || 'PAN_Document',
+        bankUrl: req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankUrl || null,
+        bankFileName: req.body.bankFileName || 'Bank_Passbook',
+        signatureUrl: req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null,
+        signatureFileName: req.body.signatureFileName || 'Specimen_Signature',
+        passportUrl: req.body.passportUrl || req.body.documents?.passportUrl || null,
+        passportFileName: req.body.passportFileName || 'Passport_Document'
+      },
+      kycDocs: {
+        aadhaarFront: { url: req.body.aadharUrl || req.body.aadharPhoto || null, name: req.body.aadharFileName || 'Aadhaar_Document' },
+        panCard: { url: req.body.panUrl || req.body.panPhoto || null, name: req.body.panFileName || 'PAN_Document' },
+        bankPassbook: { url: req.body.bankUrl || req.body.bankPhoto || null, name: req.body.bankFileName || 'Bank_Passbook' },
+        signature: { url: req.body.signatureUrl || req.body.signaturePhoto || null, name: req.body.signatureFileName || 'Specimen_Signature' },
+        passport: { url: req.body.passportUrl || null, name: req.body.passportFileName || 'Passport_Document' }
+      },
       accountHolderName: accountHolderName || null,
       bankName: bankName || null,
       accountNumber: accountNumber || null,
@@ -669,6 +697,11 @@ async function addDistrictAdmin(req, res) {
       return res.status(400).json({ success: false, message: valErr });
     }
 
+    const kycErr = validateKycDocuments(req.body);
+    if (kycErr) {
+      return res.status(400).json({ success: false, message: kycErr });
+    }
+
     if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
       return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
     }
@@ -744,8 +777,31 @@ async function addDistrictAdmin(req, res) {
       dob: dob || null,
       address: address || null,
       city: city || null,
-      aadharNumber: aadharNumber || null,
-      panNumber: panNumber || null,
+      aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+      panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+      aadharPhoto: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+      panPhoto: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+      documents: {
+        aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+        panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+        aadharUrl: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+        aadharFileName: req.body.aadharFileName || 'Aadhaar_Document',
+        panUrl: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+        panFileName: req.body.panFileName || 'PAN_Document',
+        bankUrl: req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankUrl || null,
+        bankFileName: req.body.bankFileName || 'Bank_Passbook',
+        signatureUrl: req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null,
+        signatureFileName: req.body.signatureFileName || 'Specimen_Signature',
+        passportUrl: req.body.passportUrl || req.body.documents?.passportUrl || null,
+        passportFileName: req.body.passportFileName || 'Passport_Document'
+      },
+      kycDocs: {
+        aadhaarFront: { url: req.body.aadharUrl || req.body.aadharPhoto || null, name: req.body.aadharFileName || 'Aadhaar_Document' },
+        panCard: { url: req.body.panUrl || req.body.panPhoto || null, name: req.body.panFileName || 'PAN_Document' },
+        bankPassbook: { url: req.body.bankUrl || req.body.bankPhoto || null, name: req.body.bankFileName || 'Bank_Passbook' },
+        signature: { url: req.body.signatureUrl || req.body.signaturePhoto || null, name: req.body.signatureFileName || 'Specimen_Signature' },
+        passport: { url: req.body.passportUrl || null, name: req.body.passportFileName || 'Passport_Document' }
+      },
       accountHolderName: accountHolderName || null,
       bankName: bankName || null,
       accountNumber: accountNumber || null,
@@ -1158,6 +1214,11 @@ async function addDivisionAdmin(req, res) {
       return res.status(400).json({ success: false, message: valErr });
     }
 
+    const kycErr = validateKycDocuments(req.body);
+    if (kycErr) {
+      return res.status(400).json({ success: false, message: kycErr });
+    }
+
     if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
       return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
     }
@@ -1257,8 +1318,31 @@ async function addDivisionAdmin(req, res) {
       dob: dob || null,
       address: address || null,
       city: city || null,
-      aadharNumber: aadharNumber || null,
-      panNumber: panNumber || null,
+      aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+      panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+      aadharPhoto: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+      panPhoto: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+      documents: {
+        aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+        panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+        aadharUrl: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+        aadharFileName: req.body.aadharFileName || 'Aadhaar_Document',
+        panUrl: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+        panFileName: req.body.panFileName || 'PAN_Document',
+        bankUrl: req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankUrl || null,
+        bankFileName: req.body.bankFileName || 'Bank_Passbook',
+        signatureUrl: req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null,
+        signatureFileName: req.body.signatureFileName || 'Specimen_Signature',
+        passportUrl: req.body.passportUrl || req.body.documents?.passportUrl || null,
+        passportFileName: req.body.passportFileName || 'Passport_Document'
+      },
+      kycDocs: {
+        aadhaarFront: { url: req.body.aadharUrl || req.body.aadharPhoto || null, name: req.body.aadharFileName || 'Aadhaar_Document' },
+        panCard: { url: req.body.panUrl || req.body.panPhoto || null, name: req.body.panFileName || 'PAN_Document' },
+        bankPassbook: { url: req.body.bankUrl || req.body.bankPhoto || null, name: req.body.bankFileName || 'Bank_Passbook' },
+        signature: { url: req.body.signatureUrl || req.body.signaturePhoto || null, name: req.body.signatureFileName || 'Specimen_Signature' },
+        passport: { url: req.body.passportUrl || null, name: req.body.passportFileName || 'Passport_Document' }
+      },
       accountHolderName: accountHolderName || null,
       bankName: bankName || null,
       accountNumber: accountNumber || null,
@@ -1548,6 +1632,11 @@ async function addPincodeAdmin(req, res) {
       return res.status(400).json({ success: false, message: valErr });
     }
 
+    const kycErr = validateKycDocuments(req.body);
+    if (kycErr) {
+      return res.status(400).json({ success: false, message: kycErr });
+    }
+
     const callerRole = (req.user?.role || '').toLowerCase();
     if (callerRole.includes('division') && req.user?.division) {
       if (divisionName.trim().toLowerCase() !== req.user.division.trim().toLowerCase()) {
@@ -1651,8 +1740,31 @@ async function addPincodeAdmin(req, res) {
       dob: dob || null,
       address: address || null,
       city: city || null,
-      aadharNumber: aadharNumber || null,
-      panNumber: panNumber || null,
+      aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+      panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+      aadharPhoto: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+      panPhoto: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+      documents: {
+        aadharNumber: (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '') || null,
+        panNumber: (panNumber || req.body.panNumber || '').toString().trim().toUpperCase() || null,
+        aadharUrl: req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || null,
+        aadharFileName: req.body.aadharFileName || 'Aadhaar_Document',
+        panUrl: req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null,
+        panFileName: req.body.panFileName || 'PAN_Document',
+        bankUrl: req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankUrl || null,
+        bankFileName: req.body.bankFileName || 'Bank_Passbook',
+        signatureUrl: req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null,
+        signatureFileName: req.body.signatureFileName || 'Specimen_Signature',
+        passportUrl: req.body.passportUrl || req.body.documents?.passportUrl || null,
+        passportFileName: req.body.passportFileName || 'Passport_Document'
+      },
+      kycDocs: {
+        aadhaarFront: { url: req.body.aadharUrl || req.body.aadharPhoto || null, name: req.body.aadharFileName || 'Aadhaar_Document' },
+        panCard: { url: req.body.panUrl || req.body.panPhoto || null, name: req.body.panFileName || 'PAN_Document' },
+        bankPassbook: { url: req.body.bankUrl || req.body.bankPhoto || null, name: req.body.bankFileName || 'Bank_Passbook' },
+        signature: { url: req.body.signatureUrl || req.body.signaturePhoto || null, name: req.body.signatureFileName || 'Specimen_Signature' },
+        passport: { url: req.body.passportUrl || null, name: req.body.passportFileName || 'Passport_Document' }
+      },
       accountHolderName: accountHolderName || null,
       bankName: bankName || null,
       accountNumber: accountNumber || null,

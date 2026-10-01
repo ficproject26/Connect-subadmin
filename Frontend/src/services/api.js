@@ -39,10 +39,13 @@ export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem('ams_token');
 
   const headers = {
-    'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
+
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   let url;
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {

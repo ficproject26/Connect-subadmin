@@ -1,6 +1,5 @@
 const { db } = require('../config/db');
-const bcrypt = require('bcryptjs');
-const { validateBankAndAddress } = require('../utils/validation');
+const { validateBankAndAddress, validateKycDocuments } = require('../utils/validation');
 
 // Format human-readable role labels
 const formatRoleTitle = (role) => {
@@ -222,7 +221,47 @@ const populateManager = async (m, relation, user) => {
     dob: m.dob || null,
     gender: m.gender || null,
     address: m.address || null,
-    documents: m.documents || {},
+    documents: (() => {
+      const rawDocs = m.documents || {};
+      const kycDocs = m.kycDocs || {};
+      const kyc = m.kyc || {};
+      const getVal = (f) => {
+        if (!f) return null;
+        if (typeof f === 'string') return f;
+        if (typeof f === 'object' && f.url) return f.url;
+        return null;
+      };
+      const aadharUrl = rawDocs.aadharUrl || rawDocs.aadhaarUrl || rawDocs.aadhaar || rawDocs.aadhar ||
+        getVal(kycDocs.aadhaarFront) || getVal(kycDocs.aadhaar) || getVal(kycDocs.aadhar) ||
+        kyc.aadhaarImage || kyc.aadharImage || m.aadharUrl || m.aadhaarUrl || m.aadharPhoto || m.aadhaarPhoto || null;
+      const panUrl = rawDocs.panUrl || rawDocs.pan ||
+        getVal(kycDocs.panCard) || getVal(kycDocs.pan) ||
+        kyc.panImage || m.panUrl || m.panPhoto || null;
+      const bankUrl = rawDocs.bankUrl || rawDocs.bankPassbook || rawDocs.passbookUrl || rawDocs.bankDetailsUrl || rawDocs.bank ||
+        getVal(kycDocs.bankPassbook) || getVal(kycDocs.passbook) || m.bankUrl || m.bankPhoto || m.bankPassbook || null;
+      const signatureUrl = rawDocs.signatureUrl || rawDocs.signature ||
+        getVal(kycDocs.signature) || getVal(kycDocs.authorizedSignature) || m.signatureUrl || m.signaturePhoto || m.signature || null;
+      const passportUrl = rawDocs.passportUrl || rawDocs.passport ||
+        getVal(kycDocs.passport) || getVal(kycDocs.passportPhoto) || m.passportUrl || m.passportPhoto || null;
+      return {
+        ...rawDocs,
+        aadharNumber: m.aadharNumber || rawDocs.aadharNumber || kyc.aadhaarNumber || null,
+        panNumber: m.panNumber || rawDocs.panNumber || kyc.panNumber || null,
+        aadharUrl,
+        aadharFileName: rawDocs.aadharFileName || (kycDocs.aadhaarFront?.name) || (aadharUrl ? 'Aadhaar_Document' : null),
+        panUrl,
+        panFileName: rawDocs.panFileName || (kycDocs.panCard?.name) || (panUrl ? 'PAN_Document' : null),
+        bankUrl,
+        bankFileName: rawDocs.bankFileName || (kycDocs.bankPassbook?.name) || (bankUrl ? 'Bank_Passbook' : null),
+        signatureUrl,
+        signatureFileName: rawDocs.signatureFileName || (kycDocs.signature?.name) || (signatureUrl ? 'Specimen_Signature' : null),
+        passportUrl,
+        passportFileName: rawDocs.passportFileName || (kycDocs.passport?.name) || (passportUrl ? 'Passport_Document' : null)
+      };
+    })(),
+    kycDocs: m.kycDocs || {},
+    aadharPhoto: m.aadharPhoto || m.documents?.aadharUrl || m.kycDocs?.aadhaarFront?.url || null,
+    panPhoto: m.panPhoto || m.documents?.panUrl || m.kycDocs?.panCard?.url || null,
     avatar: m.avatar || m.avatarUrl || null,
     avatarUrl: m.avatarUrl || m.avatar || null,
     declarationAccepted: !!m.declarationAccepted,
@@ -737,6 +776,11 @@ const addManager = async (req, res) => {
       return res.status(400).json({ success: false, message: valErr });
     }
 
+    const kycErr = validateKycDocuments(req.body);
+    if (kycErr) {
+      return res.status(400).json({ success: false, message: kycErr });
+    }
+
     // Check duplicate in users
     const allUsers = Array.from(db.users);
     const existing = allUsers.find(u => 
@@ -913,68 +957,95 @@ const addManager = async (req, res) => {
     const rolePrefix = mgrRole === 'state_manager' ? 'STM' : mgrRole === 'district_manager' ? 'DTM' : mgrRole === 'division_manager' ? 'DIV' : 'PIN';
     const managerId = req.body.managerId || (`MGR-${rolePrefix}-${Date.now().toString().slice(-6)}`);
 
-    const newManager = {
-      _id: newId,
-      id: newId,
-      managerId,
-      name: mgrName,
-      email: mgrEmail,
-      mobile: mgrMobile,
-      phone: mgrMobile,
-      loginId: loginId || mgrEmail,
-      passwordHash,
-      role: mgrRole,
-      level,
-      status: 'active',
-      registrationType: 'admin',
-      adminApprovalStatus: 'approved',
-      adminApprovedBy: req.user.name || req.user.email,
-      adminApprovedById: req.user.id || req.user._id,
-      adminApprovedByRole: req.user.role,
-      adminApprovedAt: now,
-      kycStatus: 'Verified',
-      state,
-      stateId: stateId || null,
-      assignedState: state,
-      assignedStateId: stateId || null,
-      district: district || null,
-      districtId: districtId || null,
-      assignedDistrict: district || null,
-      assignedDistrictId: districtId || null,
-      division: division || null,
-      divisionId: divisionId || null,
-      assignedDivision: division || null,
-      assignedDivisionId: divisionId || null,
-      pincode: pincode || null,
-      pincodeId: pincodeId || null,
-      assignedPincode: pincode || null,
-      assignedPincodeId: pincodeId || null,
-      targetJurisdiction,
-      targetAdminRole: req.user.role,
-      targetAdminId: req.user.id || req.user._id,
-      targetAdminName: req.user.name,
-      dob: dob || null,
-      gender: gender || null,
-      address: address || doorStreet || `${area || ''} ${city || ''}`.trim() || null,
-      aadharNumber: aadharNumber || null,
-      panNumber: panNumber || null,
-      bankDetails: {
-        accountHolderName: accountHolderName || mgrName,
-        bankName: bankName || null,
-        accountNumber: accountNumber || null,
-        ifscCode: ifscCode || null,
-        branchName: branchName || null
-      },
-      documents: {
-        aadharNumber: aadharNumber || null,
-        panNumber: panNumber || null
-      },
-      createdByAdmin: req.user.name || req.user.email,
-      createdById: req.user.id || req.user._id,
-      createdByRole: req.user.role,
-      createdAt: now,
-      updatedAt: now
-    };
+      const aadharDocUrl = req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || req.body.documents?.aadhaarUrl || null;
+      const panDocUrl = req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null;
+      const bankDocUrl = req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankUrl || null;
+      const signatureDocUrl = req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null;
+      const passportDocUrl = req.body.passportUrl || req.body.passportPhoto || req.body.documents?.passportUrl || null;
+      const aadharClean = (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '');
+      const panClean = (panNumber || req.body.panNumber || '').toString().trim().toUpperCase();
+
+      const newManager = {
+        _id: newId,
+        id: newId,
+        managerId,
+        name: mgrName,
+        email: mgrEmail,
+        mobile: mgrMobile,
+        phone: mgrMobile,
+        loginId: loginId || mgrEmail,
+        passwordHash,
+        role: mgrRole,
+        level,
+        status: 'active',
+        registrationType: 'admin',
+        adminApprovalStatus: 'approved',
+        adminApprovedBy: req.user.name || req.user.email,
+        adminApprovedById: req.user.id || req.user._id,
+        adminApprovedByRole: req.user.role,
+        adminApprovedAt: now,
+        kycStatus: 'Verified',
+        state,
+        stateId: stateId || null,
+        assignedState: state,
+        assignedStateId: stateId || null,
+        district: district || null,
+        districtId: districtId || null,
+        assignedDistrict: district || null,
+        assignedDistrictId: districtId || null,
+        division: division || null,
+        divisionId: divisionId || null,
+        assignedDivision: division || null,
+        assignedDivisionId: divisionId || null,
+        pincode: pincode || null,
+        pincodeId: pincodeId || null,
+        assignedPincode: pincode || null,
+        assignedPincodeId: pincodeId || null,
+        targetJurisdiction,
+        targetAdminRole: req.user.role,
+        targetAdminId: req.user.id || req.user._id,
+        targetAdminName: req.user.name,
+        dob: dob || null,
+        gender: gender || null,
+        address: address || doorStreet || `${area || ''} ${city || ''}`.trim() || null,
+        aadharNumber: aadharClean || null,
+        panNumber: panClean || null,
+        aadharPhoto: aadharDocUrl,
+        panPhoto: panDocUrl,
+        bankDetails: {
+          accountHolderName: accountHolderName || mgrName,
+          bankName: bankName || null,
+          accountNumber: accountNumber || null,
+          ifscCode: ifscCode || null,
+          branchName: branchName || null
+        },
+        documents: {
+          aadharNumber: aadharClean || null,
+          panNumber: panClean || null,
+          aadharUrl: aadharDocUrl,
+          aadharFileName: req.body.aadharFileName || (aadharDocUrl ? 'Aadhaar_Document' : null),
+          panUrl: panDocUrl,
+          panFileName: req.body.panFileName || (panDocUrl ? 'PAN_Document' : null),
+          bankUrl: bankDocUrl,
+          bankFileName: req.body.bankFileName || (bankDocUrl ? 'Bank_Passbook' : null),
+          signatureUrl: signatureDocUrl,
+          signatureFileName: req.body.signatureFileName || (signatureDocUrl ? 'Specimen_Signature' : null),
+          passportUrl: passportDocUrl,
+          passportFileName: req.body.passportFileName || (passportDocUrl ? 'Passport_Document' : null)
+        },
+        kycDocs: {
+          aadhaarFront: { url: aadharDocUrl, name: req.body.aadharFileName || 'Aadhaar_Document' },
+          panCard: { url: panDocUrl, name: req.body.panFileName || 'PAN_Document' },
+          bankPassbook: { url: bankDocUrl, name: req.body.bankFileName || 'Bank_Passbook' },
+          signature: { url: signatureDocUrl, name: req.body.signatureFileName || 'Specimen_Signature' },
+          passport: { url: passportDocUrl, name: req.body.passportFileName || 'Passport_Document' }
+        },
+        createdByAdmin: req.user.name || req.user.email,
+        createdById: req.user.id || req.user._id,
+        createdByRole: req.user.role,
+        createdAt: now,
+        updatedAt: now
+      };
 
     await db.users.insertOne(newManager);
     if (db.managers) {

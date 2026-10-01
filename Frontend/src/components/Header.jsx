@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -27,15 +27,6 @@ export function Header({ setIsSidebarOpen }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef(null);
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (notifRef.current && !notifRef.current.contains(e.target)) {
-        setShowNotifications(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   if (!user) return null;
 
@@ -218,6 +209,7 @@ export function Header({ setIsSidebarOpen }) {
           <NotificationDropdown
             isOpen={showNotifications}
             onClose={() => setShowNotifications(false)}
+            anchorRef={notifRef}
           />
         </div>
 
@@ -235,7 +227,7 @@ export function Header({ setIsSidebarOpen }) {
               {user.name || 'Admin'}
             </div>
             <div className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              {user.role}
+              {normalizeRole(user.role) || user.role}
             </div>
           </div>
         </div>

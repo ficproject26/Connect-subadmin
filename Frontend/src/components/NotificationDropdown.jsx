@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-export default function NotificationDropdown({ isOpen, onClose }) {
+export default function NotificationDropdown({ isOpen, onClose, anchorRef }) {
   const {
     notifications,
     unreadCount,
@@ -25,6 +25,26 @@ export default function NotificationDropdown({ isOpen, onClose }) {
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const [tab, setTab] = useState('all'); // 'all' | 'vendors' | 'tasks'
+  const [dropdownStyle, setDropdownStyle] = useState({});
+  const dropdownRef = useRef(null);
+
+  // Compute fixed position relative to the anchor (bell icon) on open
+  useEffect(() => {
+    if (isOpen && anchorRef?.current) {
+      const rect = anchorRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const dropdownWidth = Math.min(384, viewportWidth * 0.92);
+      // Align right edge of dropdown with right edge of anchor
+      let left = rect.right - dropdownWidth;
+      if (left < 8) left = 8;
+      setDropdownStyle({
+        position: 'fixed',
+        top: rect.bottom + 8,
+        left,
+        width: dropdownWidth,
+      });
+    }
+  }, [isOpen, anchorRef]);
 
   if (!isOpen) return null;
 
@@ -101,13 +121,22 @@ export default function NotificationDropdown({ isOpen, onClose }) {
   };
 
   return (
-    <div
-      className={`absolute right-0 mt-3 w-96 max-w-[92vw] rounded-2xl border shadow-2xl backdrop-blur-xl z-50 overflow-hidden transition-all duration-200 animate-in fade-in slide-in-from-top-2 ${
-        isDark
-          ? 'bg-[#0f1b2e]/98 border-slate-700/80 text-white'
-          : 'bg-white/98 border-slate-200 text-slate-900 shadow-slate-200/80'
-      }`}
-    >
+    <>
+      {/* Invisible backdrop to catch outside clicks, especially on mobile */}
+      <div
+        className="fixed inset-0 z-[998]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        ref={dropdownRef}
+        style={dropdownStyle}
+        className={`z-[999] rounded-2xl border shadow-2xl backdrop-blur-xl overflow-hidden transition-all duration-200 animate-in fade-in slide-in-from-top-2 ${
+          isDark
+            ? 'bg-[#0f1b2e]/98 border-slate-700/80 text-white'
+            : 'bg-white/98 border-slate-200 text-slate-900 shadow-slate-200/80'
+        }`}
+      >
       {/* Header */}
       <div
         className={`px-4 py-3 border-b flex items-center justify-between ${
@@ -258,5 +287,6 @@ export default function NotificationDropdown({ isOpen, onClose }) {
         </button>
       </div>
     </div>
+    </>
   );
 }

@@ -101,33 +101,58 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
     }
   };
 
-  const docs = manager.documents || {};
+  // Merge all possible document sub-objects so both registration flows are covered:
+  // Flow A (Manager website) → may store under manager.documents, manager.kyc, manager.kycDocs
+  // Flow B (SubAdmin portal) → may store under manager.documents.kyc or manager.kycDocuments
+  const rawDocs = manager.documents || {};
+  const kyc = manager.kyc || rawDocs.kyc || manager.kycDocs || manager.kycDocuments || {};
+
+  const docs = {
+    ...rawDocs,
+    // Merge kyc sub-object fields with raw docs (kyc takes priority for its own keys)
+    aadharUrl:    kyc.aadhaarDoc   || kyc.aadharUrl   || rawDocs.aadharUrl   || rawDocs.aadhaarUrl,
+    aadhaarUrl:   kyc.aadhaarDoc   || kyc.aadhaarUrl  || rawDocs.aadhaarUrl  || rawDocs.aadharUrl,
+    aadhaar:      kyc.aadhaar      || rawDocs.aadhaar,
+    aadhaarFront: kyc.aadhaarFront || rawDocs.aadhaarFront,
+    aadhaarFileName: kyc.aadhaarFileName || rawDocs.aadhaarFileName || rawDocs.aadharFileName,
+    panUrl:       kyc.panDoc       || kyc.panUrl       || rawDocs.panUrl      || rawDocs.pan,
+    pan:          kyc.pan          || rawDocs.pan,
+    panFileName:  kyc.panFileName  || rawDocs.panFileName,
+    bankUrl:      kyc.bankDoc      || kyc.bankUrl      || rawDocs.bankUrl     || rawDocs.bankPassbook || rawDocs.passbookUrl || rawDocs.bankDetailsUrl,
+    bankFileName: kyc.bankFileName || rawDocs.bankFileName,
+    signatureUrl: kyc.signatureDoc || kyc.signatureUrl || rawDocs.signatureUrl || rawDocs.signature,
+    signatureFileName: kyc.signatureFileName || rawDocs.signatureFileName,
+  };
+
   const docList = [
     {
       key: 'aadhaar',
       label: 'Aadhaar Card',
       value: docs.aadharUrl || docs.aadhaarUrl || docs.aadhaar || docs.aadhaarFront,
-      fileName: docs.aadharFileName || docs.aadhaarFileName || 'Aadhaar_Document'
+      number: manager.aadhaarNumber || kyc.aadhaarNumber || manager.aadharNumber,
+      fileName: docs.aadhaarFileName || docs.aadharFileName || 'Aadhaar_Document'
     },
     {
       key: 'pan',
       label: 'PAN Card',
       value: docs.panUrl || docs.pan,
+      number: manager.panNumber || kyc.panNumber,
       fileName: docs.panFileName || 'PAN_Document'
     },
     {
       key: 'bankPassbook',
       label: 'Bank Passbook / Cheque',
-      value: docs.bankUrl || docs.bankPassbook || docs.passbookUrl || docs.bankDetailsUrl || docs.bank,
+      value: docs.bankUrl,
       fileName: docs.bankFileName || 'Bank_Passbook'
     },
     {
       key: 'signature',
       label: 'Authorized Signature',
-      value: docs.signatureUrl || docs.signature,
+      value: docs.signatureUrl,
       fileName: docs.signatureFileName || 'Specimen_Signature'
     }
   ];
+
 
   const avatarSrc = manager.avatarUrl || manager.avatar;
   const resolvedAvatar = avatarSrc ? resolveMediaUrl(avatarSrc) : null;
@@ -287,7 +312,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                 const mediaUrl = d.value ? resolveMediaUrl(d.value) : null;
                 const isPdf = mediaUrl ? mediaUrl.toLowerCase().endsWith('.pdf') : false;
 
-                return (
+                  return (
                   <div
                     key={d.key}
                     className="flex flex-col p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 space-y-2"
@@ -301,12 +326,23 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                         <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3" /> Uploaded
                         </span>
+                      ) : d.number ? (
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> No file
+                        </span>
                       ) : (
                         <span className="text-[10px] font-medium text-slate-400">
-                          Self-attested
+                          Not provided
                         </span>
                       )}
                     </div>
+
+                    {/* Document number if available */}
+                    {d.number && (
+                      <div className="text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 px-2 py-1 rounded-lg tracking-wider">
+                        {d.number}
+                      </div>
+                    )}
 
                     {mediaUrl ? (
                       <div className="flex items-center justify-between pt-1 gap-2">
@@ -357,12 +393,13 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                       </div>
                     ) : (
                       <div className="text-[11px] text-slate-400 italic py-1">
-                        No physical document file uploaded
+                        {d.number ? 'Number recorded — no scan uploaded' : 'No document file uploaded'}
                       </div>
                     )}
                   </div>
                 );
               })}
+
             </div>
 
             <div className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/30 p-2.5 rounded-lg flex items-center gap-2">

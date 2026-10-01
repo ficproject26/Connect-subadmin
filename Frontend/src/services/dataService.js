@@ -253,6 +253,20 @@ export const dataService = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  uploadDocument: (file) => {
+    const formData = new FormData();
+    formData.append('document', file);
+    return apiRequest('/uploads/document', {
+      method: 'POST',
+      body: formData
+    }).catch(() => {
+      // Fallback to /api/auth/upload-document if upload endpoint errors
+      return apiRequest('/auth/upload-document', {
+        method: 'POST',
+        body: formData
+      });
+    });
+  },
 
   // ─── QC Issue & Task Management ─────────────────────────────────────────────
   // QC Issues
