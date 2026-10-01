@@ -359,31 +359,8 @@ export function StateDivisions() {
           </p>
         </div>
 
-        {/* Drill down Breadcrumb & District Filter Dropdown */}
+        {/* Drill down Breadcrumb only (filter moved into DataTable) */}
         <div className="flex flex-wrap items-center gap-2">
-          {availableDistricts.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <select
-                aria-label="Filter divisions by district"
-                value={districtFilter || ''}
-                onChange={handleDistrictSelect}
-                className={`text-xs px-2.5 py-1.5 rounded-xl border font-medium transition cursor-pointer ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-700 text-slate-200'
-                    : 'bg-white border-slate-300 text-slate-700'
-                }`}
-              >
-                <option value="">All Districts ({availableDistricts.length})</option>
-                {availableDistricts.map(d => (
-                  <option key={d.id || d._id || d.name} value={d.name}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           <div className={`flex items-center gap-2 text-xs border rounded-xl px-3 py-1.5 font-mono ${
             isDark
               ? 'bg-slate-800/80 border-slate-700 text-slate-400'
@@ -498,7 +475,28 @@ export function StateDivisions() {
             ? "No assigned division administrators found under this territory hierarchy."
             : (districtFilter ? `No divisions found for this district.` : "No divisions found.")
         }
+        customFilters={availableDistricts.length > 0 ? ({ isDark: dark }) => (
+          <div className={`h-9 inline-flex items-center gap-1.5 ${
+            dark
+              ? 'bg-slate-800 border-slate-700 text-slate-300'
+              : 'bg-slate-100 border-slate-200 text-slate-700'
+          } border rounded-xl px-2.5 text-xs transition-colors shrink-0`}>
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              aria-label="Filter divisions by district"
+              value={districtFilter || ''}
+              onChange={handleDistrictSelect}
+              className={`bg-transparent border-none ${dark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 font-medium`}
+            >
+              <option value="">All Districts ({availableDistricts.length})</option>
+              {availableDistricts.map(d => (
+                <option key={d.id || d._id || d.name} value={d.name}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       />
+
 
       {/* Division Administrator Profile & Division Details Modal */}
       <Modal

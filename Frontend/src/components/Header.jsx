@@ -5,13 +5,13 @@ import { useNotifications } from '../context/NotificationContext';
 import { useLocation } from 'react-router-dom';
 import { normalizeRole } from '../utils/permissions';
 import NotificationDropdown from './NotificationDropdown';
+import { GlobalSearch } from './GlobalSearch';
 import {
   Menu,
   MapPin,
   Bell,
   Sun,
   Moon,
-  Search,
   Calendar,
   ChevronDown
 } from 'lucide-react';
@@ -22,8 +22,6 @@ export function Header({ setIsSidebarOpen }) {
   const { unreadCount } = useNotifications();
   const location = useLocation();
   const [dateFilter, setDateFilter] = useState('This Month');
-  const [showSearchInput, setShowSearchInput] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef(null);
 
@@ -128,39 +126,8 @@ export function Header({ setIsSidebarOpen }) {
           <ChevronDown className="w-3.5 h-3.5 opacity-60 ml-0.5 text-[#1e355b]" />
         </div>
 
-        {/* Search button / input */}
-        <div className="relative">
-          {showSearchInput ? (
-            <div className="flex items-center">
-              <input
-                type="text"
-                autoFocus
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onBlur={() => !searchTerm && setShowSearchInput(false)}
-                placeholder="Search..."
-                className={`w-40 sm:w-56 px-3 py-1 text-xs rounded-xl border ${
-                  isDark
-                    ? 'bg-slate-800 border-slate-600 text-slate-100'
-                    : 'bg-slate-100 border-slate-300 text-[#001D51]'
-                } focus:outline-none`}
-              />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowSearchInput(true)}
-              title="Search records"
-              className={`p-2 rounded-xl border ${
-                isDark
-                  ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-blue-400'
-                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-blue-600'
-              } shadow-sm transition cursor-pointer`}
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        {/* Global Search */}
+        <GlobalSearch isDark={isDark} />
 
         {/* Dark / Light Mode Toggle Button */}
         <button
