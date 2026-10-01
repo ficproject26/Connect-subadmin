@@ -1,4 +1,5 @@
 const { db, filterByLocation } = require('../config/db');
+const { getComprehensiveVendorDirectory } = require('../utils/vendorDirectory');
 
 // Helper to format ISO date string into readable order date
 function formatOrderDate(dateVal) {
@@ -119,17 +120,33 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
   const tax = Number(order.tax || order.taxAmount || 0);
   const netPayable = rawTotal || (rawSubtotal - discountAmount + deliveryFee + tax);
 
-  // Vendor Enrichment from vendors and settlements
+  // Vendor Enrichment from comprehensive vendor directory (vendors, users, businesses, settlements)
   const vendorKey = String(order.vendor_id || order.vendorId || '').trim();
-  const matchedVendor = vendorKey ? vendorMap.get(vendorKey) : null;
-  const vendorName = matchedVendor ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName) : (order.vendorName || 'Not provided');
-  const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorBusinessName || matchedVendor.name) : (order.vendorBusinessName || vendorName);
-  const vendorId = matchedVendor ? (matchedVendor._id || matchedVendor.id || matchedVendor.vendorId) : (vendorKey || 'Not provided');
-  const vendorCategory = matchedVendor ? (matchedVendor.category || matchedVendor.subCategory || '-') : (order.vendorCategory || 'Not provided');
-  const vendorContact = matchedVendor ? (matchedVendor.contactPerson || matchedVendor.phone || matchedVendor.mobile || '-') : (order.vendorContact || order.vendorPhone || 'Not provided');
-  const vendorPhone = matchedVendor ? (matchedVendor.phone || matchedVendor.mobile) : (order.vendorPhone || 'Not provided');
-  const vendorEmail = matchedVendor ? matchedVendor.email : (order.vendorEmail || 'Not provided');
-  const vendorLocation = matchedVendor ? (matchedVendor.address || (matchedVendor.district ? `${matchedVendor.district}${matchedVendor.division ? `, ${matchedVendor.division}` : ''}` : 'Not provided')) : (order.vendorLocation || (district ? `${district}${division ? `, ${division}` : ''}` : 'Not provided'));
+  const matchedVendor = vendorKey ? (vendorMap.get(vendorKey) || vendorMap.get(vendorKey.toLowerCase())) : null;
+
+  const vendorName = matchedVendor ? (matchedVendor.vendorName || matchedVendor.businessName || 'Vendor Merchant') : (order.vendorName && order.vendorName !== 'Unassigned' ? order.vendorName : (vendorKey ? 'Vendor information unavailable' : 'Unassigned'));
+  const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorName || 'Merchant Enterprise') : (order.vendorBusinessName || vendorName);
+  const vendorId = matchedVendor ? (matchedVendor.vendorId || matchedVendor.registrationId || matchedVendor._id || matchedVendor.id) : (vendorKey || '-');
+  const vendorCategory = matchedVendor ? (matchedVendor.businessType || matchedVendor.category || matchedVendor.subCategory || '-') : (order.vendorCategory || '-');
+  const vendorPhone = matchedVendor ? (matchedVendor.phone || matchedVendor.mobile || '-') : (order.vendorPhone || '-');
+  const vendorContact = matchedVendor ? (matchedVendor.phone || matchedVendor.contactPerson || matchedVendor.vendorName || '-') : (order.vendorContact || vendorPhone);
+  const vendorEmail = matchedVendor ? (matchedVendor.email || '-') : (order.vendorEmail || '-');
+
+  // Format clean vendor location
+  let vendorLocation = '-';
+  if (matchedVendor) {
+    const locParts = [
+      matchedVendor.address || matchedVendor.fullAddress,
+      matchedVendor.area,
+      matchedVendor.division,
+      matchedVendor.district,
+      matchedVendor.state,
+      matchedVendor.pincode ? `PIN: ${matchedVendor.pincode}` : ''
+    ].filter(Boolean);
+    vendorLocation = locParts.filter((v, i) => locParts.indexOf(v) === i).join(', ') || 'Tamil Nadu';
+  } else if (order.vendorLocation && order.vendorLocation !== 'Not provided') {
+    vendorLocation = order.vendorLocation;
+  }
 
   // Build Real Timeline from delivery_status_history
   const rawHist = (historyMap && (historyMap.get(orderId) || historyMap.get(orderNumber) || historyMap.get(String(order._id)))) || [];
@@ -198,10 +215,15 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
     vendorName,
     vendorBusinessName,
     vendorCategory,
+    vendorType: vendorCategory,
     vendorContact,
     vendorPhone,
     vendorEmail,
     vendorLocation,
+    vendorPincode: matchedVendor?.pincode || '',
+    vendorDistrict: matchedVendor?.district || '',
+    vendorDivision: matchedVendor?.division || '',
+    vendorState: matchedVendor?.state || '',
     deliveryPartnerName: order.deliveryPartnerName || order.deliveryPartner?.name || 'Not provided',
     deliveryPartnerId: order.deliveryPartnerId || order.deliveryPartner?.id || 'Not provided',
     deliveryPartnerPhone: order.deliveryPartnerPhone || order.deliveryPartner?.phone || 'Not provided',
@@ -211,8 +233,21 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
   };
 }
 
-function getOrders(req, res) {
+async function getOrders(req, res) {
   try {
+    if (db.orders && typeof db.orders.reloadFromMongo === 'function') {
+      await db.orders.reloadFromMongo();
+    }
+    if (db.deliveryStatusHistory && typeof db.deliveryStatusHistory.reloadFromMongo === 'function') {
+      await db.deliveryStatusHistory.reloadFromMongo();
+    }
+    if (db.vendors && typeof db.vendors.reloadFromMongo === 'function') {
+      await db.vendors.reloadFromMongo();
+    }
+    if (db.users && typeof db.users.reloadFromMongo === 'function') {
+      await db.users.reloadFromMongo();
+    }
+
     const rawOrders = Array.from(db.orders || []);
     // Scope geographically according to user role
     let scoped = filterByLocation(rawOrders, req.user);
@@ -226,28 +261,8 @@ function getOrders(req, res) {
     }
 
     const pinMap = getPincodeDirectory();
-
-    // Fast vendor map from db.vendors and db.settlements
-    const vendorMap = new Map();
-    Array.from(db.vendors || []).forEach(v => {
-      const vId = String(v._id || v.id || '').trim();
-      if (vId) vendorMap.set(vId, v);
-    });
-
-    // Augment with settlements for business name mapping
-    Array.from(db.settlements || []).forEach(s => {
-      const vId = String(s.vendorId || s._id || s.id || '').trim();
-      if (vId) {
-        const existing = vendorMap.get(vId) || {};
-        vendorMap.set(vId, {
-          ...existing,
-          businessName: existing.businessName || existing.name || s.vendorBusinessName,
-          vendorBusinessName: s.vendorBusinessName || existing.businessName,
-          _id: vId,
-          id: vId
-        });
-      }
-    });
+    const vendorDirectory = getComprehensiveVendorDirectory();
+    const vendorMap = vendorDirectory.vendorMap;
 
     // Build status history lookup map
     const historyMap = new Map();
@@ -308,13 +323,15 @@ function getOrders(req, res) {
 async function updateOrderStatus(req, res) {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, notes } = req.body;
 
     if (!status) {
       return res.status(400).json({ success: false, message: 'Status is required' });
     }
 
-    const order = await db.orders.findById(id);
+    const order = await db.orders.findOne({
+      $or: [{ _id: id }, { id: id }, { orderNumber: id }, { order_number: id }]
+    });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     const scoped = filterByLocation([order], req.user);
@@ -322,8 +339,22 @@ async function updateOrderStatus(req, res) {
       return res.status(403).json({ success: false, message: 'Order outside your jurisdiction' });
     }
 
-    const updates = { status, updatedAt: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const updates = { status, orderStatus: status, deliveryStatus: status, updatedAt: now };
     const updatedOrder = await db.orders.findByIdAndUpdate(order._id || order.id, updates);
+
+    // Save real event to delivery_status_history for timeline
+    const orderKey = String(order.id || order._id || order.orderNumber || order.order_number);
+    const historyEntry = {
+      order_id: orderKey,
+      status,
+      updated_by: req.user.name || req.user.role || 'Admin',
+      notes: notes || `Order status updated to ${status} by ${req.user.role}`,
+      timestamp: now
+    };
+    if (db.deliveryStatusHistory) {
+      await db.deliveryStatusHistory.insertOne(historyEntry).catch(() => {});
+    }
 
     return res.json({ success: true, message: `Order status updated to ${status}`, order: updatedOrder || { ...order, ...updates } });
   } catch (error) {

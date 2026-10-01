@@ -369,16 +369,16 @@ export function DivisionalVendors() {
         tableClassName="min-w-[960px] w-full"
         containerClassName="overflow-x-auto"
         customFilters={({ isDark }) => (
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {/* KYC Status Filter */}
-            <div className={`h-9 inline-flex items-center gap-1.5 ${
+            <div className={`h-9 flex-1 sm:flex-initial inline-flex items-center gap-1.5 ${
               isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-            } border rounded-xl px-2.5 text-xs transition-colors shrink-0`}>
+            } border rounded-xl px-2.5 text-xs transition-colors`}>
               <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <select
                 value={kycFilter}
                 onChange={(e) => setKycFilter(e.target.value)}
-                className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 truncate`}
+                className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 w-full max-w-[180px] truncate`}
               >
                 <option value="" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>All Verification Status</option>
                 <option value="pending_pincode" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>Pending Pincode Approval</option>
@@ -389,13 +389,13 @@ export function DivisionalVendors() {
             </div>
 
             {/* Category Filter */}
-            <div className={`h-9 inline-flex items-center gap-1.5 ${
+            <div className={`h-9 flex-1 sm:flex-initial inline-flex items-center gap-1.5 ${
               isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-            } border rounded-xl px-2.5 text-xs transition-colors shrink-0`}>
+            } border rounded-xl px-2.5 text-xs transition-colors`}>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 truncate`}
+                className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 w-full max-w-[140px] truncate`}
               >
                 <option value="" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>All Categories</option>
                 <option value="Services" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>Services</option>
@@ -409,13 +409,13 @@ export function DivisionalVendors() {
             </div>
 
             {/* Rating Filter */}
-            <div className={`h-9 inline-flex items-center gap-1.5 ${
+            <div className={`h-9 flex-1 sm:flex-initial inline-flex items-center gap-1.5 ${
               isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-            } border rounded-xl px-2.5 text-xs transition-colors shrink-0`}>
+            } border rounded-xl px-2.5 text-xs transition-colors`}>
               <select
                 value={ratingFilter}
                 onChange={(e) => setRatingFilter(e.target.value)}
-                className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 truncate`}
+                className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 w-full max-w-[120px] truncate`}
               >
                 <option value="" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>All Ratings</option>
                 <option value="4+" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>4.0 & Above ★</option>

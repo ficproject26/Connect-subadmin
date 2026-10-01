@@ -36,8 +36,9 @@ export function DistrictCustomers() {
   const kpiStats = useMemo(() => {
     const dataset = allCustomers.length > 0 ? allCustomers : customers;
     const total = dataset.length;
-    const nonCard = dataset.filter(c => !c.membership?.tier).length;
-    const cards = dataset.filter(c => c.membership?.tier).length;
+    const hasActiveCard = (c) => Boolean(c.membership?.tier && String(c.membership?.status || '').toLowerCase() === 'active');
+    const cards = dataset.filter(hasActiveCard).length;
+    const nonCard = total - cards;
 
     // Find District/Division with Peak Customers
     const districtCounts = dataset.reduce((acc, c) => {
@@ -46,7 +47,7 @@ export function DistrictCustomers() {
       return acc;
     }, {});
 
-    let peakDistrict = '-';
+    let peakDistrict = total > 0 ? 'All Assigned' : '—';
     let peakCount = 0;
     Object.entries(districtCounts).forEach(([dist, count]) => {
       if (count > peakCount) {
@@ -206,7 +207,7 @@ export function DistrictCustomers() {
             {kpiStats.peakDistrict}
           </div>
           <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5 truncate">
-            {kpiStats.peakCount} customers • Peak district
+            {kpiStats.peakCount > 0 ? `${kpiStats.peakCount} customers • Peak district` : (kpiStats.total > 0 ? `${kpiStats.total} customers in jurisdiction` : '0 customers')}
           </div>
         </div>
       </div>

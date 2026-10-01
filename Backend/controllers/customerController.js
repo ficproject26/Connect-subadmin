@@ -89,25 +89,34 @@ function enrichCustomer(c, allCardholders) {
     else if (/andhra\s*pradesh/i.test(street)) state = 'Andhra Pradesh';
   }
 
-  // Find membership card
+  // Find membership card from db.cardholders or customer.membership
   const card = findCustomerCard(c, allCardholders);
   let membership = c.membership || null;
   if (card) {
     const rawTier = card.cardType || card.tier || 'Silver';
     const tier = rawTier === 'Platinum' ? 'Diamond' : rawTier;
-    // Default tier maps — used ONLY when actual DB fields are absent
+    const isExpired = card.expiryDate && new Date(card.expiryDate) < new Date();
+    const isActive = (card.status || '').toLowerCase() === 'active' && !isExpired;
+
     const discountMap = { Silver: 5, Gold: 12, Diamond: 20 };
     const pointsMap = { Silver: 500, Gold: 1200, Diamond: 2500 };
 
     membership = {
       tier,
       cardNumber: card.cardNumber,
-      status: card.status === 'active' ? 'Active' : 'Expired',
+      status: isActive ? 'Active' : (isExpired ? 'Expired' : (card.status || 'Expired')),
       validUntil: card.expiryDate || new Date(Date.now() + 365 * 86400000).toISOString(),
       issueDate: card.createdAt || new Date().toISOString(),
-      // Prefer actual stored values from DB before falling back to defaults
       discountPercent: card.discountPercent || discountMap[tier] || 10,
       points: card.points || card.rewardPoints || pointsMap[tier] || 1000
+    };
+  } else if (membership && membership.tier) {
+    const isExpired = membership.validUntil && new Date(membership.validUntil) < new Date();
+    const isActive = (membership.status || '').toLowerCase() === 'active' && !isExpired;
+    membership = {
+      ...membership,
+      tier: membership.tier === 'Platinum' ? 'Diamond' : membership.tier,
+      status: isActive ? 'Active' : (isExpired ? 'Expired' : (membership.status || 'Expired'))
     };
   }
 
@@ -129,8 +138,15 @@ function enrichCustomer(c, allCardholders) {
   };
 }
 
-function getCustomers(req, res) {
+async function getCustomers(req, res) {
   try {
+    if (db.customers && typeof db.customers.reloadFromMongo === 'function') {
+      await db.customers.reloadFromMongo();
+    }
+    if (db.cardholders && typeof db.cardholders.reloadFromMongo === 'function') {
+      await db.cardholders.reloadFromMongo();
+    }
+
     const allCardholders = Array.from(db.cardholders || []);
     const rawCustomers = Array.from(db.customers || []);
 
@@ -142,23 +158,32 @@ function getCustomers(req, res) {
 
     // Apply query filters
     const { search, tier, status, pincode } = req.query;
-    if (search) {
-      const q = search.toLowerCase();
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
       scoped = scoped.filter(c => 
         (c.name && c.name.toLowerCase().includes(q)) || 
         (c.email && c.email.toLowerCase().includes(q)) || 
         (c.phone && c.phone.includes(q)) ||
         (c.pincode && c.pincode.includes(q)) ||
         (c.district && c.district.toLowerCase().includes(q)) ||
+        (c.division && c.division.toLowerCase().includes(q)) ||
         (c.fullAddress && c.fullAddress.toLowerCase().includes(q)) ||
         (c.membership && c.membership.cardNumber && c.membership.cardNumber.toLowerCase().includes(q))
       );
     }
-    if (tier) {
-      if (tier.toLowerCase() === 'customers' || tier.toLowerCase() === 'none' || tier.toLowerCase() === 'no card') {
-        scoped = scoped.filter(c => !c.membership || !c.membership.tier);
+    if (tier && tier.trim()) {
+      const tLow = tier.trim().toLowerCase();
+      if (['customer', 'customers', 'none', 'no card', 'no_card', 'nocard', 'without card'].includes(tLow)) {
+        // Show ONLY customers who do NOT have a valid ACTIVE membership card
+        scoped = scoped.filter(c => !c.membership || c.membership.status !== 'Active' || !c.membership.tier);
+      } else if (tLow === 'diamond' || tLow === 'platinum') {
+        scoped = scoped.filter(c => c.membership && c.membership.status === 'Active' && 
+          (c.membership.tier?.toLowerCase() === 'diamond' || c.membership.tier?.toLowerCase() === 'platinum')
+        );
       } else {
-        scoped = scoped.filter(c => c.membership && c.membership.tier.toLowerCase() === tier.toLowerCase());
+        scoped = scoped.filter(c => c.membership && c.membership.status === 'Active' && 
+          c.membership.tier?.toLowerCase() === tLow
+        );
       }
     }
     if (status) {
@@ -174,8 +199,15 @@ function getCustomers(req, res) {
   }
 }
 
-function getMembershipCards(req, res) {
+async function getMembershipCards(req, res) {
   try {
+    if (db.cardholders && typeof db.cardholders.reloadFromMongo === 'function') {
+      await db.cardholders.reloadFromMongo();
+    }
+    if (db.customers && typeof db.customers.reloadFromMongo === 'function') {
+      await db.customers.reloadFromMongo();
+    }
+
     const rawCardholders = Array.from(db.cardholders || []);
     const rawCustomers = Array.from(db.customers || []);
 

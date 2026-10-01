@@ -40,14 +40,15 @@ export function PincodeCustomers() {
   const kpiStats = useMemo(() => {
     const dataset = allCustomers.length > 0 ? allCustomers : customers;
     const total = dataset.length;
-    const nonCard = dataset.filter(c => !c.membership?.tier).length;
-    const cards = dataset.filter(c => c.membership?.tier).length;
+    const hasActiveCard = (c) => Boolean(c.membership?.tier && String(c.membership?.status || '').toLowerCase() === 'active');
+    const cards = dataset.filter(hasActiveCard).length;
+    const nonCard = total - cards;
 
     return {
       total,
       nonCard,
       cards,
-      activeArea: areaName
+      activeArea: areaName || 'Pincode Zone'
     };
   }, [allCustomers, customers, areaName]);
 
@@ -181,10 +182,11 @@ export function PincodeCustomers() {
         loading={loading}
         onRefresh={loadData}
         filterOptions={[
-          { label: 'All Tiers', value: '' },
+          { label: 'All Customers', value: '' },
           { label: 'Diamond Card', value: 'Diamond' },
           { label: 'Gold Card', value: 'Gold' },
           { label: 'Silver Card', value: 'Silver' },
+          { label: 'Customer (No Card)', value: 'Customer' },
         ]}
         activeFilter={tierFilter}
         onFilterChange={setTierFilter}

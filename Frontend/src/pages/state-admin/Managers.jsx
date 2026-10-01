@@ -48,6 +48,13 @@ import {
   Lock
 } from 'lucide-react';
 import { ALL_INDIAN_STATES, getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/indiaPostalData';
+import {
+  validateBankDetails,
+  validateAddressDetails,
+  cleanAccountNumber,
+  cleanIFSC,
+  cleanPincode
+} from '../../utils/formValidation';
 
 const STEPS = [
   { id: 1, label: 'Personal',   icon: User },
@@ -511,12 +518,14 @@ export function StateManagers({ level }) {
   const handleAddSubmit = async () => {
     setAddError('');
     setAddSuccess('');
-    if (!form.fullName.trim()) return setAddError('Full name is required.');
-    if (!form.email.trim()) return setAddError('Email address is required.');
-    if (!form.mobile.trim()) return setAddError('Mobile number is required.');
-    if (!form.loginId.trim()) return setAddError('Login ID / Username is required.');
-    if (form.password.length < 6) return setAddError('Password must be at least 6 characters.');
-    if (form.password !== form.confirmPassword) return setAddError('Passwords do not match.');
+    for (let s = 1; s <= 6; s++) {
+      const err = validateStep(s);
+      if (err) {
+        setAddError(err);
+        setCurrentStep(s);
+        return;
+      }
+    }
 
     setAddLoading(true);
     try {
@@ -640,6 +649,15 @@ export function StateManagers({ level }) {
       if (activeRole === 'division_manager' && (!(form.assignedState || user?.state) || !(form.assignedDistrict || user?.district) || !(form.assignedDivision || user?.division))) return 'Please assign Division jurisdiction.';
       if (activeRole === 'pincode_manager' && !(form.assignedPincode || user?.pincode)) return 'Please assign Pincode jurisdiction.';
       return null;
+    }
+    if (step === 3) {
+      return validateAddressDetails(form, { requiresDistrict: false });
+    }
+    if (step === 4) {
+      return null;
+    }
+    if (step === 5) {
+      return validateBankDetails(form);
     }
     if (step === 6) {
       if (!form.loginId.trim()) return 'Please enter a Login ID.';
@@ -1082,7 +1100,7 @@ export function StateManagers({ level }) {
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <FieldInput label="Door No / Street">
+              <FieldInput label="Door No / Street" required>
                 <input
                   type="text"
                   className={inputCls}
@@ -1092,7 +1110,7 @@ export function StateManagers({ level }) {
                 />
               </FieldInput>
             </div>
-            <FieldInput label="Area / Locality">
+            <FieldInput label="Village / Area / Locality" required>
               <input
                 type="text"
                 className={inputCls}
@@ -1110,7 +1128,7 @@ export function StateManagers({ level }) {
                 onChange={(e) => setF({ city: e.target.value })}
               />
             </FieldInput>
-            <FieldInput label="District">
+            <FieldInput label="District" required>
               <input
                 type="text"
                 className={inputCls}
@@ -1119,7 +1137,7 @@ export function StateManagers({ level }) {
                 onChange={(e) => setF({ district: e.target.value })}
               />
             </FieldInput>
-            <FieldInput label="State">
+            <FieldInput label="State" required>
               <input
                 type="text"
                 className={inputCls}
@@ -1128,15 +1146,21 @@ export function StateManagers({ level }) {
                 onChange={(e) => setF({ state: e.target.value })}
               />
             </FieldInput>
-            <FieldInput label="Pincode">
+            <FieldInput label="Pincode" required>
               <input
                 type="text"
                 className={inputCls}
                 placeholder="e.g. 636001"
                 maxLength={6}
                 value={form.pincode}
-                onChange={(e) => setF({ pincode: e.target.value.replace(/\D/g, '') })}
+                onChange={(e) => setF({ pincode: cleanPincode(e.target.value) })}
               />
+              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                <span>Exact 6 digits</span>
+                {form.pincode && form.pincode.length === 6 && (
+                  <span className="text-emerald-500 font-semibold">Valid 6-digit Pincode</span>
+                )}
+              </div>
             </FieldInput>
           </div>
         );
@@ -1208,7 +1232,7 @@ export function StateManagers({ level }) {
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <FieldInput label="Account Holder Name">
+              <FieldInput label="Account Holder Name" required>
                 <input
                   type="text"
                   className={inputCls}
@@ -1218,7 +1242,7 @@ export function StateManagers({ level }) {
                 />
               </FieldInput>
             </div>
-            <FieldInput label="Bank Name">
+            <FieldInput label="Bank Name" required>
               <input
                 type="text"
                 className={inputCls}
@@ -1227,26 +1251,39 @@ export function StateManagers({ level }) {
                 onChange={(e) => setF({ bankName: e.target.value })}
               />
             </FieldInput>
-            <FieldInput label="Account Number">
+            <FieldInput label="Account Number" required>
               <input
                 type="text"
                 className={inputCls}
-                placeholder="e.g. 123456789012"
+                placeholder="9-18 digits"
+                maxLength={18}
                 value={form.accountNumber}
-                onChange={(e) => setF({ accountNumber: e.target.value })}
+                onChange={(e) => setF({ accountNumber: cleanAccountNumber(e.target.value) })}
               />
+              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                <span>Digits only (9–18 digits)</span>
+                {form.accountNumber && form.accountNumber.length >= 9 && form.accountNumber.length <= 18 && (
+                  <span className="text-emerald-500 font-semibold">Valid length</span>
+                )}
+              </div>
             </FieldInput>
-            <FieldInput label="IFSC Code">
+            <FieldInput label="IFSC Code" required>
               <input
                 type="text"
                 className={inputCls}
                 placeholder="e.g. SBIN0001234"
                 maxLength={11}
                 value={form.ifscCode}
-                onChange={(e) => setF({ ifscCode: e.target.value.toUpperCase() })}
+                onChange={(e) => setF({ ifscCode: cleanIFSC(e.target.value) })}
               />
+              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                <span>Format: 4 letters + 0 + 6 alphanumeric</span>
+                {form.ifscCode && /^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifscCode) && (
+                  <span className="text-emerald-500 font-semibold">Valid IFSC</span>
+                )}
+              </div>
             </FieldInput>
-            <FieldInput label="Branch Name">
+            <FieldInput label="Branch Name" required>
               <input
                 type="text"
                 className={inputCls}
@@ -2435,7 +2472,7 @@ export function StateManagers({ level }) {
       >
         <div className="space-y-5">
           {/* Step Indicator */}
-          <div className="flex items-center justify-between border-b pb-3 dark:border-slate-700">
+          <div className="flex items-center justify-between border-b pb-3 dark:border-slate-700 overflow-x-auto scrollbar-none gap-1">
             {STEPS.map((step) => {
               const StepIcon = step.icon;
               const isDone = currentStep > step.id;

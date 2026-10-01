@@ -7,6 +7,7 @@ const {
   getPincodesForDivision,
   ALL_INDIAN_STATES
 } = require('../data/indiaPostalData');
+const { validateBankAndAddress } = require('../utils/validation');
 
 // Explicit Sub-Admin capacity limits per jurisdiction
 const SUB_ADMIN_LIMITS = {
@@ -180,6 +181,11 @@ async function addStateAdmin(req, res) {
 
     if (!adminName || !email || !stateName) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Assigned State are required.' });
+    }
+
+    const valErr = validateBankAndAddress(req.body);
+    if (valErr) {
+      return res.status(400).json({ success: false, message: valErr });
     }
 
     if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
@@ -656,6 +662,11 @@ async function addDistrictAdmin(req, res) {
 
     if (!adminName || !email || !districtName) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Assigned District are required.' });
+    }
+
+    const valErr = validateBankAndAddress(req.body, { requiresDistrict: true });
+    if (valErr) {
+      return res.status(400).json({ success: false, message: valErr });
     }
 
     if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
@@ -1142,6 +1153,11 @@ async function addDivisionAdmin(req, res) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Division Name are required.' });
     }
 
+    const valErr = validateBankAndAddress(req.body, { requiresDistrict: true, requiresDivision: true });
+    if (valErr) {
+      return res.status(400).json({ success: false, message: valErr });
+    }
+
     if (phone && !/^[6-9]\d{9}$/.test(phone.trim())) {
       return res.status(400).json({ success: false, message: 'Phone number must be a 10-digit number starting with 6, 7, 8, or 9.' });
     }
@@ -1525,6 +1541,11 @@ async function addPincodeAdmin(req, res) {
     }
     if (!adminName || !email || !pincode) {
       return res.status(400).json({ success: false, message: 'Admin name, Email, and Assigned Pincode are required.' });
+    }
+
+    const valErr = validateBankAndAddress(req.body, { requiresDistrict: true, requiresDivision: true });
+    if (valErr) {
+      return res.status(400).json({ success: false, message: valErr });
     }
 
     const callerRole = (req.user?.role || '').toLowerCase();

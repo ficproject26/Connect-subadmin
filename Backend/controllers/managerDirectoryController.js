@@ -1,5 +1,6 @@
 const { db } = require('../config/db');
 const bcrypt = require('bcryptjs');
+const { validateBankAndAddress } = require('../utils/validation');
 
 // Format human-readable role labels
 const formatRoleTitle = (role) => {
@@ -727,6 +728,14 @@ const addManager = async (req, res) => {
     if (!mgrName) return res.status(400).json({ success: false, message: 'Manager name is required.' });
     if (!mgrEmail) return res.status(400).json({ success: false, message: 'Email address is required.' });
     if (!mgrMobile) return res.status(400).json({ success: false, message: 'Mobile number is required.' });
+
+    const valErr = validateBankAndAddress(req.body, {
+      requiresDistrict: ['district_manager', 'division_manager', 'pincode_manager'].includes(mgrRole),
+      requiresDivision: ['division_manager', 'pincode_manager'].includes(mgrRole)
+    });
+    if (valErr) {
+      return res.status(400).json({ success: false, message: valErr });
+    }
 
     // Check duplicate in users
     const allUsers = Array.from(db.users);

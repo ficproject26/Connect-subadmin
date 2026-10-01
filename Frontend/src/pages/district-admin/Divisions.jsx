@@ -42,6 +42,13 @@ import {
 } from 'lucide-react';
 import { extractTerritoryName, safeString, safeLowerCase } from '../../utils/territoryHelper';
 import { getDivisionsForDistrict, syncTerritoryFromAdmin } from '../../utils/indiaPostalData';
+import {
+  validateBankDetails,
+  validateAddressDetails,
+  cleanAccountNumber,
+  cleanIFSC,
+  cleanPincode
+} from '../../utils/formValidation';
 
 const STEPS = [
   { id: 1, label: 'Personal',   icon: User },
@@ -313,11 +320,11 @@ export function DistrictDivisions() {
         if (form.dob && !is18Plus(form.dob)) return 'Date of Birth must be 18+ years ago (Admin must be at least 18 years old).';
         return null;
       case 2:
-        return null;
+        return validateAddressDetails(form, { requiresDistrict: true });
       case 3:
         return null;
       case 4:
-        return null;
+        return validateBankDetails(form);
       case 5:
         if (!form.divisionName.trim()) return 'Please enter the Division Name.';
         return null;
@@ -337,13 +344,13 @@ export function DistrictDivisions() {
 
   const handleSubmit = async () => {
     setAddError('');
-    if (!form.fullName.trim() || !form.email.trim() || !form.divisionName.trim()) {
-      setAddError('Full name, email, and division name are required.');
-      return;
-    }
-    if (form.password && form.password !== form.confirmPassword) {
-      setAddError('Passwords do not match.');
-      return;
+    for (let s = 1; s <= 6; s++) {
+      const err = validateStep(s);
+      if (err) {
+        setAddError(err);
+        setCurrentStep(s);
+        return;
+      }
     }
 
     setAddLoading(true);
@@ -479,12 +486,12 @@ export function DistrictDivisions() {
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <FieldInput label="Door No / Street">
+              <FieldInput label="Door No / Street" required>
                 <input type="text" className={inputCls} placeholder="e.g. 15, Gandhi Road"
                   value={form.doorStreet} onChange={e => setF({ doorStreet: e.target.value })} />
               </FieldInput>
             </div>
-            <FieldInput label="Area">
+            <FieldInput label="Village / Area / Locality" required>
               <input type="text" className={inputCls} placeholder="e.g. Rayakottai Road"
                 value={form.area} onChange={e => setF({ area: e.target.value })} />
             </FieldInput>
@@ -492,17 +499,23 @@ export function DistrictDivisions() {
               <input type="text" className={inputCls} placeholder="e.g. Hosur"
                 value={form.city} onChange={e => setF({ city: e.target.value })} />
             </FieldInput>
-            <FieldInput label="District">
+            <FieldInput label="District" required>
               <input type="text" className={inputCls} placeholder="e.g. Krishnagiri"
                 value={form.district} onChange={e => setF({ district: e.target.value })} />
             </FieldInput>
-            <FieldInput label="State">
+            <FieldInput label="State" required>
               <input type="text" className={inputCls} placeholder="e.g. Tamil Nadu"
                 value={form.state} onChange={e => setF({ state: e.target.value })} />
             </FieldInput>
-            <FieldInput label="Pincode">
-              <input type="text" className={inputCls} placeholder="e.g. 635109"
-                value={form.pincode} onChange={e => setF({ pincode: e.target.value })} />
+            <FieldInput label="Pincode" required>
+              <input type="text" className={inputCls} placeholder="6-digit PIN (e.g. 635109)" maxLength={6}
+                value={form.pincode} onChange={e => setF({ pincode: cleanPincode(e.target.value) })} />
+              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                <span>Exact 6 digits</span>
+                {form.pincode && form.pincode.length === 6 && (
+                  <span className="text-emerald-500 font-semibold">Valid 6-digit Pincode</span>
+                )}
+              </div>
             </FieldInput>
           </div>
         );
@@ -595,24 +608,36 @@ export function DistrictDivisions() {
         return (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <FieldInput label="Account Holder Name">
+              <FieldInput label="Account Holder Name" required>
                 <input type="text" className={inputCls} placeholder="e.g. Rajesh Kannan"
                   value={form.accountHolderName} onChange={e => setF({ accountHolderName: e.target.value })} />
               </FieldInput>
             </div>
-            <FieldInput label="Bank Name">
+            <FieldInput label="Bank Name" required>
               <input type="text" className={inputCls} placeholder="e.g. State Bank of India"
                 value={form.bankName} onChange={e => setF({ bankName: e.target.value })} />
             </FieldInput>
-            <FieldInput label="Account Number">
-              <input type="text" className={inputCls} placeholder="e.g. 987654321098"
-                value={form.accountNumber} onChange={e => setF({ accountNumber: e.target.value })} />
+            <FieldInput label="Account Number" required>
+              <input type="text" className={inputCls} placeholder="9-18 digits" maxLength={18}
+                value={form.accountNumber} onChange={e => setF({ accountNumber: cleanAccountNumber(e.target.value) })} />
+              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                <span>Digits only (9–18 digits)</span>
+                {form.accountNumber && form.accountNumber.length >= 9 && form.accountNumber.length <= 18 && (
+                  <span className="text-emerald-500 font-semibold">Valid length</span>
+                )}
+              </div>
             </FieldInput>
-            <FieldInput label="IFSC Code">
-              <input type="text" className={inputCls} placeholder="e.g. SBIN0001235"
-                value={form.ifscCode} onChange={e => setF({ ifscCode: e.target.value.toUpperCase() })} />
+            <FieldInput label="IFSC Code" required>
+              <input type="text" className={inputCls} placeholder="e.g. SBIN0001235" maxLength={11}
+                value={form.ifscCode} onChange={e => setF({ ifscCode: cleanIFSC(e.target.value) })} />
+              <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                <span>Format: 4 letters + 0 + 6 alphanumeric</span>
+                {form.ifscCode && /^[A-Z]{4}0[A-Z0-9]{6}$/.test(form.ifscCode) && (
+                  <span className="text-emerald-500 font-semibold">Valid IFSC</span>
+                )}
+              </div>
             </FieldInput>
-            <FieldInput label="Branch Name">
+            <FieldInput label="Branch Name" required>
               <input type="text" className={inputCls} placeholder="e.g. Hosur Main"
                 value={form.branchName} onChange={e => setF({ branchName: e.target.value })} />
             </FieldInput>
@@ -1290,7 +1315,7 @@ export function DistrictDivisions() {
         ) : (
           <div className="space-y-5">
             {/* Step Indicator */}
-            <div className="flex items-center gap-0">
+            <div className="flex items-center gap-0 overflow-x-auto pb-2 scrollbar-none">
               {STEPS.map((step, idx) => {
                 const Icon = step.icon;
                 const done = currentStep > step.id;

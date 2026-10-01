@@ -49,8 +49,9 @@ export function DivisionalCustomers() {
   const kpiStats = useMemo(() => {
     const dataset = allCustomers.length > 0 ? allCustomers : customers;
     const total = dataset.length;
-    const nonCard = dataset.filter(c => !c.membership?.tier).length;
-    const cards = dataset.filter(c => c.membership?.tier).length;
+    const hasActiveCard = (c) => Boolean(c.membership?.tier && String(c.membership?.status || '').toLowerCase() === 'active');
+    const cards = dataset.filter(hasActiveCard).length;
+    const nonCard = total - cards;
 
     const pinCounts = dataset.reduce((acc, c) => {
       const pin = String(c.pincode || '');
@@ -58,7 +59,7 @@ export function DivisionalCustomers() {
       return acc;
     }, {});
 
-    let peakPin = '-';
+    let peakPin = total > 0 ? 'All Assigned' : '—';
     let peakCount = 0;
     Object.entries(pinCounts).forEach(([pin, count]) => {
       if (count > peakCount) {
@@ -202,10 +203,10 @@ export function DivisionalCustomers() {
             <TrendingUp className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5 truncate">
-            PIN: {kpiStats.peakPin}
+            {kpiStats.peakPin && kpiStats.peakPin !== '—' && kpiStats.peakPin !== 'All Assigned' ? `PIN: ${kpiStats.peakPin}` : kpiStats.peakPin}
           </div>
           <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5 truncate">
-            {kpiStats.peakCount} customers &bull; Peak zone
+            {kpiStats.peakCount > 0 ? `${kpiStats.peakCount} customers • Peak zone` : (kpiStats.total > 0 ? `${kpiStats.total} customers in jurisdiction` : '0 customers')}
           </div>
         </div>
       </div>

@@ -124,9 +124,9 @@ export function DataTable({
       ) : (
         <div className={`p-3.5 sm:p-4 lg:px-5 lg:py-4 border-b ${
           isDark ? 'border-slate-800 bg-slate-900/30' : 'border-slate-200/80 bg-slate-50/50'
-        } flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 transition-colors`}>
+        } flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 transition-colors`}>
           {/* Title & Subtitle */}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 max-w-full">
             {title && (
               <h3 className={`text-sm sm:text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'} truncate`}>
                 {title}
@@ -140,7 +140,7 @@ export function DataTable({
           </div>
 
           {/* Controls Bar: Search, Filters, View Toggle, Export, Refresh */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full lg:w-auto shrink-0 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto">
             {/* Search Input */}
             <SearchBar
               value={search}
@@ -149,11 +149,11 @@ export function DataTable({
                 setCurrentPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="w-full sm:w-60 md:w-64 lg:w-56 xl:w-72"
+              className="w-full sm:w-60 md:w-64 lg:w-56 xl:w-64"
             />
 
             {/* Actions group */}
-            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               {typeof customFilters === 'function'
                 ? customFilters({ isDark })
                 : customFilters}
@@ -286,7 +286,7 @@ export function DataTable({
           className={`w-full max-w-full overflow-x-auto ${containerClassName || ''}`}
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          <table className={`w-full text-left text-xs ${isDark ? 'text-slate-300' : 'text-slate-800'} ${tableClassName || ''}`}>
+          <table className={`w-full min-w-[640px] text-left text-xs ${isDark ? 'text-slate-300' : 'text-slate-800'} ${tableClassName || ''}`}>
             <thead className={`${
               isDark ? 'bg-slate-950/60 text-slate-400 border-slate-800' : 'bg-slate-50 text-slate-600 border-slate-200'
             } uppercase tracking-wider text-[11px] border-b transition-colors`}>

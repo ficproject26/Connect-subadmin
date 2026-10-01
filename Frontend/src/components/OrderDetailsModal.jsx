@@ -163,13 +163,22 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
     (order.membershipTier.charAt(0).toUpperCase() + order.membershipTier.slice(1).toLowerCase()) : null;
 
   // Real vendor details from database
-  const vendorName = order.vendorBusinessName || order.vendorName || 'Not provided';
-  const vendorId = order.vendorId && order.vendorId !== '-' ? order.vendorId : 'Not provided';
-  const vendorCategory = order.vendorCategory && order.vendorCategory !== '-' ? order.vendorCategory : 'Not provided';
-  const vendorContact = order.vendorContact && order.vendorContact !== '-' ? order.vendorContact : (order.vendorPhone || 'Not provided');
-  const vendorPhone = order.vendorPhone && order.vendorPhone !== '-' ? order.vendorPhone : 'Not provided';
-  const vendorEmail = order.vendorEmail && order.vendorEmail !== '-' ? order.vendorEmail : 'Not provided';
-  const vendorLocation = order.vendorLocation && order.vendorLocation !== '-' ? order.vendorLocation : (order.district ? `${order.district}${order.division ? `, ${order.division}` : ''}` : 'Not provided');
+  const hasVendorRef = Boolean(order.vendorId && order.vendorId !== '-' && order.vendorId !== 'Unassigned');
+  const businessName = order.vendorBusinessName || order.vendorName || '';
+  const vendorOwnerName = order.vendorName && order.vendorName !== businessName ? order.vendorName : '';
+  const isVendorDataAvailable = Boolean(businessName && businessName !== 'Unassigned' && businessName !== '-');
+  
+  const displayVendorTitle = isVendorDataAvailable 
+    ? businessName 
+    : (hasVendorRef ? 'Vendor information unavailable' : 'Unassigned');
+
+  const vendorId = hasVendorRef ? order.vendorId : 'Not provided';
+  const vendorCategory = order.vendorCategory && order.vendorCategory !== '-' ? order.vendorCategory : null;
+  const vendorPhone = order.vendorPhone || order.vendorContact;
+  const hasVendorContact = vendorPhone && vendorPhone !== '-' && vendorPhone !== 'Not provided';
+  const vendorEmail = order.vendorEmail && order.vendorEmail !== '-' && order.vendorEmail !== 'Not provided' ? order.vendorEmail : null;
+  const vendorLocation = order.vendorLocation && order.vendorLocation !== '-' ? order.vendorLocation : (order.vendorAddress || '');
+  const vendorPincode = order.vendorPincode || (vendorLocation ? (vendorLocation.match(/\b\d{6}\b/) || [])[0] : null);
 
   return (
     <Modal
@@ -249,28 +258,40 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
               </div>
 
               <div>
-                <div className="font-bold text-sm text-navy dark:text-white">
-                  {vendorName}
+                <div className="font-bold text-sm text-navy dark:text-white flex items-center gap-2">
+                  <span>{displayVendorTitle}</span>
+                  {vendorCategory && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      {vendorCategory}
+                    </span>
+                  )}
                 </div>
-                {vendorCategory && vendorCategory !== 'Not provided' && (
-                  <div className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                    Category: {vendorCategory}
+                {vendorOwnerName && (
+                  <div className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                    Owner: {vendorOwnerName}
                   </div>
                 )}
-                <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
-                  <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
-                  <span>{vendorLocation}</span>
-                </div>
-              </div>
-
-              <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5 pt-0.5">
-                <div className="flex items-center gap-1.5">
-                  <User className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span>Contact: <span className="font-medium text-navy-secondary dark:text-slate-200">{vendorContact}</span></span>
-                </div>
-                {vendorEmail !== 'Not provided' && (
-                  <div className="text-[11px] text-slate-400 font-mono truncate">
+                {hasVendorContact && (
+                  <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300 flex items-center gap-1 mt-0.5">
+                    <Phone className="w-3 h-3 text-slate-400" />
+                    <span>Contact: {vendorPhone}</span>
+                  </div>
+                )}
+                {vendorEmail && (
+                  <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
                     Email: {vendorEmail}
+                  </div>
+                )}
+                {(vendorLocation || vendorPincode) && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>{vendorLocation || 'Location recorded'}</span>
+                    {vendorPincode && (
+                      <>
+                        <span>•</span>
+                        <span className="font-mono">PIN: {vendorPincode}</span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
