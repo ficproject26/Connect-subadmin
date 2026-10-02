@@ -455,6 +455,8 @@ const getVendors = async (req, res) => {
       pagedVendors = filtered.slice(startIndex, startIndex + pageSize);
     }
 
+    const totalPages = Math.ceil(totalVendors / (pageSize || 1)) || 1;
+
     // Populate vendors using fast O(1) pre-indexed context
     const lookupCtx = buildVendorLookupContext();
     const populated = pagedVendors.map(v => populateVendorLocations(v, lookupCtx));
