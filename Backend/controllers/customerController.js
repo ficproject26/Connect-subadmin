@@ -25,9 +25,45 @@ const PIN_MAP = {
 };
 
 /**
- * Find customer's active membership card from db.cardholders
+ * Build fast O(1) hash maps for cardholders to avoid O(N*M) linear scans
  */
-function findCustomerCard(customer, allCardholders) {
+function buildCardholderIndices(allCardholders) {
+  const phoneMap = new Map();
+  const emailMap = new Map();
+  const idMap = new Map();
+
+  if (allCardholders && allCardholders.length > 0) {
+    for (const ch of allCardholders) {
+      if (!ch.cardNumber) continue;
+      if (ch.phone) phoneMap.set(String(ch.phone).trim(), ch);
+      if (ch.email) emailMap.set(String(ch.email).trim().toLowerCase(), ch);
+      if (ch.customerId) idMap.set(String(ch.customerId).trim(), ch);
+    }
+  }
+  return { phoneMap, emailMap, idMap };
+}
+
+/**
+ * Find customer's active membership card from pre-indexed cardholders
+ */
+function findCustomerCard(customer, indicesOrArray) {
+  if (!customer) return null;
+  // If passed indices object
+  if (indicesOrArray && indicesOrArray.phoneMap) {
+    const cPhone = String(customer.phone || '').trim();
+    if (cPhone && indicesOrArray.phoneMap.has(cPhone)) return indicesOrArray.phoneMap.get(cPhone);
+
+    const cEmail = String(customer.email || '').trim().toLowerCase();
+    if (cEmail && indicesOrArray.emailMap.has(cEmail)) return indicesOrArray.emailMap.get(cEmail);
+
+    const cId = String(customer.id || customer._id || customer.customerId || '').trim();
+    if (cId && indicesOrArray.idMap.has(cId)) return indicesOrArray.idMap.get(cId);
+
+    return null;
+  }
+
+  // Fallback if raw array passed
+  const allCardholders = indicesOrArray;
   if (!allCardholders || allCardholders.length === 0) return null;
   const cPhone = String(customer.phone || '').trim();
   const cEmail = String(customer.email || '').trim().toLowerCase();
@@ -45,7 +81,7 @@ function findCustomerCard(customer, allCardholders) {
 /**
  * Enrich customer record with resolved geographical coordinates and membership
  */
-function enrichCustomer(c, allCardholders) {
+function enrichCustomer(c, indicesOrArray) {
   const addr0 = (c.addresses && c.addresses[0]) || {};
   const rawPin = String(c.pincode || addr0.pincode || '').trim();
   const geo = PIN_MAP[rawPin] || {};
@@ -89,8 +125,8 @@ function enrichCustomer(c, allCardholders) {
     else if (/andhra\s*pradesh/i.test(street)) state = 'Andhra Pradesh';
   }
 
-  // Find membership card from db.cardholders or customer.membership
-  const card = findCustomerCard(c, allCardholders);
+  // Find membership card from indices or array
+  const card = findCustomerCard(c, indicesOrArray);
   let membership = c.membership || null;
   if (card) {
     const rawTier = card.cardType || card.tier || 'Silver';
@@ -140,24 +176,20 @@ function enrichCustomer(c, allCardholders) {
 
 async function getCustomers(req, res) {
   try {
-    if (db.customers && typeof db.customers.reloadFromMongo === 'function') {
-      await db.customers.reloadFromMongo();
-    }
-    if (db.cardholders && typeof db.cardholders.reloadFromMongo === 'function') {
-      await db.cardholders.reloadFromMongo();
-    }
-
     const allCardholders = Array.from(db.cardholders || []);
     const rawCustomers = Array.from(db.customers || []);
 
+    // Build O(1) indices for fast cardholder lookups
+    const cardholderIndices = buildCardholderIndices(allCardholders);
+
     // Enrich all customers with verified coordinates & membership tier
-    const enriched = rawCustomers.map(c => enrichCustomer(c, allCardholders));
+    const enriched = rawCustomers.map(c => enrichCustomer(c, cardholderIndices));
 
     // Apply strict location filtering
     let scoped = filterByLocation(enriched, req.user);
 
     // Apply query filters
-    const { search, tier, status, pincode } = req.query;
+    const { search, tier, status, pincode, page, limit } = req.query;
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
       scoped = scoped.filter(c => 
@@ -193,7 +225,33 @@ async function getCustomers(req, res) {
       scoped = scoped.filter(c => c.pincode === pincode);
     }
 
-    return res.json({ success: true, count: scoped.length, customers: scoped });
+    const total = scoped.length;
+    let pagedCustomers = scoped;
+    let currentPage = 1;
+    let pageSize = total;
+
+    if (page || limit) {
+      currentPage = parseInt(page, 10) || 1;
+      pageSize = parseInt(limit, 10) || 20;
+      const startIndex = (currentPage - 1) * pageSize;
+      pagedCustomers = scoped.slice(startIndex, startIndex + pageSize);
+    }
+
+    const totalPages = Math.ceil(total / (pageSize || 1)) || 1;
+
+    return res.json({
+      success: true,
+      count: pagedCustomers.length,
+      total,
+      customers: pagedCustomers,
+      data: pagedCustomers,
+      pagination: {
+        page: currentPage,
+        limit: pageSize,
+        total,
+        totalPages
+      }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch customers', error: error.message });
   }
@@ -201,24 +259,38 @@ async function getCustomers(req, res) {
 
 async function getMembershipCards(req, res) {
   try {
-    if (db.cardholders && typeof db.cardholders.reloadFromMongo === 'function') {
-      await db.cardholders.reloadFromMongo();
-    }
-    if (db.customers && typeof db.customers.reloadFromMongo === 'function') {
-      await db.customers.reloadFromMongo();
-    }
-
     const rawCardholders = Array.from(db.cardholders || []);
     const rawCustomers = Array.from(db.customers || []);
+
+    // Build O(1) Customer lookup maps
+    const custPhoneMap = new Map();
+    const custEmailMap = new Map();
+    const custNameMap = new Map();
+    for (const c of rawCustomers) {
+      if (c.phone) custPhoneMap.set(String(c.phone).trim(), c);
+      if (c.email) custEmailMap.set(String(c.email).trim().toLowerCase(), c);
+      if (c.name && c.name !== 'Customer Member') custNameMap.set(String(c.name).trim().toLowerCase(), c);
+    }
+
+    // Build O(1) Cardholder matching sets
+    const cardholderPhones = new Set();
+    const cardholderEmails = new Set();
+    const cardholderNames = new Set();
 
     const allCards = rawCardholders
       .filter(ch => ch.cardNumber && ch.cardNumber.startsWith('FIC-'))
       .map(ch => {
-        const cust = rawCustomers.find(c => 
-          (ch.phone && c.phone === ch.phone) || 
-          (ch.email && c.email && c.email.toLowerCase() === ch.email.toLowerCase()) ||
-          (ch.name && c.name && ch.name.toLowerCase() === c.name.toLowerCase() && ch.name !== 'Customer Member')
-        );
+        const chPhone = ch.phone ? String(ch.phone).trim() : '';
+        const chEmail = ch.email ? String(ch.email).trim().toLowerCase() : '';
+        const chName = ch.name ? String(ch.name).trim().toLowerCase() : '';
+
+        if (chPhone) cardholderPhones.add(chPhone);
+        if (chEmail) cardholderEmails.add(chEmail);
+        if (chName && chName !== 'customer member') cardholderNames.add(chName);
+
+        const cust = (chPhone && custPhoneMap.get(chPhone)) ||
+                     (chEmail && custEmailMap.get(chEmail)) ||
+                     (chName && custNameMap.get(chName)) || null;
 
         const rawPin = String(ch.pincode || (cust && cust.pincode) || '').trim();
         const geo = PIN_MAP[rawPin] || {};
@@ -275,13 +347,12 @@ async function getMembershipCards(req, res) {
     // Also include real customers without active card
     const customersWithoutCard = rawCustomers
       .filter(cust => {
-        const hasCard = rawCardholders.some(ch => 
-          ch.cardNumber && ch.cardNumber.startsWith('FIC-') && (
-            (ch.phone && cust.phone && ch.phone === cust.phone) ||
-            (ch.email && cust.email && ch.email.toLowerCase() === cust.email.toLowerCase()) ||
-            (ch.name && cust.name && ch.name.toLowerCase() === cust.name.toLowerCase() && ch.name !== 'Customer Member')
-          )
-        );
+        const cPhone = cust.phone ? String(cust.phone).trim() : '';
+        const cEmail = cust.email ? String(cust.email).trim().toLowerCase() : '';
+        const cName = cust.name ? String(cust.name).trim().toLowerCase() : '';
+        const hasCard = (cPhone && cardholderPhones.has(cPhone)) ||
+                        (cEmail && cardholderEmails.has(cEmail)) ||
+                        (cName && cardholderNames.has(cName));
         return !hasCard;
       })
       .map(cust => {

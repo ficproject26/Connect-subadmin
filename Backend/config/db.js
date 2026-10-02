@@ -46,8 +46,14 @@ class Collection extends Array {
     this._isReady = true;
   }
 
-  async reloadFromMongo() {
+  async reloadFromMongo(force = false) {
     if (this._mongoCol) {
+      const now = Date.now();
+      // Throttle reloads to at most once every 60 seconds per collection to eliminate redundant network roundtrips
+      if (!force && this._lastReload && (now - this._lastReload < 60000)) {
+        return Array.from(this);
+      }
+      this._lastReload = now;
       const docs = await this._mongoCol.find({}).toArray();
       this.length = 0;
       if (docs && docs.length > 0) {
@@ -598,9 +604,18 @@ function initDatabase() {
           mongoDb.collection('users').createIndex({ role: 1, status: 1 }),
           mongoDb.collection('vendors').createIndex({ status: 1, kycStatus: 1 }),
           mongoDb.collection('vendors').createIndex({ pincode: 1 }),
+          mongoDb.collection('vendors').createIndex({ category: 1, status: 1 }),
           mongoDb.collection('orders').createIndex({ status: 1, createdAt: -1 }),
+          mongoDb.collection('orders').createIndex({ category: 1, status: 1 }),
+          mongoDb.collection('orders').createIndex({ type: 1, status: 1 }),
+          mongoDb.collection('orders').createIndex({ pincode: 1 }),
           mongoDb.collection('bookings').createIndex({ status: 1, createdAt: -1 }),
+          mongoDb.collection('bookings').createIndex({ category: 1, status: 1 }),
           mongoDb.collection('jobs').createIndex({ status: 1, createdAt: -1 }),
+          mongoDb.collection('customers').createIndex({ phone: 1, email: 1 }),
+          mongoDb.collection('cardholders').createIndex({ phone: 1, email: 1, cardNumber: 1 }),
+          mongoDb.collection('delivery_status_history').createIndex({ order_id: 1 }),
+          mongoDb.collection('delivery_status_history').createIndex({ order_number: 1 }),
           mongoDb.collection('pincodes').createIndex({ code: 1 }),
           mongoDb.collection('pincodes').createIndex({ divisionId: 1, districtId: 1 }),
           mongoDb.collection('districts').createIndex({ stateId: 1 }),

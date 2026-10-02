@@ -47,20 +47,17 @@ export function StateAdminDashboard() {
 
   useEffect(() => {
     let isMounted = true;
-    Promise.all([
-      dataService.getDashboardSummary().catch(() => null),
-      dataService.getDistricts().catch(() => null),
-      dataService.getDivisions().catch(() => null),
-      dataService.getPincodes().catch(() => null),
-      dataService.getSubordinateAdmins().catch(() => null)
-    ]).then(([summary, dstRes, divRes, pinRes, subRes]) => {
-      if (!isMounted) return;
-      if (summary?.success) setSummaryData(summary);
-      if (dstRes?.districts) setDistrictsCount(dstRes.districts.length);
-      if (divRes?.divisions) setDivisionsCount(divRes.divisions.length);
-      if (pinRes?.pincodes) setPincodesCount(pinRes.pincodes.length);
-      if (subRes?.admins) setAdminsCount(subRes.admins.length);
-    });
+    dataService.getDashboardSummary()
+      .then((summary) => {
+        if (!isMounted || !summary?.success) return;
+        setSummaryData(summary);
+        const m = summary.metrics || {};
+        if (m.totalDistricts !== undefined) setDistrictsCount(m.totalDistricts);
+        if (m.totalDivisions !== undefined) setDivisionsCount(m.totalDivisions);
+        if (m.totalPincodes !== undefined) setPincodesCount(m.totalPincodes);
+        if (m.totalAdmins !== undefined) setAdminsCount(m.totalAdmins);
+      })
+      .catch((err) => console.error('Failed to load dashboard summary:', err));
     return () => { isMounted = false; };
   }, []);
 

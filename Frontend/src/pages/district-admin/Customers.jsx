@@ -15,12 +15,17 @@ export function DistrictCustomers() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [res, allRes] = await Promise.all([
-        dataService.getCustomers({ tier: tierFilter }),
-        dataService.getCustomers({})
-      ]);
-      if (res.success) setCustomers(res.customers);
-      if (allRes.success) setAllCustomers(allRes.customers);
+      if (allCustomers.length === 0) {
+        const allRes = await dataService.getCustomers({});
+        const list = allRes.success ? (allRes.customers || []) : [];
+        setAllCustomers(list);
+        if (!tierFilter) {
+          setCustomers(list);
+          return;
+        }
+      }
+      const res = await dataService.getCustomers(tierFilter ? { tier: tierFilter } : {});
+      if (res.success) setCustomers(res.customers || []);
     } catch (e) {
       console.error(e);
     } finally {

@@ -235,19 +235,6 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
 
 async function getOrders(req, res) {
   try {
-    if (db.orders && typeof db.orders.reloadFromMongo === 'function') {
-      await db.orders.reloadFromMongo();
-    }
-    if (db.deliveryStatusHistory && typeof db.deliveryStatusHistory.reloadFromMongo === 'function') {
-      await db.deliveryStatusHistory.reloadFromMongo();
-    }
-    if (db.vendors && typeof db.vendors.reloadFromMongo === 'function') {
-      await db.vendors.reloadFromMongo();
-    }
-    if (db.users && typeof db.users.reloadFromMongo === 'function') {
-      await db.users.reloadFromMongo();
-    }
-
     const rawOrders = Array.from(db.orders || []);
     // Scope geographically according to user role
     let scoped = filterByLocation(rawOrders, req.user);
@@ -333,12 +320,34 @@ async function getOrders(req, res) {
       filtered = filtered.filter(o => (o.division || '').toLowerCase() === division.toLowerCase());
     }
 
+    const pageNum = parseInt(req.query.page, 10);
+    const limitNum = parseInt(req.query.limit, 10);
+    let pagedOrders = filtered;
+    let pagination = null;
+
+    if (!isNaN(pageNum) && !isNaN(limitNum) && limitNum > 0) {
+      const startIndex = (pageNum - 1) * limitNum;
+      pagedOrders = filtered.slice(startIndex, startIndex + limitNum);
+      pagination = {
+        page: pageNum,
+        limit: limitNum,
+        total: filtered.length,
+        totalPages: Math.ceil(filtered.length / limitNum) || 1
+      };
+    }
+
     return res.json({
       success: true,
-      count: filtered.length,
+      count: pagedOrders.length,
       total: filtered.length,
-      orders: filtered,
-      data: filtered
+      orders: pagedOrders,
+      data: pagedOrders,
+      pagination: pagination || {
+        page: 1,
+        limit: filtered.length,
+        total: filtered.length,
+        totalPages: 1
+      }
     });
   } catch (error) {
     console.error('[getOrders] Error:', error);

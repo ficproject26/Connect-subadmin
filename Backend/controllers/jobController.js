@@ -215,12 +215,34 @@ function getJobs(req, res) {
       filtered = filtered.filter(j => (j.status || '').toLowerCase() === status.toLowerCase());
     }
 
+    const pageNum = parseInt(req.query.page, 10);
+    const limitNum = parseInt(req.query.limit, 10);
+    let pagedJobs = filtered;
+    let pagination = null;
+
+    if (!isNaN(pageNum) && !isNaN(limitNum) && limitNum > 0) {
+      const startIndex = (pageNum - 1) * limitNum;
+      pagedJobs = filtered.slice(startIndex, startIndex + limitNum);
+      pagination = {
+        page: pageNum,
+        limit: limitNum,
+        total: filtered.length,
+        totalPages: Math.ceil(filtered.length / limitNum) || 1
+      };
+    }
+
     return res.json({
       success: true,
-      count: filtered.length,
+      count: pagedJobs.length,
       total: filtered.length,
-      jobs: filtered,
-      data: filtered
+      jobs: pagedJobs,
+      data: pagedJobs,
+      pagination: pagination || {
+        page: 1,
+        limit: filtered.length,
+        total: filtered.length,
+        totalPages: 1
+      }
     });
   } catch (error) {
     console.error('[getJobs] Error:', error);

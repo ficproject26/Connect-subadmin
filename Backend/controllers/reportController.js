@@ -22,7 +22,14 @@ function getDashboardSummary(req, res) {
       const isPinAdmin = u.role === 'Pincode Admin' || (u.role || '').toLowerCase().includes('pincode admin');
       return isPinAdmin && u.status === 'active';
     });
-    const scopedPincodes = filterByLocation(pinAdmins, user);
+    const scopedDistricts = filterByLocation(db.districts || [], user);
+    const scopedDivisions = filterByLocation(db.divisions || [], user);
+    const scopedPincodesList = filterByLocation(db.pincodes || [], user);
+    const subordinateAdmins = allUsers.filter(u => {
+      const isSubAdmin = (u.role || '').toLowerCase().includes('admin') && u.role !== 'Super Admin';
+      return isSubAdmin && u.status === 'active';
+    });
+    const scopedSubAdmins = filterByLocation(subordinateAdmins, user);
 
     const totalRevenue = scopedOrders.reduce((sum, o) => sum + (o.netPayable || o.totalAmount || 0), 0);
     const pendingAgentPayouts = scopedAgentPayments
@@ -77,6 +84,11 @@ function getDashboardSummary(req, res) {
         pincode: user.pincode
       },
       metrics: {
+        totalDistricts: scopedDistricts.length,
+        totalDivisions: scopedDivisions.length,
+        totalPincodes: scopedPincodesList.length || scopedPincodes.length,
+        totalAdmins: scopedSubAdmins.length,
+        totalPincodeAdmins: scopedPincodes.length,
         totalCustomers: scopedCustomers.length,
         totalVendors: scopedVendors.length,
         totalOrders: scopedOrders.length,
@@ -87,7 +99,6 @@ function getDashboardSummary(req, res) {
         totalSupportTickets: scopedSupport.length,
         totalAgents: scopedAgents.length,
         totalKYC: scopedKYC.length,
-        totalPincodes: scopedPincodes.length,
         totalRevenue,
         pendingAgentPayouts,
         pendingVendorPayouts
@@ -104,19 +115,6 @@ function getDashboardSummary(req, res) {
 async function getBusinessReports(req, res) {
   try {
     const user = req.user;
-    if (db.orders && typeof db.orders.reloadFromMongo === 'function') {
-      await db.orders.reloadFromMongo();
-    }
-    if (db.customers && typeof db.customers.reloadFromMongo === 'function') {
-      await db.customers.reloadFromMongo();
-    }
-    if (db.vendors && typeof db.vendors.reloadFromMongo === 'function') {
-      await db.vendors.reloadFromMongo();
-    }
-    if (db.bookings && typeof db.bookings.reloadFromMongo === 'function') {
-      await db.bookings.reloadFromMongo();
-    }
-
     const allScopedOrders = filterByLocation(db.orders, user);
 
     // Business Reports Orders = commerce/product only (product, daily_need, food)
@@ -141,6 +139,29 @@ async function getBusinessReports(req, res) {
     const allCustomers = Array.from(db.customers || []);
     const vendorDir = typeof getComprehensiveVendorDirectory === 'function' ? getComprehensiveVendorDirectory() : null;
 
+    // Build fast customer index maps
+    const custIdMap = new Map();
+    const custPhoneMap = new Map();
+    const custNameMap = new Map();
+    for (const c of allCustomers) {
+      if (c._id) custIdMap.set(String(c._id), c);
+      if (c.id) custIdMap.set(String(c.id), c);
+      if (c.customerId) custIdMap.set(String(c.customerId), c);
+      if (c.registrationId) custIdMap.set(String(c.registrationId), c);
+      if (c.phone) custPhoneMap.set(String(c.phone), c);
+      if (c.mobile) custPhoneMap.set(String(c.mobile), c);
+      if (c.name && c.name !== 'Customer Member' && c.name !== '-') custNameMap.set(String(c.name).toLowerCase(), c);
+      if (c.fullName && c.fullName !== 'Customer Member' && c.fullName !== '-') custNameMap.set(String(c.fullName).toLowerCase(), c);
+    }
+
+    // Build fast vendor index map
+    const vendorMap = new Map();
+    for (const v of (db.vendors || [])) {
+      if (v._id) vendorMap.set(String(v._id), v);
+      if (v.id) vendorMap.set(String(v.id), v);
+      if (v.vendorId) vendorMap.set(String(v.vendorId), v);
+    }
+
     const report = {
       generatedAt: new Date().toISOString(),
       adminScope: `${user.role} - ${user.pincode || user.division || user.district || user.state}`,
@@ -162,19 +183,15 @@ async function getBusinessReports(req, res) {
           // Resolve order number / transaction ID
           const orderNumber = o.order_number || o.orderNumber || o.orderId || o.order_id || o.transactionId || (o._id ? String(o._id).slice(-8) : '-');
 
-          // Resolve customer record from allCustomers
+          // Resolve customer record from indexed maps
           const custId = o.customer_id || o.customerId || o.customerDisplayId || (o.customer && (o.customer.id || o.customer._id));
           const custPhone = o.customer_phone || o.customerPhone || o.customerMobile || o.phone || o.mobile;
           const custName = o.customer_name || o.customerName || o.customer;
           let customer = null;
-          if (custId) {
-            customer = allCustomers.find(c => String(c._id || c.id || c.customerId || c.registrationId) === String(custId));
-          }
-          if (!customer && custPhone) {
-            customer = allCustomers.find(c => (c.phone && c.phone === custPhone) || (c.mobile && c.mobile === custPhone));
-          }
+          if (custId) customer = custIdMap.get(String(custId));
+          if (!customer && custPhone) customer = custPhoneMap.get(String(custPhone));
           if (!customer && custName && custName !== '-' && custName !== 'Customer Member') {
-            customer = allCustomers.find(c => (c.name && c.name.toLowerCase() === custName.toLowerCase()) || (c.fullName && c.fullName.toLowerCase() === custName.toLowerCase()));
+            customer = custNameMap.get(String(custName).toLowerCase());
           }
 
           const customerName = customer
@@ -194,7 +211,7 @@ async function getBusinessReports(req, res) {
             vendor = vendorDir.findVendor(vendorId);
           }
           if (!vendor && vendorId) {
-            vendor = (db.vendors || []).find(v => String(v._id || v.id || v.vendorId) === String(vendorId));
+            vendor = vendorMap.get(String(vendorId));
           }
           const vendorName = vendor
             ? (vendor.businessName || vendor.name || vendor.shopName || '-')

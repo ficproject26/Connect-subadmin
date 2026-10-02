@@ -1,5 +1,5 @@
 // Centralized fetch wrapper with Bearer token injection, resilient startup retry,
-// and controlled error handling.
+// client-side in-memory caching (SWR), request deduplication, and controlled error handling.
 
 export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
@@ -35,18 +35,68 @@ export function sanitizeErrorMessage(message, status) {
   return message;
 }
 
-export async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem('ams_token');
+// Client-side cache and deduplication structures
+const apiCache = new Map();
+const inFlightRequests = new Map();
 
-  const headers = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
-
-  if (!(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
+// Helper to determine cache TTL based on endpoint characteristics
+function getEndpointTTL(endpoint) {
+  const ep = endpoint.toLowerCase();
+  // Geography and hierarchy entities change very rarely -> 10 minutes
+  if (ep.includes('/admin/districts') || ep.includes('/admin/divisions') || ep.includes('/admin/pincodes') || ep.includes('/admin/states') || ep.includes('/territory')) {
+    return 10 * 60 * 1000;
   }
+  // User authentication and categories -> 5 minutes
+  if (ep.includes('/auth/me') || ep.includes('/categories')) {
+    return 5 * 60 * 1000;
+  }
+  // Dynamic business data (orders, bookings, jobs, vendors, customers, reports) -> 45 seconds
+  return 45 * 1000;
+}
 
+// Invalidate cache keys matching prefix or all
+export function clearApiCache(prefix = '') {
+  if (!prefix) {
+    apiCache.clear();
+    return;
+  }
+  const target = prefix.toLowerCase();
+  for (const key of apiCache.keys()) {
+    if (key.toLowerCase().includes(target)) {
+      apiCache.delete(key);
+    }
+  }
+}
+
+// Invalidate relevant cache namespaces when a mutating request occurs
+function invalidateRelatedCaches(endpoint) {
+  const ep = endpoint.toLowerCase();
+  if (ep.includes('/order')) {
+    clearApiCache('/orders');
+    clearApiCache('/reports');
+  } else if (ep.includes('/booking')) {
+    clearApiCache('/bookings');
+    clearApiCache('/reports');
+  } else if (ep.includes('/job')) {
+    clearApiCache('/jobs');
+    clearApiCache('/reports');
+  } else if (ep.includes('/vendor')) {
+    clearApiCache('/vendors');
+    clearApiCache('/reports');
+  } else if (ep.includes('/customer')) {
+    clearApiCache('/customers');
+    clearApiCache('/reports');
+  } else if (ep.includes('/admin') || ep.includes('/territory')) {
+    clearApiCache('/admin');
+    clearApiCache('/territory');
+    clearApiCache('/reports');
+  } else {
+    clearApiCache('/reports');
+  }
+}
+
+// Internal core HTTP fetch execution
+async function executeFetch(endpoint, options, headers) {
   let url;
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
     url = endpoint;
@@ -63,13 +113,9 @@ export async function apiRequest(endpoint, options = {}) {
   const isGet = !options.method || options.method.toUpperCase() === 'GET';
   const maxRetries = options.retries ?? (isGet ? 2 : 0);
 
-  // Endpoints that must NEVER trigger a 401-logout redirect.
-  // /auth/login responses are intentional (wrong credentials).
-  // /auth/me is called during startup; handled by AuthContext.initAuth().
   const noAutoLogoutEndpoints = ['/auth/login', '/auth/me', '/auth/register'];
   const isNoAutoLogout = noAutoLogoutEndpoints.some((e) => endpoint.includes(e));
 
-  // Determine candidate URLs (primary configured URL and same-origin fallback if applicable)
   const candidateUrls = [url];
   if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -96,14 +142,11 @@ export async function apiRequest(endpoint, options = {}) {
         }
 
         if (!response.ok) {
-          // Retry on 503 (backend restarting)
           if (response.status === 503 && attempt < maxRetries) {
             await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
             continue;
           }
 
-          // 401 on a protected endpoint that is NOT login/me:
-          // clear the stale token and redirect to login.
           if (response.status === 401 && !isNoAutoLogout) {
             localStorage.removeItem('ams_token');
             localStorage.removeItem('ams_user');
@@ -125,12 +168,10 @@ export async function apiRequest(endpoint, options = {}) {
         return data;
       } catch (error) {
         lastError = error;
-        // If it's a 503 or network failure, retry with backoff on same URL
         if (attempt < maxRetries && (!error.status || error.status === 503)) {
           await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
           continue;
         }
-        // If candidateUrls has another option (e.g. fallback from direct domain to same-origin proxy), break to next URL
         break;
       }
     }
@@ -141,4 +182,73 @@ export async function apiRequest(endpoint, options = {}) {
   cleanError.status = lastError?.status;
   console.error(`API Error [${endpoint}]:`, cleanMsg);
   throw cleanError;
+}
+
+export async function apiRequest(endpoint, options = {}) {
+  const token = localStorage.getItem('ams_token') || 'anon';
+  const method = (options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
+
+  // Invalidate relevant cache namespaces on state mutations
+  if (!isGet) {
+    invalidateRelatedCaches(endpoint);
+  }
+
+  const headers = {
+    ...(token && token !== 'anon' ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const cacheKey = `${token}:${method}:${cleanEndpoint}`;
+
+  // Serve from client-side SWR cache if valid GET
+  if (isGet && !options.skipCache && !options.fresh) {
+    const cached = apiCache.get(cacheKey);
+    const ttl = getEndpointTTL(cleanEndpoint);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp < ttl)) {
+      // Background revalidation if older than 20 seconds
+      if (now - cached.timestamp > 20000 && !inFlightRequests.has(cacheKey)) {
+        const bgPromise = executeFetch(cleanEndpoint, options, headers)
+          .then((freshData) => {
+            apiCache.set(cacheKey, { data: freshData, timestamp: Date.now() });
+            return freshData;
+          })
+          .catch(() => {})
+          .finally(() => inFlightRequests.delete(cacheKey));
+        inFlightRequests.set(cacheKey, bgPromise);
+      }
+      return cached.data;
+    }
+
+    // Deduplicate in-flight requests
+    if (inFlightRequests.has(cacheKey)) {
+      return inFlightRequests.get(cacheKey);
+    }
+  }
+
+  const fetchPromise = executeFetch(cleanEndpoint, options, headers)
+    .then((data) => {
+      if (isGet) {
+        apiCache.set(cacheKey, { data, timestamp: Date.now() });
+      }
+      return data;
+    })
+    .finally(() => {
+      if (isGet) {
+        inFlightRequests.delete(cacheKey);
+      }
+    });
+
+  if (isGet && !options.skipCache) {
+    inFlightRequests.set(cacheKey, fetchPromise);
+  }
+
+  return fetchPromise;
 }

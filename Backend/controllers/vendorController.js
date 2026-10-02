@@ -45,8 +45,79 @@ function formatActorRole(role, fallbackType = 'Manager') {
   return role;
 }
 
+// Pre-index collections for ultra-fast O(1) enrichment of vendors
+function buildVendorLookupContext() {
+  const stateIdMap = new Map();
+  const stateNameMap = new Map();
+  for (const s of (db.states || [])) {
+    if (s._id) stateIdMap.set(String(s._id), s);
+    if (s.id) stateIdMap.set(String(s.id), s);
+    if (s.name) stateNameMap.set(String(s.name).trim().toLowerCase(), s);
+  }
+
+  const districtIdMap = new Map();
+  const districtNameMap = new Map();
+  for (const d of (db.districts || [])) {
+    if (d._id) districtIdMap.set(String(d._id), d);
+    if (d.id) districtIdMap.set(String(d.id), d);
+    if (d.name) districtNameMap.set(String(d.name).trim().toLowerCase(), d);
+  }
+
+  const divisionIdMap = new Map();
+  const divisionNameMap = new Map();
+  for (const dv of (db.divisions || [])) {
+    if (dv._id) divisionIdMap.set(String(dv._id), dv);
+    if (dv.id) divisionIdMap.set(String(dv.id), dv);
+    if (dv.name) divisionNameMap.set(String(dv.name).trim().toLowerCase(), dv);
+  }
+
+  const pincodeIdMap = new Map();
+  const pincodeCodeMap = new Map();
+  for (const p of (db.pincodes || [])) {
+    if (p._id) pincodeIdMap.set(String(p._id), p);
+    if (p.id) pincodeIdMap.set(String(p.id), p);
+    if (p.code) pincodeCodeMap.set(String(p.code).trim(), p);
+  }
+
+  const userMap = new Map();
+  for (const u of (db.users || [])) {
+    if (u._id) userMap.set(String(u._id).toLowerCase(), u);
+    if (u.id) userMap.set(String(u.id).toLowerCase(), u);
+    if (u.loginId) userMap.set(String(u.loginId).toLowerCase(), u);
+    if (u.email) userMap.set(String(u.email).toLowerCase(), u);
+  }
+  for (const m of (db.managers || [])) {
+    if (m._id) userMap.set(String(m._id).toLowerCase(), m);
+    if (m.id) userMap.set(String(m.id).toLowerCase(), m);
+    if (m.employeeCode) userMap.set(String(m.employeeCode).toLowerCase(), m);
+  }
+
+  const agentMap = new Map();
+  for (const a of (db.agents || [])) {
+    if (a._id) agentMap.set(String(a._id).toLowerCase(), a);
+    if (a.id) agentMap.set(String(a.id).toLowerCase(), a);
+    if (a.registrationId) agentMap.set(String(a.registrationId).toLowerCase(), a);
+    if (a.agentCode) agentMap.set(String(a.agentCode).toLowerCase(), a);
+    if (a.name) agentMap.set(String(a.name).toLowerCase(), a);
+  }
+
+  const kycMap = new Map();
+  for (const k of (db.kycRecords || [])) {
+    if (k.id) kycMap.set(String(k.id), k);
+    if (k.vendorId) kycMap.set(String(k.vendorId), k);
+  }
+
+  return {
+    stateIdMap, stateNameMap,
+    districtIdMap, districtNameMap,
+    divisionIdMap, divisionNameMap,
+    pincodeIdMap, pincodeCodeMap,
+    userMap, agentMap, kycMap
+  };
+}
+
 // Helper: Resolve who onboarded this vendor (Actor / Creator)
-function resolveOnboardedBy(vendor) {
+function resolveOnboardedBy(vendor, ctx) {
   if (!vendor) {
     return {
       role: 'Not Available',
@@ -59,10 +130,6 @@ function resolveOnboardedBy(vendor) {
     };
   }
 
-  const allAgents = Array.from(db.agents || []);
-  const allUsers = Array.from(db.users || []);
-  const allManagers = Array.from(db.managers || []);
-
   const actorKey = String(
     vendor.createdById ||
     vendor.createdBy ||
@@ -74,17 +141,24 @@ function resolveOnboardedBy(vendor) {
     ''
   ).trim().toLowerCase();
 
-  // 1. Cross-reference actor in db.users or db.managers (highest priority for real credentials/role)
+  // 1. Cross-reference actor in users/managers
   if (actorKey) {
-    const matchedUser = allUsers.find(u => {
-      const uId = String(u._id || u.id || '').trim().toLowerCase();
-      const uLogin = String(u.loginId || u.email || '').trim().toLowerCase();
-      return uId === actorKey || uLogin === actorKey;
-    }) || allManagers.find(m => {
-      const mId = String(m._id || m.id || '').trim().toLowerCase();
-      const mCode = String(m.employeeCode || '').trim().toLowerCase();
-      return mId === actorKey || mCode === actorKey;
-    });
+    let matchedUser = null;
+    if (ctx && ctx.userMap) {
+      matchedUser = ctx.userMap.get(actorKey);
+    } else {
+      const allUsers = Array.from(db.users || []);
+      const allManagers = Array.from(db.managers || []);
+      matchedUser = allUsers.find(u => {
+        const uId = String(u._id || u.id || '').trim().toLowerCase();
+        const uLogin = String(u.loginId || u.email || '').trim().toLowerCase();
+        return uId === actorKey || uLogin === actorKey;
+      }) || allManagers.find(m => {
+        const mId = String(m._id || m.id || '').trim().toLowerCase();
+        const mCode = String(m.employeeCode || '').trim().toLowerCase();
+        return mId === actorKey || mCode === actorKey;
+      });
+    }
 
     if (matchedUser) {
       const roleTitle = matchedUser.roleTitle || formatActorRole(matchedUser.role, 'Manager');
@@ -103,13 +177,19 @@ function resolveOnboardedBy(vendor) {
       };
     }
 
-    // 2. Check in db.agents
-    const matchedAgent = allAgents.find(a => {
-      const aId = String(a._id || a.id || '').trim().toLowerCase();
-      const aReg = String(a.registrationId || a.agentCode || '').trim().toLowerCase();
-      const aName = String(a.name || '').trim().toLowerCase();
-      return aId === actorKey || aReg === actorKey || aName === actorKey;
-    });
+    // 2. Check in agents
+    let matchedAgent = null;
+    if (ctx && ctx.agentMap) {
+      matchedAgent = ctx.agentMap.get(actorKey);
+    } else {
+      const allAgents = Array.from(db.agents || []);
+      matchedAgent = allAgents.find(a => {
+        const aId = String(a._id || a.id || '').trim().toLowerCase();
+        const aReg = String(a.registrationId || a.agentCode || '').trim().toLowerCase();
+        const aName = String(a.name || '').trim().toLowerCase();
+        return aId === actorKey || aReg === actorKey || aName === actorKey;
+      });
+    }
 
     if (matchedAgent) {
       const roleTitle = formatActorRole(matchedAgent.role, 'Agent');
@@ -146,7 +226,6 @@ function resolveOnboardedBy(vendor) {
   // 4. Direct addedBy property on vendor object
   if (vendor.addedBy && vendor.addedBy.name && vendor.addedBy.name !== 'Unassigned') {
     let cleanRole = formatActorRole(vendor.addedBy.role);
-    // If erroneously tagged as Admin but ID is a manager ID
     if (cleanRole.includes('Admin') && String(vendor.addedBy.id || '').startsWith('usr_mgr')) {
       cleanRole = 'Pincode Manager';
     }
@@ -176,7 +255,7 @@ function resolveOnboardedBy(vendor) {
 
   // 6. Check KYC notes
   const vIdStr = String(vendor._id || vendor.id || '');
-  const kycRec = (db.kycRecords || []).find(k => k.id === `KYC-${vIdStr}` || String(k.vendorId) === vIdStr);
+  const kycRec = (ctx && ctx.kycMap) ? (ctx.kycMap.get(`KYC-${vIdStr}`) || ctx.kycMap.get(vIdStr)) : (db.kycRecords || []).find(k => k.id === `KYC-${vIdStr}` || String(k.vendorId) === vIdStr);
   if (kycRec && kycRec.notes && kycRec.notes.toLowerCase().includes('onboarded by')) {
     const match = kycRec.notes.match(/onboarded\s+by\s+([A-Za-z\s]+)/i);
     if (match && match[1]) {
@@ -206,9 +285,9 @@ function resolveOnboardedBy(vendor) {
 }
 
 // Helper: Resolve dynamic KYC status from vendor document & db.kycRecords
-function resolveVendorKycStatus(vendor) {
+function resolveVendorKycStatus(vendor, ctx) {
   const vIdStr = String(vendor._id || vendor.id || '');
-  const kycRec = (db.kycRecords || []).find(k => k.id === `KYC-${vIdStr}` || String(k.vendorId) === vIdStr);
+  const kycRec = (ctx && ctx.kycMap) ? (ctx.kycMap.get(`KYC-${vIdStr}`) || ctx.kycMap.get(vIdStr)) : (db.kycRecords || []).find(k => k.id === `KYC-${vIdStr}` || String(k.vendorId) === vIdStr);
 
   const rawStatus = (kycRec && kycRec.status) ? kycRec.status : (vendor.kycStatus || vendor.status || 'Pending');
   const clean = String(rawStatus).trim().toLowerCase();
@@ -232,13 +311,13 @@ function resolveVendorKycStatus(vendor) {
 }
 
 // Populate location names, IDs, onboarding attribution, and dynamic KYC status
-const populateVendorLocations = async (vendor) => {
-  const [state, district, division, pincode] = await Promise.all([
-    vendor.stateId ? db.states.findById(vendor.stateId) : (vendor.state ? db.states.findOne({ name: vendor.state }) : null),
-    vendor.districtId ? db.districts.findById(vendor.districtId) : (vendor.district ? db.districts.findOne({ name: vendor.district }) : null),
-    vendor.divisionId ? db.divisions.findById(vendor.divisionId) : (vendor.division ? db.divisions.findOne({ name: vendor.division }) : null),
-    vendor.pincodeId ? db.pincodes.findById(vendor.pincodeId) : (vendor.pincode ? db.pincodes.findOne({ code: vendor.pincode }) : null)
-  ]);
+const populateVendorLocations = (vendor, ctx = null) => {
+  const context = ctx || buildVendorLookupContext();
+
+  const state = vendor.stateId ? context.stateIdMap.get(String(vendor.stateId)) : (vendor.state ? context.stateNameMap.get(String(vendor.state).trim().toLowerCase()) : null);
+  const district = vendor.districtId ? context.districtIdMap.get(String(vendor.districtId)) : (vendor.district ? context.districtNameMap.get(String(vendor.district).trim().toLowerCase()) : null);
+  const division = vendor.divisionId ? context.divisionIdMap.get(String(vendor.divisionId)) : (vendor.division ? context.divisionNameMap.get(String(vendor.division).trim().toLowerCase()) : null);
+  const pincode = vendor.pincodeId ? context.pincodeIdMap.get(String(vendor.pincodeId)) : (vendor.pincode ? context.pincodeCodeMap.get(String(vendor.pincode).trim()) : null);
 
   const stateName = vendor.state || state?.name || '';
   const districtName = vendor.district || district?.name || '';
@@ -246,8 +325,8 @@ const populateVendorLocations = async (vendor) => {
   const pincodeCode = vendor.pincode || pincode?.code || '';
   const pincodeArea = pincode?.areaName || vendor.address || '';
 
-  const addedBy = resolveOnboardedBy(vendor);
-  const kycStatus = resolveVendorKycStatus(vendor);
+  const addedBy = resolveOnboardedBy(vendor, context);
+  const kycStatus = resolveVendorKycStatus(vendor, context);
   const approvalStatus = vendor.approvalStatus || ((vendor.status === 'Active' || vendor.status === 'Approved') ? 'Approved' : 'Pending');
 
   const normalized = {
@@ -376,10 +455,9 @@ const getVendors = async (req, res) => {
       pagedVendors = filtered.slice(startIndex, startIndex + pageSize);
     }
 
-    const totalPages = Math.ceil(totalVendors / (pageSize || 1)) || 1;
-
-    // Populate vendors
-    const populated = await Promise.all(pagedVendors.map(populateVendorLocations));
+    // Populate vendors using fast O(1) pre-indexed context
+    const lookupCtx = buildVendorLookupContext();
+    const populated = pagedVendors.map(v => populateVendorLocations(v, lookupCtx));
 
     return res.json({
       success: true,

@@ -36,20 +36,18 @@ export function DivisionalAdminDashboard() {
 
   useEffect(() => {
     let isMounted = true;
-    Promise.all([
-      dataService.getDashboardSummary().catch(() => null),
-      dataService.getPincodes().catch(() => null)
-    ]).then(([summary, pinRes]) => {
-      if (!isMounted) return;
-      if (summary?.success) setSummaryData(summary);
-      if (pinRes?.pincodes) setPincodes(pinRes.pincodes);
-    });
+    dataService.getDashboardSummary()
+      .then((summary) => {
+        if (!isMounted || !summary?.success) return;
+        setSummaryData(summary);
+      })
+      .catch((err) => console.error('Failed to load dashboard summary:', err));
     return () => { isMounted = false; };
   }, []);
 
   const metrics = summaryData?.metrics || {};
   const stats = {
-    totalPincodes: pincodes.length || metrics.totalPincodes || 0,
+    totalPincodes: metrics.totalPincodes || pincodes.length || 0,
     totalPincodeAdmins: metrics.totalPincodeAdmins || 0,
     totalCustomers: metrics.totalCustomers || 0,
     totalVendors: metrics.totalVendors || 0,

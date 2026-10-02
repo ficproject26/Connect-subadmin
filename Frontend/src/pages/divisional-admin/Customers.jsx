@@ -22,18 +22,24 @@ export function DivisionalCustomers() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [res, allRes] = await Promise.all([
-        dataService.getCustomers({ tier: tierFilter, division: divisionName }),
-        dataService.getCustomers({ division: divisionName })
-      ]);
+      if (allCustomers.length === 0) {
+        const allRes = await dataService.getCustomers({ division: divisionName });
+        const allList = allRes.success ? (allRes.customers || []) : [];
+        setAllCustomers(allList);
+        if (!tierFilter && !pincodeFilter) {
+          setCustomers(allList);
+          return;
+        }
+      }
+      const res = await dataService.getCustomers({
+        division: divisionName,
+        ...(tierFilter ? { tier: tierFilter } : {})
+      });
       let list = res.success ? (res.customers || []) : [];
-      let allList = allRes.success ? (allRes.customers || []) : [];
-
       if (pincodeFilter) {
         list = list.filter(c => String(c.pincode) === String(pincodeFilter));
       }
       setCustomers(list);
-      setAllCustomers(allList);
     } catch (e) {
       console.error(e);
     } finally {

@@ -37,14 +37,12 @@ export function PincodeAdminDashboard() {
 
   useEffect(() => {
     let isMounted = true;
-    Promise.all([
-      dataService.getDashboardSummary().catch(() => null),
-      dataService.getVendors({ pincode }).catch(() => null)
-    ]).then(([summary, vendorRes]) => {
-      if (!isMounted) return;
-      if (summary?.success) setSummaryData(summary);
-      if (vendorRes?.vendors) setVendors(vendorRes.vendors);
-    });
+    dataService.getDashboardSummary()
+      .then((summary) => {
+        if (!isMounted || !summary?.success) return;
+        setSummaryData(summary);
+      })
+      .catch((err) => console.error('Failed to load dashboard summary:', err));
     return () => { isMounted = false; };
   }, [pincode]);
 
@@ -52,7 +50,7 @@ export function PincodeAdminDashboard() {
   const stats = {
     totalCustomers: metrics.totalCustomers || 0,
     membershipCardCustomers: (summaryData?.membershipDistribution?.Silver || 0) + (summaryData?.membershipDistribution?.Gold || 0) + (summaryData?.membershipDistribution?.Diamond || 0),
-    totalVendors: vendors.length || metrics.totalVendors || 0,
+    totalVendors: metrics.totalVendors || vendors.length || 0,
     totalOrders: metrics.totalOrders || 0,
     totalBookings: metrics.totalBookings || 0,
     totalJobs: metrics.totalJobs || 0,

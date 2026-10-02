@@ -20,12 +20,20 @@ export function PincodeCustomers() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [res, allRes] = await Promise.all([
-        dataService.getCustomers({ tier: tierFilter, pincode }),
-        dataService.getCustomers({ pincode })
-      ]);
+      if (allCustomers.length === 0) {
+        const allRes = await dataService.getCustomers({ pincode });
+        const allList = allRes.success ? (allRes.customers || []) : [];
+        setAllCustomers(allList);
+        if (!tierFilter) {
+          setCustomers(allList);
+          return;
+        }
+      }
+      const res = await dataService.getCustomers({
+        pincode,
+        ...(tierFilter ? { tier: tierFilter } : {})
+      });
       setCustomers(res.success ? (res.customers || []) : []);
-      setAllCustomers(allRes.success ? (allRes.customers || []) : []);
     } catch (e) {
       console.error(e);
     } finally {
