@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNotifications } from '../../context/NotificationContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -27,10 +28,20 @@ export default function NotificationsPage() {
     removeNotification
   } = useNotifications();
   const { isDark } = useTheme();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'vendor' | 'task' | 'unread'
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Role-aware prefix for navigation links
+  const getRolePrefix = () => {
+    const role = (user?.role || '').toLowerCase().replace(/[_-]/g, ' ');
+    if (role.includes('district') && !role.includes('manager')) return '/district-admin';
+    if ((role.includes('division') || role.includes('divisional')) && !role.includes('manager')) return '/divisional-admin';
+    if (role.includes('pincode') && !role.includes('manager')) return '/pincode-admin';
+    return '/state-admin';
+  };
 
   const filtered = notifications.filter(n => {
     // Tab filter
@@ -99,12 +110,13 @@ export default function NotificationsPage() {
 
   const handleNavigate = (n) => {
     markAsRead(n._id || n.id);
+    const prefix = getRolePrefix();
     if (n.actionUrl) {
       navigate(n.actionUrl);
     } else if (n.type?.startsWith('vendor') || n.entityType === 'vendor') {
-      navigate('/state-admin/vendors');
+      navigate(`${prefix}/vendors`);
     } else if (n.type?.startsWith('task') || n.entityType === 'task') {
-      navigate('/state-admin/tasks');
+      navigate(`${prefix}/tasks`);
     }
   };
 

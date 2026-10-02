@@ -30,52 +30,43 @@ export function Header({ setIsSidebarOpen }) {
 
   const role = normalizeRole(user?.role);
 
-  const isDistrictAdmin =
-    role === 'District Admin' ||
-    user.role === 'District Admin' ||
-    (typeof user.role === 'string' && user.role.toLowerCase().includes('district') && !user.role.toLowerCase().includes('manager')) ||
-    location.pathname.startsWith('/district-admin');
-
   const getDashboardTitle = () => {
-    if (isDistrictAdmin) return 'DISTRICT ADMIN DASHBOARD';
-    switch (role) {
-      case 'Super Admin':
-      case 'Main Admin':
-      case 'State Admin': return 'STATE ADMIN DASHBOARD';
-      case 'Divisional Admin':
-      case 'Division Admin': return 'DIVISION ADMIN DASHBOARD';
-      case 'Pincode Admin': return 'PINCODE ADMIN DASHBOARD';
-      case 'Manager':
-      case 'state_manager':
-      case 'district_manager':
-      case 'division_manager':
-      case 'pincode_manager': return 'MANAGER DASHBOARD';
-      default: return 'ADMIN DASHBOARD';
-    }
+    const raw = (user?.role || '').toLowerCase().replace(/[_-]/g, ' ').trim();
+    if (raw === 'super admin' || raw === 'superadmin' || raw === 'main admin') return 'SUPER ADMIN DASHBOARD';
+    if (raw.includes('state') && !raw.includes('manager')) return 'STATE ADMIN DASHBOARD';
+    if (raw.includes('district') && !raw.includes('manager')) return 'DISTRICT ADMIN DASHBOARD';
+    if ((raw.includes('division') || raw.includes('divisional')) && !raw.includes('manager')) return 'DIVISION ADMIN DASHBOARD';
+    if (raw.includes('pincode') && !raw.includes('manager')) return 'PINCODE ADMIN DASHBOARD';
+    if (raw.includes('manager')) return 'MANAGER DASHBOARD';
+    return (user.role || 'ADMIN').toUpperCase() + ' DASHBOARD';
   };
 
   const getLocationSubtitle = () => {
-    // District Admin header must never display PIN code, only the dynamic assigned district name
-    if (isDistrictAdmin) {
-      const dist = user.district || (user.scope && user.scope.districtName) || 'Assigned';
-      return dist.toLowerCase().endsWith('district') ? dist : `${dist} District`;
+    const raw = (user?.role || '').toLowerCase().replace(/[_-]/g, ' ').trim();
+    if (raw === 'super admin' || raw === 'superadmin' || raw === 'main admin' || user.state === 'All India') {
+      return 'All India (Central HQ)';
     }
-    if (role === 'State Admin' || user.role === 'State Admin' || location.pathname.startsWith('/state-admin')) {
-      return user.state || 'Tamil Nadu';
+    if (raw.includes('pincode') && !raw.includes('manager')) {
+      const pin = user.pincode || (user.scope && user.scope.pincode) || '';
+      const area = user.areaName || user.division || user.district || '';
+      return pin ? `PIN: ${pin}${area ? ` (${area})` : ''}` : (area || 'Assigned Pincode');
     }
-    if (role === 'Divisional Admin' || user.role === 'Division Admin' || location.pathname.startsWith('/divisional-admin')) {
-      const div = user.division || 'Division';
-      const divLabel = div.toLowerCase().endsWith('division') ? div : `${div} Division`;
+    if ((raw.includes('division') || raw.includes('divisional')) && !raw.includes('manager')) {
+      const div = user.division || (user.scope && user.scope.divisionName) || '';
+      const divLabel = div ? (div.toLowerCase().endsWith('division') ? div : `${div} Division`) : 'Assigned Division';
       return user.district ? `${divLabel}, ${user.district}` : divLabel;
     }
-    if (role === 'Pincode Admin' || user.role === 'Pincode Admin' || location.pathname.startsWith('/pincode-admin')) {
-      return `PIN: ${user.pincode || 'Pincode'} (${user.areaName || user.district || 'Local Zone'})`;
+    if (raw.includes('district') && !raw.includes('manager')) {
+      const dist = user.district || (user.scope && user.scope.districtName) || '';
+      return dist ? (dist.toLowerCase().endsWith('district') ? dist : `${dist} District`) : 'Assigned District';
     }
-    if (user.district) {
-      const dist = user.district;
-      return dist.toLowerCase().endsWith('district') ? dist : `${dist} District`;
+    if (raw.includes('state') && !raw.includes('manager')) {
+      return user.state || (user.scope && user.scope.stateName) || 'Assigned State';
     }
-    return user.state || 'Tamil Nadu';
+    if (user.pincode) return `PIN: ${user.pincode} (${user.district || 'Territory'})`;
+    if (user.division) return `${user.division} Division`;
+    if (user.district) return `${user.district} District`;
+    return user.state || 'Assigned Territory';
   };
 
   return (

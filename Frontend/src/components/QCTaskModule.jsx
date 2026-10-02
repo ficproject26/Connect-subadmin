@@ -188,9 +188,21 @@ function Field({ label, isDark, children, required }) {
   );
 }
 
-function Input({ isDark, ...props }) {
-  const base = { width:'100%', padding:'9px 12px', borderRadius:10, border:isDark?'1px solid #1a2d4a':'1px solid #e2e8f0', background:isDark?'#060e1c':'#f8fafc', color:isDark?'#e2e8f0':'#0f172a', fontSize:'0.84rem', outline:'none', boxSizing:'border-box' };
-  return <input style={base} {...props}/>;
+function Input({ isDark, readOnly, style = {}, ...props }) {
+  const base = {
+    width: '100%',
+    padding: '9px 12px',
+    borderRadius: 10,
+    border: isDark ? '1px solid #1a2d4a' : '1px solid #e2e8f0',
+    background: readOnly ? (isDark ? '#0d1d33' : '#f1f5f9') : (isDark ? '#060e1c' : '#f8fafc'),
+    color: readOnly ? (isDark ? '#cbd5e1' : '#334155') : (isDark ? '#e2e8f0' : '#0f172a'),
+    fontSize: '0.84rem',
+    outline: 'none',
+    boxSizing: 'border-box',
+    cursor: readOnly ? 'default' : 'text',
+    ...style
+  };
+  return <input style={base} readOnly={readOnly} {...props} />;
 }
 
 function Textarea({ isDark, rows=3, ...props }) {
@@ -278,11 +290,26 @@ function RaiseIssueModal({ isDark, onClose, onSuccess }) {
 
 function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
   const [form, setForm] = useState({
-    title:'', description:'', category:'General', priority: linkedIssue?.priority || 'Medium',
-    dueDate:'', assignedManagerId:'', qcIssueId: linkedIssue?._id || linkedIssue?.id || '',
-    state: linkedIssue?.state||'', district: linkedIssue?.district||'',
-    division: linkedIssue?.division||'', pincode: linkedIssue?.pincode||'',
-    location: linkedIssue?.location||'', remarks:''
+    title: '',
+    description: '',
+    category: 'General',
+    priority: linkedIssue?.priority || 'Medium',
+    dueDate: '',
+    assignedManagerId: '',
+    assignedManagerName: '',
+    assignedManagerRole: '',
+    assignedManagerLevel: null,
+    qcIssueId: linkedIssue?._id || linkedIssue?.id || '',
+    state: linkedIssue?.state || '',
+    district: linkedIssue?.district || '',
+    division: linkedIssue?.division || '',
+    pincode: linkedIssue?.pincode || '',
+    stateId: linkedIssue?.stateId || '',
+    districtId: linkedIssue?.districtId || '',
+    divisionId: linkedIssue?.divisionId || '',
+    pincodeId: linkedIssue?.pincodeId || '',
+    location: linkedIssue?.location || '',
+    remarks: ''
   });
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -291,19 +318,102 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
-    dataService.getQCTaskManagers().then(r => { if (r.success) setManagers(r.data || []); }).catch(() => {}).finally(()=>setLoadingMgrs(false));
+    dataService.getQCTaskManagers()
+      .then(r => { if (r.success) setManagers(r.data || []); })
+      .catch(() => {})
+      .finally(() => setLoadingMgrs(false));
   }, []);
 
-  const submit = async () => {
-    if (!form.title || !form.assignedManagerId) { setErr('Task title and assigned manager are required.'); return; }
-    setLoading(true); setErr('');
-    try {
-      const res = await dataService.createQCTask(form);
-      if (res.success) { onSuccess(res.message); onClose(); }
-      else setErr(res.message || 'Failed to create task.');
-    } catch (e) { setErr(e.message); }
-    finally { setLoading(false); }
+  const handleManagerChange = (e) => {
+    const mgrId = e.target.value;
+    const mgr = managers.find(m => String(m.id || m._id) === String(mgrId));
+    if (!mgr) {
+      setForm(p => ({
+        ...p,
+        assignedManagerId: '',
+        assignedManagerName: '',
+        assignedManagerRole: '',
+        assignedManagerLevel: null,
+        state: linkedIssue?.state || '',
+        stateId: linkedIssue?.stateId || '',
+        district: linkedIssue?.district || '',
+        districtId: linkedIssue?.districtId || '',
+        division: linkedIssue?.division || '',
+        divisionId: linkedIssue?.divisionId || '',
+        pincode: linkedIssue?.pincode || '',
+        pincodeId: linkedIssue?.pincodeId || ''
+      }));
+      return;
+    }
+
+    const rLower = String(mgr.role || '').toLowerCase();
+    const isPincode = rLower.includes('pincode');
+    const isDivisional = rLower.includes('divis');
+    const isDistrict = rLower.includes('dist');
+    const isState = rLower.includes('state');
+
+    const mState = mgr.state || mgr.assignedState || linkedIssue?.state || '';
+    const mDistrict = mgr.district || mgr.assignedDistrict || linkedIssue?.district || '';
+    const mDivision = mgr.division || mgr.assignedDivision || linkedIssue?.division || '';
+    let mPincode = mgr.pincode || mgr.assignedPincode || (isPincode ? (linkedIssue?.pincode || '') : '');
+
+    if (!mPincode) {
+      if (isDivisional) {
+        mPincode = 'Division Scope (All Pincodes)';
+      } else if (isDistrict) {
+        mPincode = 'District Scope';
+      } else if (isState) {
+        mPincode = 'State Scope';
+      }
+    }
+
+    setForm(p => ({
+      ...p,
+      assignedManagerId: mgr.id || mgr._id,
+      assignedManagerName: mgr.name || mgr.username,
+      assignedManagerRole: mgr.roleTitle || mgr.role,
+      assignedManagerLevel: mgr.level,
+      state: mState,
+      stateId: mgr.stateId || mgr.assignedStateId || '',
+      district: isState && !mDistrict ? 'State Scope (All Districts)' : mDistrict,
+      districtId: mgr.districtId || mgr.assignedDistrictId || '',
+      division: (isState || isDistrict) && !mDivision ? (isDistrict ? 'District Scope (All Divisions)' : '') : mDivision,
+      divisionId: mgr.divisionId || mgr.assignedDivisionId || '',
+      pincode: mPincode,
+      pincodeId: mgr.pincodeId || mgr.assignedPincodeId || ''
+    }));
   };
+
+  const submit = async () => {
+    if (!form.title || !form.assignedManagerId) {
+      setErr('Task title and assigned manager are required.');
+      return;
+    }
+    setLoading(true);
+    setErr('');
+    try {
+      const payload = {
+        ...form,
+        state: form.state?.includes('Scope') ? '' : form.state,
+        district: form.district?.includes('Scope') ? '' : form.district,
+        division: form.division?.includes('Scope') ? '' : form.division,
+        pincode: form.pincode?.includes('Scope') ? '' : form.pincode
+      };
+      const res = await dataService.createQCTask(payload);
+      if (res.success) {
+        onSuccess(res.message);
+        onClose();
+      } else {
+        setErr(res.message || 'Failed to create task.');
+      }
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isTerritoryLocked = Boolean(form.assignedManagerId);
 
   return (
     <ModalShell onClose={onClose} isDark={isDark} title={linkedIssue ? `Create Task from Issue #${linkedIssue.issueNumber}` : 'Create New Task'} icon={ClipboardList} iconBg="linear-gradient(135deg,#6366f1,#4f46e5)">
@@ -334,20 +444,58 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
           <Input isDark={isDark} type="date" value={form.dueDate} onChange={e=>set('dueDate',e.target.value)}/>
         </Field>
         <Field label="Assign Manager" isDark={isDark} required>
-          {loadingMgrs ? <div style={{ color:'#64748b', fontSize:'0.8rem' }}>Loading managers…</div> : (
-            <Select isDark={isDark} value={form.assignedManagerId} onChange={e=>set('assignedManagerId',e.target.value)}>
+          {loadingMgrs ? (
+            <div style={{ color:'#64748b', fontSize:'0.8rem', padding:'9px 0' }}>Loading managers…</div>
+          ) : (
+            <Select isDark={isDark} value={form.assignedManagerId} onChange={handleManagerChange}>
               <option value="">Select manager…</option>
-              {managers.map(m=><option key={m.id} value={m.id}>{m.name} ({m.role}) {m.pincode?`— PIN ${m.pincode}`:m.division?`— ${m.division}`:m.district?`— ${m.district}`:''}</option>)}
+              {managers.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.roleTitle || m.role}) {m.pincode ? `— PIN ${m.pincode}` : m.division ? `— ${m.division}` : m.district ? `— ${m.district}` : m.state ? `— ${m.state}` : ''}
+                </option>
+              ))}
             </Select>
           )}
         </Field>
       </div>
-      {!linkedIssue && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-          <Field label="District" isDark={isDark}><Input isDark={isDark} placeholder="District" value={form.district} onChange={e=>set('district',e.target.value)}/></Field>
-          <Field label="Pincode" isDark={isDark}><Input isDark={isDark} placeholder="Pincode" value={form.pincode} onChange={e=>set('pincode',e.target.value)}/></Field>
+
+      {/* Territory Hierarchy: STATE → DISTRICT → DIVISION → PINCODE */}
+      <div style={{
+        marginTop: 4,
+        marginBottom: 16,
+        padding: '14px 16px',
+        borderRadius: 12,
+        background: isDark ? 'rgba(30, 41, 59, 0.4)' : '#f8fafc',
+        border: isDark ? '1px solid #1e293b' : '1px solid #e2e8f0'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <MapPin size={13} />
+            Territory Scope ({isTerritoryLocked ? 'Auto-populated from Manager Profile' : 'Target Location'})
+          </div>
+          {isTerritoryLocked && (
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: isDark ? 'rgba(99,102,241,0.2)' : '#e0e7ff', color: isDark ? '#a5b4fc' : '#4338ca' }}>
+              Read-Only Scope
+            </span>
+          )}
         </div>
-      )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <Field label="State" isDark={isDark}>
+            <Input isDark={isDark} placeholder="State" value={form.state} readOnly={isTerritoryLocked} onChange={e=>set('state',e.target.value)}/>
+          </Field>
+          <Field label="District" isDark={isDark}>
+            <Input isDark={isDark} placeholder="District" value={form.district} readOnly={isTerritoryLocked} onChange={e=>set('district',e.target.value)}/>
+          </Field>
+          <Field label="Division" isDark={isDark}>
+            <Input isDark={isDark} placeholder="Division" value={form.division} readOnly={isTerritoryLocked} onChange={e=>set('division',e.target.value)}/>
+          </Field>
+          <Field label="Pincode" isDark={isDark}>
+            <Input isDark={isDark} placeholder="Pincode" value={form.pincode} readOnly={isTerritoryLocked} onChange={e=>set('pincode',e.target.value)}/>
+          </Field>
+        </div>
+      </div>
+
       <Field label="Remarks" isDark={isDark}><Textarea isDark={isDark} rows={2} placeholder="Any notes…" value={form.remarks} onChange={e=>set('remarks',e.target.value)}/></Field>
       <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:8 }}>
         <Btn variant="neutral" onClick={onClose}>Cancel</Btn>
@@ -356,6 +504,7 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
     </ModalShell>
   );
 }
+
 
 // ─── Complete Task Modal ───────────────────────────────────────────────────────
 
@@ -513,6 +662,41 @@ function TaskDetailModal({ task, isDark, onClose, onReview, isAdmin }) {
             <div style={{ fontSize:'0.84rem', color:isDark?'#e2e8f0':'#0f172a', fontWeight:600 }}>{val}</div>
           </div>
         ))}
+      </div>
+      {/* Territory Scope & Hierarchy */}
+      <div style={{
+        background: isDark ? 'rgba(30, 41, 59, 0.45)' : '#f8fafc',
+        border: isDark ? '1px solid #1e293b' : '1px solid #e2e8f0',
+        borderRadius: 12,
+        padding: '12px 16px',
+        marginBottom: 16
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.74rem', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+          <MapPin size={13} /> Assigned Territory Scope
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: isDark ? '#64748b' : '#94a3b8', textTransform: 'uppercase' }}>State</div>
+            <div style={{ fontSize: '0.84rem', fontWeight: 700, color: isDark ? '#f1f5f9' : '#0f172a', marginTop: 2 }}>{task.state || task.stateName || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: isDark ? '#64748b' : '#94a3b8', textTransform: 'uppercase' }}>District</div>
+            <div style={{ fontSize: '0.84rem', fontWeight: 700, color: isDark ? '#f1f5f9' : '#0f172a', marginTop: 2 }}>{task.district || task.districtName || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: isDark ? '#64748b' : '#94a3b8', textTransform: 'uppercase' }}>Division</div>
+            <div style={{ fontSize: '0.84rem', fontWeight: 700, color: isDark ? '#f1f5f9' : '#0f172a', marginTop: 2 }}>{task.division || task.divisionName || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: isDark ? '#64748b' : '#94a3b8', textTransform: 'uppercase' }}>Pincode</div>
+            <div style={{ fontSize: '0.84rem', fontWeight: 700, color: isDark ? '#f1f5f9' : '#0f172a', marginTop: 2 }}>
+              {task.pincode || (task.assignedManagerRole?.toLowerCase().includes('divis') ? 'Division Scope' : task.assignedManagerRole?.toLowerCase().includes('dist') ? 'District Scope' : task.assignedManagerRole?.toLowerCase().includes('state') ? 'State Scope' : '—')}
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: 8, paddingTop: 6, borderTop: isDark ? '1px dashed #334155' : '1px dashed #cbd5e1', fontSize: '0.74rem', color: isDark ? '#94a3b8' : '#64748b' }}>
+          <strong>Territory Path:</strong> {[task.state || task.stateName, task.district || task.districtName, task.division || task.divisionName, task.pincode ? `PIN ${task.pincode}` : null].filter(Boolean).join(' → ')}
+        </div>
       </div>
       <div style={{ marginBottom:12 }}>
         <div style={{ fontSize:'0.72rem', fontWeight:700, color:isDark?'#64748b':'#94a3b8', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:6 }}>Description</div>
@@ -840,6 +1024,7 @@ function TasksTable({ isDark, tasks, onView, onAction, roleGroup, isPincodeManag
             <th className="px-4 py-3 font-semibold">Category</th>
             <th className="px-4 py-3 font-semibold">Priority</th>
             <th className="px-4 py-3 font-semibold">Assigned Manager</th>
+            <th className="px-4 py-3 font-semibold">Territory</th>
             <th className="px-4 py-3 font-semibold">Due Date</th>
             <th className="px-4 py-3 font-semibold">Status</th>
             <th className="px-4 py-3 font-semibold text-right">Actions</th>
@@ -878,6 +1063,21 @@ function TasksTable({ isDark, tasks, onView, onAction, roleGroup, isPincodeManag
                   {task.assignedManagerName || 'Unassigned'}
                 </div>
                 <div className="text-[10px] text-slate-500">{task.assignedManagerRole}</div>
+              </td>
+              <td className="px-4 py-3 min-w-[170px]">
+                <div className="font-semibold text-slate-900 dark:text-white text-xs">
+                  {[task.district || task.districtName, task.division || task.divisionName].filter(Boolean).join(', ') || task.state || '—'}
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <span>State: {task.state || task.stateName || '—'}</span>
+                  {task.pincode ? (
+                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">• PIN: {task.pincode}</span>
+                  ) : (
+                    <span className="text-slate-400">
+                      • {task.assignedManagerRole?.toLowerCase().includes('divis') ? 'Division Scope' : task.assignedManagerRole?.toLowerCase().includes('dist') ? 'District Scope' : task.assignedManagerRole?.toLowerCase().includes('state') ? 'State Scope' : '—'}
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="px-4 py-3 whitespace-nowrap text-slate-500 dark:text-slate-400 text-xs">
                 {fmtDateOnly(task.dueDate)}

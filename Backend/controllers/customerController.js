@@ -242,24 +242,29 @@ async function getMembershipCards(req, res) {
         return {
           id: ch._id || ch.id,
           _id: ch._id || ch.id,
-          customerId: cust ? (cust.id || cust.customerId || cust._id) : (ch.customerId || '-'),
-          customerName: cust ? cust.name : ch.name,
-          customerPhone: cust ? cust.phone : ch.phone,
+          customerId: cust ? (cust.customerId || cust.id || cust._id) : (ch.customerId || '-'),
+          customerName: cust ? (cust.name || cust.fullName) : ch.name,
+          customerMobile: cust ? (cust.phone || cust.mobile) : (ch.phone || ch.mobile),
+          mobile: cust ? (cust.phone || cust.mobile) : (ch.phone || ch.mobile),
           customerEmail: cust ? cust.email : ch.email,
           cardNumber: ch.cardNumber,
           tier,
           cardType: tier,
-          // Prefer actual stored values from the cardholder record
           amount: ch.amount || ch.cardAmount || amountMap[tier] || 15000,
           paymentAmount: ch.paymentAmount || ch.amount || amountMap[tier] || 15000,
           paymentStatus: ch.paymentStatus || 'PAID',
           paymentDate: ch.paymentDate || ch.createdAt,
-          issueDate: ch.createdAt ? new Date(ch.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+          issueDate: ch.createdAt || ch.validFrom || ch.issueDate || null,
+          expiryDate: ch.expiryDate || ch.validUntil || ch.expiry || null,
+          expiry: ch.expiryDate || ch.validUntil || ch.expiry || null,
           validFrom: ch.validFrom || ch.createdAt,
           validUntil: ch.expiryDate || ch.validUntil,
           status: (ch.status === 'active' ? 'Active' : (ch.status === 'expired' ? 'Expired' : (ch.status || 'Active'))),
           discountPercent: ch.discountPercent || discountMap[tier] || 10,
           points: ch.points || ch.rewardPoints || pointsMap[tier] || 1000,
+          purchaseType: ch.purchaseType || ch.transactionType || ch.action || 'New Purchase',
+          previousTier: ch.previousTier || ch.fromTier || ch.upgradedFrom || null,
+          hasCard: true,
           state,
           district,
           division,
@@ -267,15 +272,72 @@ async function getMembershipCards(req, res) {
         };
       });
 
+    // Also include real customers without active card
+    const customersWithoutCard = rawCustomers
+      .filter(cust => {
+        const hasCard = rawCardholders.some(ch => 
+          ch.cardNumber && ch.cardNumber.startsWith('FIC-') && (
+            (ch.phone && cust.phone && ch.phone === cust.phone) ||
+            (ch.email && cust.email && ch.email.toLowerCase() === cust.email.toLowerCase()) ||
+            (ch.name && cust.name && ch.name.toLowerCase() === cust.name.toLowerCase() && ch.name !== 'Customer Member')
+          )
+        );
+        return !hasCard;
+      })
+      .map(cust => {
+        const rawPin = String(cust.pincode || cust.assignedPincode || '').trim();
+        const geo = PIN_MAP[rawPin] || {};
+        let state = cust.state || geo.state || 'Tamil Nadu';
+        let district = cust.district || cust.city || geo.district || 'Salem';
+        let division = cust.division || geo.division || 'Attur Division';
+        let pincode = rawPin || '636112';
+
+        return {
+          id: cust._id || cust.id,
+          _id: cust._id || cust.id,
+          customerId: cust.customerId || cust.id || cust._id || '-',
+          customerName: cust.name || cust.fullName || 'Customer',
+          customerMobile: cust.phone || cust.mobile || '-',
+          mobile: cust.phone || cust.mobile || '-',
+          customerEmail: cust.email || '-',
+          cardNumber: 'No Card',
+          tier: 'No Card',
+          cardType: 'No Card',
+          hasCard: false,
+          amount: 0,
+          paymentAmount: 0,
+          paymentStatus: '-',
+          paymentDate: null,
+          issueDate: null,
+          expiryDate: null,
+          expiry: null,
+          validFrom: null,
+          validUntil: null,
+          status: 'No Active Card',
+          discountPercent: 0,
+          points: 0,
+          purchaseType: 'No Card',
+          previousTier: null,
+          state,
+          district,
+          division,
+          pincode
+        };
+      });
+
+    const combinedList = [...allCards, ...customersWithoutCard];
+
     // Enforce territorial access control
-    const scopedCards = filterByLocation(allCards, req.user);
+    const scopedCards = filterByLocation(combinedList, req.user);
 
     // Tier counts strictly for scoped territory
+    const activeScopedCards = scopedCards.filter(c => c.tier !== 'No Card');
     const counts = {
-      total: scopedCards.length,
+      total: activeScopedCards.length,
       silver: scopedCards.filter(c => c.tier === 'Silver').length,
       gold: scopedCards.filter(c => c.tier === 'Gold').length,
-      diamond: scopedCards.filter(c => c.tier === 'Diamond').length
+      diamond: scopedCards.filter(c => c.tier === 'Diamond').length,
+      noCard: scopedCards.filter(c => c.tier === 'No Card').length
     };
 
     return res.json({ success: true, counts, cards: scopedCards });

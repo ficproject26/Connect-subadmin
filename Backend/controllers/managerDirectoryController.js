@@ -221,6 +221,15 @@ const populateManager = async (m, relation, user) => {
     dob: m.dob || null,
     gender: m.gender || null,
     address: m.address || null,
+    doorNumber: m.doorNumber || m.doorNo || m.houseNumber || m.address || null,
+    street: m.street || m.streetName || m.doorStreet || null,
+    area: m.area || m.locality || null,
+    village: m.village || m.town || m.city || null,
+    taluk: m.taluk || resolvedDivision || m.division || m.assignedDivision || null,
+    district: resolvedDistrict || m.district || m.assignedDistrict || null,
+    state: resolvedState || m.state || m.assignedState || 'Tamil Nadu',
+    pincode: resolvedPincode || m.pincode || m.assignedPincode || null,
+    fullAddress: m.fullAddress || [m.address, m.village, resolvedDivision || m.division, resolvedDistrict || m.district, resolvedState || m.state, resolvedPincode || m.pincode].filter(Boolean).join(', '),
     documents: (() => {
       const rawDocs = m.documents || {};
       const kycDocs = m.kycDocs || {};

@@ -49,10 +49,11 @@ export function CardTierIcon({ tier, className = 'w-3.5 h-3.5' }) {
 }
 
 export function TierBadge({ tier, className = '' }) {
-  if (!tier || tier.toLowerCase() === 'customer' || tier.toLowerCase() === 'customers') {
+  const norm = tier ? tier.toLowerCase() : '';
+  if (!tier || norm === 'customer' || norm === 'customers' || norm === 'no card') {
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 whitespace-nowrap shrink-0 ${className}`}>
-        Customer
+        {norm === 'no card' ? 'No Card' : 'Customer'}
       </span>
     );
   }

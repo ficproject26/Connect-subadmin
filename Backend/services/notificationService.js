@@ -1,4 +1,4 @@
-const { db } = require('../config/db');
+const { db, filterByLocation } = require('../config/db');
 
 // In-memory active SSE clients: Map<clientId, { res, user, connectedAt }>
 const clients = new Map();
@@ -39,69 +39,57 @@ function unregisterClient(clientId) {
  * Determine if a notification matches a user's role and geographic scope
  */
 function isNotificationInScope(notification, user) {
-  if (!user) return true;
+  if (!user) return false;
   const role = (user.role || '').toLowerCase();
   const nScope = notification.scope || {};
-
-  // If targeted directly to this specific user ID
+  const meta = notification.metadata || {};
   const userId = String(user.id || user._id || '');
+
+  // 1. If targeted directly to this specific user ID
   if (nScope.targetUserId && String(nScope.targetUserId) === userId) {
     return true;
   }
 
-  // Super Admin / All India State Admin sees all notifications
-  if (role.includes('super admin') || role === 'admin' || (role.includes('state') && (!user.state || user.state === 'All India'))) {
+  // 2. Super Admin has authorized global scope
+  if (role.includes('super admin') || role === 'admin' || role === 'superadmin' || user.role === 'super-admin' || (!user.state || user.state === 'All India')) {
     return true;
   }
 
-  // State Admin: matches if notification is in same state or statewide
-  if (role.includes('state') && !role.includes('district') && !role.includes('division') && !role.includes('pincode') && !role.includes('manager')) {
-    if (!nScope.state || !user.state) return true;
-    return nScope.state.toLowerCase() === user.state.toLowerCase();
+  // 3. Global system broadcast / maintenance announcements without any geographic bounds
+  const isBroadcast = ['system', 'broadcast', 'announcement', 'maintenance', 'system_update'].includes((notification.type || '').toLowerCase());
+  const hasNoGeo = !nScope.pincode && !nScope.division && !nScope.district && !nScope.state &&
+                   !meta.pincode && !meta.district && !meta.division && !meta.state;
+  if (isBroadcast && hasNoGeo) {
+    return true;
   }
 
-  // District Admin: matches if in same district
-  if (role.includes('district') && !role.includes('manager')) {
-    if (!nScope.district || !user.district) return true;
-    return nScope.district.toLowerCase() === user.district.toLowerCase();
+  // 4. Targeted by role explicitly with no geographic bounds
+  if (nScope.targetRoles && Array.isArray(nScope.targetRoles) && nScope.targetRoles.length > 0 && hasNoGeo) {
+    const matchesTargetRole = nScope.targetRoles.some(r => role.includes(r.toLowerCase()) || r.toLowerCase().includes(role.split(' ')[0]));
+    if (matchesTargetRole) return true;
   }
 
-  // Division Admin: matches if in same division
-  if ((role.includes('division') || role.includes('divisional')) && !role.includes('manager')) {
-    if (!nScope.division || !user.division) return true;
-    return nScope.division.toLowerCase() === user.division.toLowerCase();
-  }
-
-  // Pincode Admin: matches if in same pincode
-  if (role.includes('pincode') && !role.includes('manager')) {
-    if (!nScope.pincode || !user.pincode) return true;
-    return String(nScope.pincode) === String(user.pincode);
-  }
-
-  // Field Managers
+  // 5. Manager direct involvement
   if (role.includes('manager')) {
-    // If targeted role includes managers
-    if (nScope.targetRoles && nScope.targetRoles.some(r => r.toLowerCase().includes('manager'))) {
-      if (nScope.pincode && user.pincode && String(nScope.pincode) === String(user.pincode)) return true;
-      if (nScope.division && user.division && nScope.division.toLowerCase() === user.division.toLowerCase()) return true;
-      if (nScope.district && user.district && nScope.district.toLowerCase() === user.district.toLowerCase()) return true;
-      if (!nScope.pincode && !nScope.district && !nScope.division) return true;
-    }
-    // Also if manager is creator or assignee
-    if (notification.metadata?.managerId && String(notification.metadata.managerId) === userId) {
-      return true;
-    }
-    if (notification.metadata?.assignedManagerId && String(notification.metadata.assignedManagerId) === userId) {
-      return true;
-    }
+    if (meta.managerId && String(meta.managerId) === userId) return true;
+    if (meta.assignedManagerId && String(meta.assignedManagerId) === userId) return true;
   }
 
-  // Default fallback: allow if no strict geographic bounds
-  if (!nScope.pincode && !nScope.division && !nScope.district && !nScope.state) {
-    return true;
-  }
-
-  return false;
+  // 6. Enforce strict geographic hierarchy via filterByLocation
+  // filterByLocation checks top-level state/district/division/pincode fields.
+  // Notifications store these inside `scope`, so we flatten them for the check.
+  const flatNotification = {
+    ...notification,
+    state: nScope.state || meta.state || notification.state,
+    district: nScope.district || meta.district || notification.district,
+    division: nScope.division || meta.division || notification.division,
+    pincode: nScope.pincode || meta.pincode || notification.pincode,
+    stateId: nScope.stateId || meta.stateId || notification.stateId,
+    districtId: nScope.districtId || meta.districtId || notification.districtId,
+    divisionId: nScope.divisionId || meta.divisionId || notification.divisionId,
+    pincodeId: nScope.pincodeId || meta.pincodeId || notification.pincodeId,
+  };
+  return filterByLocation([flatNotification], user).length > 0;
 }
 
 /**
@@ -381,9 +369,13 @@ async function notifyVendorVerification({ vendor, action, reason, admin }) {
  * 4. Task Created Trigger
  */
 async function notifyTaskCreated({ task, manager, admin }) {
+  const territoryParts = [task.state, task.district, task.division, task.pincode].filter(Boolean);
+  const territoryStr = territoryParts.join(' → ');
+  const managerRole = task.assignedManagerRole || manager?.role || 'Field Manager';
+
   return await createAndBroadcast({
     title: `New Task Assigned: ${task.title}`,
-    message: `Task ${task.taskNumber} (${task.priority} Priority) was assigned to ${manager?.name || 'Field Manager'}. Due: ${task.dueDate || 'Flexible'}.`,
+    message: `Task ${task.taskNumber} (${task.priority} Priority) was assigned to ${manager?.name || 'Field Manager'} (${managerRole}). Territory: ${territoryStr || 'Assigned Territory'}. Due: ${task.dueDate || 'Flexible'}.`,
     type: 'task_created',
     category: 'task',
     entityId: task._id || task.id,
@@ -403,7 +395,14 @@ async function notifyTaskCreated({ task, manager, admin }) {
       taskNumber: task.taskNumber,
       title: task.title,
       assignedManagerId: manager?._id || manager?.id || task.assignedManagerId,
-      assignedManagerName: manager?.name,
+      assignedManagerName: manager?.name || task.assignedManagerName,
+      assignedManagerRole: managerRole,
+      assignedManagerLevel: task.assignedManagerLevel,
+      territory: territoryStr,
+      state: task.state,
+      district: task.district,
+      division: task.division,
+      pincode: task.pincode,
       createdByName: admin?.name,
       priority: task.priority
     }

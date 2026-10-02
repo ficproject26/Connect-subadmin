@@ -303,11 +303,11 @@ export function VendorDetailsModal({ isOpen, onClose, vendor, onVendorUpdated })
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-3 mt-1">
                       <span className="flex items-center gap-1 font-medium">
                         <Phone className="w-3 h-3 text-slate-400" />
-                        {addedBy.phone || '+91 94432 10001'}
+                        {addedBy.phone || 'Not Available'}
                       </span>
                       <span className="flex items-center gap-1">
                         <Mail className="w-3 h-3 text-slate-400" />
-                        {addedBy.email || 'creator@forgeindia.in'}
+                        {addedBy.email || 'Not Available'}
                       </span>
                     </div>
                   </div>
@@ -318,7 +318,7 @@ export function VendorDetailsModal({ isOpen, onClose, vendor, onVendorUpdated })
                     Added Date
                   </div>
                   <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    {addedBy.addedAt || '2026-02-15'}
+                    {addedBy.addedAt || 'Not Available'}
                   </div>
                 </div>
               </div>

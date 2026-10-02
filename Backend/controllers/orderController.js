@@ -252,12 +252,38 @@ async function getOrders(req, res) {
     // Scope geographically according to user role
     let scoped = filterByLocation(rawOrders, req.user);
 
-    // Keep commerce orders for the Orders ledger
+    // ORDER CATEGORY CLASSIFICATION:
+    // Orders = product, daily_need, daily needs, food (commerce/physical goods)
+    // Bookings = service, stay, travel (excluded from Orders tab)
+    // Jobs = job (excluded from Orders tab)
+    const BOOKING_CATEGORIES = new Set(['service', 'services', 'stay', 'travel']);
+    const JOB_CATEGORIES = new Set(['job', 'jobs']);
+    const ORDER_CATEGORIES = new Set(['product', 'products', 'daily_need', 'daily needs', 'daily_needs', 'food']);
+
     const { type } = req.query;
     if (type) {
-      scoped = scoped.filter(o => (o.type || '').toLowerCase() === type.toLowerCase());
+      // Explicit type filter from client
+      scoped = scoped.filter(o => (o.type || o.category || '').toLowerCase() === type.toLowerCase());
     } else {
-      scoped = scoped.filter(o => o.type !== 'Job');
+      // Default: show ONLY commerce/product orders — no bookings, no jobs
+      scoped = scoped.filter(o => {
+        const cat = (o.category || o.type || '').toLowerCase().trim();
+        const id = String(o.id || o._id || o.order_number || '').toUpperCase();
+
+        // If a persisted category/type field is present, use it exclusively
+        if (cat) {
+          if (BOOKING_CATEGORIES.has(cat)) return false; // is a booking
+          if (JOB_CATEGORIES.has(cat)) return false;     // is a job
+          if (ORDER_CATEGORIES.has(cat)) return true;    // explicitly an order
+          // For unrecognized categories, exclude booking/job ID prefixes only
+          if (id.startsWith('BKG') || id.startsWith('JOB')) return false;
+          return true;
+        }
+
+        // No category field: fall back to ID prefix heuristic only
+        if (id.startsWith('BKG') || id.startsWith('JOB')) return false;
+        return true;
+      });
     }
 
     const pinMap = getPincodeDirectory();

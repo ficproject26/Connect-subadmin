@@ -285,11 +285,49 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                     {manager.gender || 'Not specified'} {manager.dob ? `(${manager.dob})` : ''}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Address:</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[170px]" title={manager.address || 'Not provided'}>
-                    {manager.address || 'Not provided'}
-                  </span>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-500 shrink-0">Address:</span>
+                  <div className="text-right">
+                    {(() => {
+                      // Compose full address from all possible sub-fields
+                      const addr = manager.address || manager.fullAddress || '';
+                      const door = manager.doorNumber || manager.houseNumber || manager.doorStreet || manager.doorNo || '';
+                      const street = manager.street || manager.streetName || manager.streetAddress || '';
+                      const area = manager.area || manager.locality || manager.localityArea || '';
+                      const village = manager.village || manager.villageName || manager.town || manager.city || manager.townCity || '';
+                      const taluk = manager.taluk || manager.talukName || manager.mandal || '';
+                      const dist = manager.district || manager.districtName || manager.districtAddr || '';
+                      const state = manager.state || manager.stateName || manager.stateAddr || '';
+                      const pin = manager.pincode || manager.addrPincode || manager.assignedPincode || manager.pincodeCode || '';
+
+                      // If all sub-fields are empty, fall back to raw address string
+                      const hasSubFields = door || street || area || village || taluk || dist || state || pin;
+                      if (!hasSubFields) {
+                        return (
+                          <span className={`font-semibold text-slate-800 dark:text-slate-200 text-right ${!addr ? 'italic text-slate-400' : ''}`}>
+                            {addr || 'Not provided'}
+                          </span>
+                        );
+                      }
+
+                      const lines = [
+                        door && `Door No: ${door}`,
+                        street && street,
+                        area && area,
+                        village && village,
+                        taluk && `Taluk: ${taluk}`,
+                        dist && dist,
+                        state && state,
+                        pin && `PIN: ${pin}`,
+                      ].filter(Boolean);
+
+                      return (
+                        <div className="font-semibold text-slate-800 dark:text-slate-200 text-right leading-relaxed">
+                          {lines.map((line, i) => <div key={i}>{line}</div>)}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>

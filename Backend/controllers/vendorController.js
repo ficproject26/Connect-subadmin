@@ -23,96 +23,158 @@ const maskGst = (gst) => {
   return `${stateCode}••••••••••${endCode}`;
 };
 
-// Helper: Resolve who onboarded this vendor (Agent or Manager)
+// Helper to format role titles cleanly
+function formatActorRole(role, fallbackType = 'Manager') {
+  if (!role) return fallbackType === 'Agent' ? 'Pincode Agent' : 'Pincode Manager';
+  const r = String(role).toLowerCase().replace(/_/g, ' ').trim();
+  if (r.includes('pincode') && r.includes('manager')) return 'Pincode Manager';
+  if (r.includes('divis') && r.includes('manager')) return 'Divisional Manager';
+  if (r.includes('dist') && r.includes('manager')) return 'District Manager';
+  if (r.includes('state') && r.includes('manager')) return 'State Manager';
+  if (r === 'manager') return 'Field Manager';
+  if (r.includes('pincode') && r.includes('agent')) return 'Pincode Agent';
+  if (r.includes('divis') && r.includes('agent')) return 'Divisional Agent';
+  if (r.includes('dist') && r.includes('agent')) return 'District Agent';
+  if (r.includes('state') && r.includes('agent')) return 'State Agent';
+  if (r.includes('agent')) return 'Pincode Agent';
+  if (r.includes('pincode') && r.includes('admin')) return 'Pincode Admin';
+  if (r.includes('divis') && r.includes('admin')) return 'Divisional Admin';
+  if (r.includes('dist') && r.includes('admin')) return 'District Admin';
+  if (r.includes('state') && r.includes('admin')) return 'State Admin';
+  if (r.includes('super') && r.includes('admin')) return 'Super Admin';
+  return role;
+}
+
+// Helper: Resolve who onboarded this vendor (Actor / Creator)
 function resolveOnboardedBy(vendor) {
-  if (vendor.addedBy && vendor.addedBy.name && vendor.addedBy.name !== 'Unassigned') {
-    return vendor.addedBy;
+  if (!vendor) {
+    return {
+      role: 'Not Available',
+      type: 'Not Available',
+      name: 'Not Available',
+      id: '-',
+      phone: 'Not Available',
+      email: 'Not Available',
+      addedAt: '-'
+    };
   }
 
   const allAgents = Array.from(db.agents || []);
   const allUsers = Array.from(db.users || []);
   const allManagers = Array.from(db.managers || []);
 
-  const agentKey = String(vendor.agentId || vendor.onboardedBy || vendor.assignedAgent || '').trim().toLowerCase();
-  const managerKey = String(vendor.managerId || '').trim().toLowerCase();
+  const actorKey = String(
+    vendor.createdById ||
+    vendor.createdBy ||
+    vendor.onboardedById ||
+    vendor.onboardedBy ||
+    vendor.managerId ||
+    vendor.agentId ||
+    vendor.addedBy?.id ||
+    ''
+  ).trim().toLowerCase();
 
-  // 1. Try finding in agents collection by ObjectId, id, or registrationId
-  if (agentKey) {
+  // 1. Cross-reference actor in db.users or db.managers (highest priority for real credentials/role)
+  if (actorKey) {
+    const matchedUser = allUsers.find(u => {
+      const uId = String(u._id || u.id || '').trim().toLowerCase();
+      const uLogin = String(u.loginId || u.email || '').trim().toLowerCase();
+      return uId === actorKey || uLogin === actorKey;
+    }) || allManagers.find(m => {
+      const mId = String(m._id || m.id || '').trim().toLowerCase();
+      const mCode = String(m.employeeCode || '').trim().toLowerCase();
+      return mId === actorKey || mCode === actorKey;
+    });
+
+    if (matchedUser) {
+      const roleTitle = matchedUser.roleTitle || formatActorRole(matchedUser.role, 'Manager');
+      const isMgr = roleTitle.toLowerCase().includes('manager');
+      const isAdmin = roleTitle.toLowerCase().includes('admin');
+      const isAgent = roleTitle.toLowerCase().includes('agent');
+
+      return {
+        id: matchedUser.employeeCode || matchedUser.id || String(matchedUser._id || '-'),
+        name: matchedUser.name || vendor.createdByName || vendor.onboardedByName || vendor.addedBy?.name || 'Not Available',
+        role: roleTitle,
+        type: isMgr ? 'Manager' : isAdmin ? 'Admin' : isAgent ? 'Agent' : 'User',
+        phone: matchedUser.phone || matchedUser.mobile || vendor.addedBy?.phone || 'Not Available',
+        email: matchedUser.email || vendor.addedBy?.email || 'Not Available',
+        addedAt: vendor.addedBy?.addedAt || (vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-')
+      };
+    }
+
+    // 2. Check in db.agents
     const matchedAgent = allAgents.find(a => {
       const aId = String(a._id || a.id || '').trim().toLowerCase();
       const aReg = String(a.registrationId || a.agentCode || '').trim().toLowerCase();
       const aName = String(a.name || '').trim().toLowerCase();
-      return aId === agentKey || aReg === agentKey || aName === agentKey;
+      return aId === actorKey || aReg === actorKey || aName === actorKey;
     });
 
     if (matchedAgent) {
-      const rawRole = (matchedAgent.role || '').toLowerCase();
-      let roleTitle = 'Pincode Agent';
-      if (rawRole.includes('state')) roleTitle = 'State Agent';
-      else if (rawRole.includes('district')) roleTitle = 'District Agent';
-      else if (rawRole.includes('division') || rawRole.includes('divisional')) roleTitle = 'Divisional Agent';
-      else if (rawRole.includes('pincode')) roleTitle = 'Pincode Agent';
-
+      const roleTitle = formatActorRole(matchedAgent.role, 'Agent');
       return {
+        id: matchedAgent.registrationId || matchedAgent.agentCode || String(matchedAgent._id || matchedAgent.id),
+        name: matchedAgent.name,
         role: roleTitle,
         type: 'Agent',
-        name: matchedAgent.name,
-        id: matchedAgent.registrationId || matchedAgent.agentCode || String(matchedAgent._id || matchedAgent.id),
-        phone: matchedAgent.phone || matchedAgent.mobile || '-',
-        email: matchedAgent.email || '-',
-        addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
+        phone: matchedAgent.phone || matchedAgent.mobile || 'Not Available',
+        email: matchedAgent.email || 'Not Available',
+        addedAt: vendor.addedBy?.addedAt || (vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-')
       };
     }
   }
 
-  // 2. If vendor document directly stores agent info
+  // 3. Direct creator fields on vendor object
+  if (vendor.createdByRole || vendor.onboardedByRole) {
+    const rawRole = vendor.createdByRole || vendor.onboardedByRole;
+    const roleTitle = formatActorRole(rawRole);
+    const name = vendor.createdByName || vendor.onboardedByName || vendor.addedBy?.name;
+    if (name && name !== 'Unassigned') {
+      return {
+        id: vendor.createdById || vendor.onboardedById || vendor.addedBy?.id || '-',
+        name,
+        role: roleTitle,
+        type: roleTitle.includes('Manager') ? 'Manager' : roleTitle.includes('Admin') ? 'Admin' : 'Agent',
+        phone: vendor.addedBy?.phone || 'Not Available',
+        email: vendor.addedBy?.email || 'Not Available',
+        addedAt: vendor.addedBy?.addedAt || (vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-')
+      };
+    }
+  }
+
+  // 4. Direct addedBy property on vendor object
+  if (vendor.addedBy && vendor.addedBy.name && vendor.addedBy.name !== 'Unassigned') {
+    let cleanRole = formatActorRole(vendor.addedBy.role);
+    // If erroneously tagged as Admin but ID is a manager ID
+    if (cleanRole.includes('Admin') && String(vendor.addedBy.id || '').startsWith('usr_mgr')) {
+      cleanRole = 'Pincode Manager';
+    }
+    return {
+      id: vendor.addedBy.id || '-',
+      name: vendor.addedBy.name,
+      role: cleanRole,
+      type: cleanRole.includes('Manager') ? 'Manager' : cleanRole.includes('Admin') ? 'Admin' : 'Agent',
+      phone: vendor.addedBy.phone || 'Not Available',
+      email: vendor.addedBy.email || 'Not Available',
+      addedAt: vendor.addedBy.addedAt || (vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-')
+    };
+  }
+
+  // 5. Direct agent info on vendor object
   if (vendor.agentName) {
     return {
+      id: vendor.agentRegistrationId || vendor.agentId || '-',
+      name: vendor.agentName,
       role: 'Pincode Agent',
       type: 'Agent',
-      name: vendor.agentName,
-      id: vendor.agentRegistrationId || vendor.agentId || '-',
-      phone: vendor.agentPhone || '-',
-      email: '-',
+      phone: vendor.agentPhone || 'Not Available',
+      email: 'Not Available',
       addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
     };
   }
 
-  // 3. Try finding in managers collection or users
-  if (managerKey || agentKey) {
-    const searchKey = managerKey || agentKey;
-    const matchedMgr = allManagers.find(m => {
-      const mId = String(m.id || m._id || '').trim().toLowerCase();
-      const mCode = String(m.employeeCode || '').trim().toLowerCase();
-      return mId === searchKey || mCode === searchKey;
-    }) || allUsers.find(u => {
-      const r = (u.role || '').toLowerCase();
-      const uId = String(u._id || u.id || '').trim().toLowerCase();
-      const uLogin = String(u.loginId || '').trim().toLowerCase();
-      return r.includes('manager') && (uId === searchKey || uLogin === searchKey);
-    });
-
-    if (matchedMgr) {
-      const r = (matchedMgr.role || '').toLowerCase();
-      let roleTitle = 'Pincode Manager';
-      if (r.includes('state')) roleTitle = 'State Manager';
-      else if (r.includes('district')) roleTitle = 'District Manager';
-      else if (r.includes('division')) roleTitle = 'Division Manager';
-      else if (r.includes('pincode')) roleTitle = 'Pincode Manager';
-
-      return {
-        role: matchedMgr.roleTitle || roleTitle,
-        type: 'Manager',
-        name: matchedMgr.name,
-        id: matchedMgr.employeeCode || String(matchedMgr._id || matchedMgr.id),
-        phone: matchedMgr.mobile || matchedMgr.phone || '-',
-        email: matchedMgr.email || '-',
-        addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
-      };
-    }
-  }
-
-  // 4. Check if KYC records note includes onboarding agent name (e.g., 'Onboarded by Murugan')
+  // 6. Check KYC notes
   const vIdStr = String(vendor._id || vendor.id || '');
   const kycRec = (db.kycRecords || []).find(k => k.id === `KYC-${vIdStr}` || String(k.vendorId) === vIdStr);
   if (kycRec && kycRec.notes && kycRec.notes.toLowerCase().includes('onboarded by')) {
@@ -124,21 +186,21 @@ function resolveOnboardedBy(vendor) {
         type: 'Agent',
         name: name,
         id: '-',
-        phone: '-',
-        email: '-',
+        phone: 'Not Available',
+        email: 'Not Available',
         addedAt: vendor.createdAt ? new Date(vendor.createdAt).toISOString().split('T')[0] : '-'
       };
     }
   }
 
-  // Fallback: Real empty state, NEVER fake Admin
+  // Fallback: Real empty state, NEVER fake Admin or logged-in viewer
   return {
-    role: '-',
-    type: '-',
-    name: 'Unassigned',
+    role: 'Not Available',
+    type: 'Not Available',
+    name: 'Not Available',
     id: '-',
-    phone: '-',
-    email: '-',
+    phone: 'Not Available',
+    email: 'Not Available',
     addedAt: '-'
   };
 }
@@ -218,7 +280,17 @@ const populateVendorLocations = async (vendor) => {
     approvalStatus,
     addedBy,
     onboardedBy: addedBy.id,
-    onboardedByInfo: addedBy
+    onboardedByInfo: addedBy,
+    onboardedById: addedBy.id,
+    onboardedByName: addedBy.name,
+    onboardedByRole: addedBy.role,
+    createdById: vendor.createdById || vendor.createdBy || addedBy.id,
+    createdByName: vendor.createdByName || addedBy.name,
+    createdByRole: vendor.createdByRole || addedBy.role,
+    approvedById: vendor.approvedById || null,
+    approvedByName: vendor.approvedByName || null,
+    approvedByRole: vendor.approvedByRole || null,
+    approvedAt: vendor.approvedAt || null
   };
 
   return normalized;
@@ -467,13 +539,19 @@ const createVendor = async (req, res) => {
       rating: 5.0,
       totalOrdersDelivered: 0,
       pendingPayout: 0,
-      createdBy: req.user?.id || req.user?._id || 'user_pin_mgr1',
+      createdBy: req.user?.id || req.user?._id || 'USR-001',
+      createdById: req.user?.id || req.user?._id || 'USR-001',
+      createdByName: req.user?.name || req.user?.username || 'Field Manager',
+      createdByRole: formatActorRole(req.user?.role || 'Pincode Manager'),
+      onboardedById: req.user?.id || req.user?._id || 'USR-001',
+      onboardedByName: req.user?.name || req.user?.username || 'Field Manager',
+      onboardedByRole: formatActorRole(req.user?.role || 'Pincode Manager'),
       addedBy: {
         id: req.user?.id || req.user?._id || 'USR-001',
-        name: req.user?.name || req.user?.role || 'Field Manager',
-        role: req.user?.role || 'Field Manager',
-        phone: req.user?.phone || req.user?.mobile || '+91 98765 43210',
-        email: req.user?.email || 'manager@forgeindia.in',
+        name: req.user?.name || req.user?.username || 'Field Manager',
+        role: formatActorRole(req.user?.role || 'Pincode Manager'),
+        phone: req.user?.phone || req.user?.mobile || '',
+        email: req.user?.email || '',
         addedAt: new Date().toISOString().split('T')[0]
       },
       documents: data.documents || {},
@@ -668,12 +746,20 @@ const pincodeAdminVerifyVendor = async (req, res) => {
           status: 'Rejected',
           approvalStatus: 'Pincode Admin Rejected',
           kycStatus: 'Pincode Admin Rejected',
+          approvedById: req.user.id || req.user._id,
+          approvedByName: req.user.name,
+          approvedByRole: req.user.role || 'Pincode Admin',
+          approvedAt: decidedAt,
           pincodeAdminApproval: { status: 'Rejected', decidedBy, decidedAt, rejectionReason: rejectionReason.trim() }
         }
       : {
           status: 'Pending KYC Review',
           approvalStatus: 'Pincode Admin Approved',
           kycStatus: 'KYC Pending',
+          approvedById: req.user.id || req.user._id,
+          approvedByName: req.user.name,
+          approvedByRole: req.user.role || 'Pincode Admin',
+          approvedAt: decidedAt,
           pincodeAdminApproval: { status: 'Approved', decidedBy, decidedAt, rejectionReason: null }
         };
 
@@ -754,12 +840,20 @@ const kycVerifyVendor = async (req, res) => {
           status: 'KYC Rejected',
           approvalStatus: 'KYC Rejected',
           kycStatus: 'KYC Rejected',
+          kycVerifiedById: req.user.id || req.user._id,
+          kycVerifiedByName: req.user.name,
+          kycVerifiedByRole: req.user.role || 'KYC Team',
+          kycVerifiedAt: decidedAt,
           kycTeamApproval: { status: 'Rejected', decidedBy, decidedAt, rejectionReason: rejectionReason.trim() }
         }
       : {
           status: 'Active',
           approvalStatus: 'KYC Approved',
           kycStatus: 'KYC Approved',
+          kycVerifiedById: req.user.id || req.user._id,
+          kycVerifiedByName: req.user.name,
+          kycVerifiedByRole: req.user.role || 'KYC Team',
+          kycVerifiedAt: decidedAt,
           kycTeamApproval: { status: 'Approved', decidedBy, decidedAt, rejectionReason: null }
         };
 

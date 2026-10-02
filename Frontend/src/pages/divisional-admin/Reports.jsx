@@ -1,8 +1,9 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { dataService } from "../../services/dataService";
 import { useTheme } from "../../context/ThemeContext";
 import { Download, FileText, BarChart2 } from "lucide-react";
 import { ManagerReportsPanel } from "../../components/ManagerReportsPanel";
+import { RecentTransactionsTable } from "../../components/RecentTransactionsTable";
 
 export function DivisionalReports() {
   const { isDark } = useTheme();
@@ -74,37 +75,7 @@ export function DivisionalReports() {
                     </div>
                   ))}
                 </div>
-                <div className={`admin-card rounded-2xl p-6 ${cardStyle} border space-y-4 transition-colors`}>
-                  <h3 className={`text-base font-bold ${isDark?"text-white":"text-slate-900"}`}>Recent Transactions</h3>
-                  <div className="overflow-x-auto">
-                    <table className={`w-full text-left text-xs ${isDark?"text-slate-300":"text-slate-800"}`}>
-                      <thead className={`${isDark?"bg-slate-950/60 text-slate-400 border-slate-800":"bg-slate-50 text-slate-500 border-slate-200"} uppercase text-[10px] border-b`}>
-                        <tr>
-                          <th className="px-4 py-3">Order Number</th>
-                          <th className="px-4 py-3">Customer</th>
-                          <th className="px-4 py-3">Location</th>
-                          <th className="px-4 py-3">Gross Total</th>
-                          <th className="px-4 py-3">Net Payable</th>
-                          <th className="px-4 py-3">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${isDark?"divide-slate-800/60":"divide-slate-100"}`}>
-                        {report?.ordersList?.map(o => (
-                          <tr key={o.id} className={`${isDark?"hover:bg-slate-800/30":"hover:bg-slate-50"} transition-colors`}>
-                            <td className={`px-4 py-3 font-mono font-bold ${isDark?"text-indigo-300":"text-blue-600"}`}>{o.orderNumber}</td>
-                            <td className={`px-4 py-3 font-semibold ${isDark?"text-white":"text-slate-900"}`}>{o.customerName}</td>
-                            <td className="px-4 py-3 font-mono text-emerald-600">PIN: {o.pincode}</td>
-                            <td className={`px-4 py-3 ${isDark?"text-slate-400":"text-slate-600"}`}>₹{o.totalAmount?.toLocaleString()}</td>
-                            <td className="px-4 py-3 font-bold text-emerald-600">₹{o.netPayable?.toLocaleString()}</td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${isDark?"bg-indigo-950 text-indigo-300 border-indigo-800":"bg-blue-50 text-blue-700 border-blue-200"}`}>{o.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <RecentTransactionsTable orders={report?.ordersList || []} loading={loading} />
               </>
             );
           })()}

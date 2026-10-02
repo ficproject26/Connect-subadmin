@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -23,8 +24,27 @@ export default function NotificationDropdown({ isOpen, onClose, anchorRef }) {
     removeNotification
   } = useNotifications();
   const { isDark } = useTheme();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState('all'); // 'all' | 'vendors' | 'tasks'
+
+  // Compute role-aware notifications page path
+  const getNotifPath = () => {
+    const role = (user?.role || '').toLowerCase().replace(/[_-]/g, ' ');
+    if (role.includes('district') && !role.includes('manager')) return '/district-admin/notifications';
+    if ((role.includes('division') || role.includes('divisional')) && !role.includes('manager')) return '/divisional-admin/notifications';
+    if (role.includes('pincode') && !role.includes('manager')) return '/pincode-admin/notifications';
+    return '/state-admin/notifications';
+  };
+
+  // Compute role-aware vendor/task base paths
+  const getRolePrefix = () => {
+    const role = (user?.role || '').toLowerCase().replace(/[_-]/g, ' ');
+    if (role.includes('district') && !role.includes('manager')) return '/district-admin';
+    if ((role.includes('division') || role.includes('divisional')) && !role.includes('manager')) return '/divisional-admin';
+    if (role.includes('pincode') && !role.includes('manager')) return '/pincode-admin';
+    return '/state-admin';
+  };
   const [dropdownStyle, setDropdownStyle] = useState({});
   const dropdownRef = useRef(null);
 
@@ -111,12 +131,13 @@ export default function NotificationDropdown({ isOpen, onClose, anchorRef }) {
     markAsRead(n._id || n.id);
     onClose?.();
 
+    const prefix = getRolePrefix();
     if (n.actionUrl) {
       navigate(n.actionUrl);
     } else if (n.type?.startsWith('vendor') || n.entityType === 'vendor') {
-      navigate('/state-admin/vendors');
+      navigate(`${prefix}/vendors`);
     } else if (n.type?.startsWith('task') || n.entityType === 'task') {
-      navigate('/state-admin/tasks');
+      navigate(`${prefix}/tasks`);
     }
   };
 
@@ -279,7 +300,7 @@ export default function NotificationDropdown({ isOpen, onClose, anchorRef }) {
           type="button"
           onClick={() => {
             onClose?.();
-            navigate('/state-admin/notifications');
+            navigate(getNotifPath());
           }}
           className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
         >

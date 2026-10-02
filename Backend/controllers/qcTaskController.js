@@ -34,6 +34,27 @@ function isQCTeam(user) {
   return r.includes('qc');
 }
 
+function formatActorRole(role = '', fallbackType = 'Manager') {
+  if (!role) return fallbackType === 'Agent' ? 'Pincode Agent' : 'Pincode Manager';
+  const r = String(role).toLowerCase().replace(/_/g, ' ').trim();
+  if (r.includes('pincode') && r.includes('manager')) return 'Pincode Manager';
+  if (r.includes('divis') && r.includes('manager')) return 'Divisional Manager';
+  if (r.includes('dist') && r.includes('manager')) return 'District Manager';
+  if (r.includes('state') && r.includes('manager')) return 'State Manager';
+  if (r === 'manager') return 'Field Manager';
+  if (r.includes('pincode') && r.includes('agent')) return 'Pincode Agent';
+  if (r.includes('divis') && r.includes('agent')) return 'Divisional Agent';
+  if (r.includes('dist') && r.includes('agent')) return 'District Agent';
+  if (r.includes('state') && r.includes('agent')) return 'State Agent';
+  if (r.includes('agent')) return 'Pincode Agent';
+  if (r.includes('pincode') && r.includes('admin')) return 'Pincode Admin';
+  if (r.includes('divis') && r.includes('admin')) return 'Divisional Admin';
+  if (r.includes('dist') && r.includes('admin')) return 'District Admin';
+  if (r.includes('state') && r.includes('admin')) return 'State Admin';
+  if (r.includes('super') && r.includes('admin')) return 'Super Admin';
+  return role;
+}
+
 // Check if a manager is within an admin's hierarchy scope
 function isManagerInScope(admin, manager) {
   const ar = (admin.role || '').toLowerCase();
@@ -41,22 +62,34 @@ function isManagerInScope(admin, manager) {
 
   if (ar.includes('super') || ar === 'admin') return true;
 
+  const mState = (mn.state || mn.assignedState || '').trim();
+  const mDistrict = (mn.district || mn.assignedDistrict || '').trim();
+  const mDivision = (mn.division || mn.assignedDivision || '').trim();
+  const mPincode = String(mn.pincode || mn.assignedPincode || '').trim();
+  const mStateId = String(mn.stateId || mn.assignedStateId || '').trim();
+  const mDistrictId = String(mn.districtId || mn.assignedDistrictId || '').trim();
+  const mDivisionId = String(mn.divisionId || mn.assignedDivisionId || '').trim();
+  const mPincodeId = String(mn.pincodeId || mn.assignedPincodeId || '').trim();
+
   // State Admin: manager must be in same state
   if (ar.includes('state') && !ar.includes('district') && !ar.includes('division') && !ar.includes('pincode')) {
-    return (admin.state && mn.state === admin.state) || (admin.stateId && mn.stateId === admin.stateId);
+    return (admin.state && mState.toLowerCase() === String(admin.state).trim().toLowerCase()) ||
+           (admin.stateId && String(mStateId) === String(admin.stateId).trim());
   }
   // District Admin: manager must be in same district
   if (ar.includes('district')) {
-    return (admin.district && mn.district === admin.district) || (admin.districtId && mn.districtId === admin.districtId);
+    return (admin.district && mDistrict.toLowerCase() === String(admin.district).trim().toLowerCase()) ||
+           (admin.districtId && String(mDistrictId) === String(admin.districtId).trim());
   }
   // Division Admin: manager must be in same division
   if (ar.includes('division') || ar.includes('divisional')) {
-    return (admin.division && mn.division === admin.division) || (admin.divisionId && mn.divisionId === admin.divisionId);
+    return (admin.division && mDivision.toLowerCase() === String(admin.division).trim().toLowerCase()) ||
+           (admin.divisionId && String(mDivisionId) === String(admin.divisionId).trim());
   }
   // Pincode Admin: manager must be in same pincode
   if (ar.includes('pincode')) {
-    return (admin.pincode && String(mn.pincode) === String(admin.pincode)) ||
-           (admin.pincodeId && mn.pincodeId === admin.pincodeId);
+    return (admin.pincode && String(mPincode) === String(admin.pincode).trim()) ||
+           (admin.pincodeId && String(mPincodeId) === String(admin.pincodeId).trim());
   }
   return false;
 }
@@ -219,12 +252,151 @@ const createTask = async (req, res) => {
 
     // Verify manager exists and is in scope
     const allUsers = Array.from(db.users || []);
-    const manager = allUsers.find(u => (u._id || u.id) === assignedManagerId);
+    const manager = allUsers.find(u => String(u._id || u.id) === String(assignedManagerId));
     if (!manager) {
       return res.status(404).json({ success: false, message: 'Assigned manager not found.' });
     }
     if (!isManagerInScope(user, manager)) {
       return res.status(403).json({ success: false, message: 'Manager is outside your authorized hierarchy.' });
+    }
+
+    // Determine Manager's real assigned territory
+    const mgrRole = String(manager.role || '').toLowerCase().replace(/_/g, ' ').trim();
+    const mgrRoleTitle = formatActorRole(manager.role, 'Manager');
+    const mgrState = String(manager.state || manager.assignedState || '').trim();
+    const mgrDistrict = String(manager.district || manager.assignedDistrict || '').trim();
+    const mgrDivision = String(manager.division || manager.assignedDivision || '').trim();
+    const mgrPincode = String(manager.pincode || manager.assignedPincode || '').trim();
+    let mgrStateId = manager.stateId || manager.assignedStateId || null;
+    let mgrDistrictId = manager.districtId || manager.assignedDistrictId || null;
+    let mgrDivisionId = manager.divisionId || manager.assignedDivisionId || null;
+    let mgrPincodeId = manager.pincodeId || manager.assignedPincodeId || null;
+
+    let taskState = mgrState;
+    let taskDistrict = mgrDistrict;
+    let taskDivision = mgrDivision;
+    let taskPincode = mgrPincode;
+    let taskStateId = mgrStateId;
+    let taskDistrictId = mgrDistrictId;
+    let taskDivisionId = mgrDivisionId;
+    let taskPincodeId = mgrPincodeId;
+
+    // Strict validation based on manager's authorized scope
+    if (mgrRole.includes('pincode')) {
+      // 1. PINCODE MANAGER: authorized strictly for their assigned pincode
+      if (pincode && String(pincode).trim() !== mgrPincode) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively for Pincode ${mgrPincode}. Submitted pincode '${pincode}' is not authorized.`
+        });
+      }
+      if (division && mgrDivision && String(division).trim().toLowerCase() !== mgrDivision.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively under Division '${mgrDivision}'.`
+        });
+      }
+      if (district && mgrDistrict && String(district).trim().toLowerCase() !== mgrDistrict.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively under District '${mgrDistrict}'.`
+        });
+      }
+      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively under State '${mgrState}'.`
+        });
+      }
+      taskState = mgrState;
+      taskDistrict = mgrDistrict;
+      taskDivision = mgrDivision;
+      taskPincode = mgrPincode;
+    } else if (mgrRole.includes('divis')) {
+      // 2. DIVISIONAL MANAGER: authorized for assigned division
+      if (division && mgrDivision && String(division).trim().toLowerCase() !== mgrDivision.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected Divisional Manager (${manager.name}) is authorized exclusively for Division '${mgrDivision}'.`
+        });
+      }
+      if (district && mgrDistrict && String(district).trim().toLowerCase() !== mgrDistrict.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected Divisional Manager (${manager.name}) is authorized exclusively under District '${mgrDistrict}'.`
+        });
+      }
+      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected Divisional Manager (${manager.name}) is authorized exclusively under State '${mgrState}'.`
+        });
+      }
+      if (pincode && String(pincode).trim()) {
+        const pinDoc = Array.from(db.pincodes || []).find(p => String(p.code || p.pincode).trim() === String(pincode).trim());
+        if (pinDoc && pinDoc.division && pinDoc.division.toLowerCase() !== mgrDivision.toLowerCase()) {
+          return res.status(400).json({
+            success: false,
+            message: `Territory validation failed: Pincode '${pincode}' belongs to Division '${pinDoc.division}', outside Manager's authorized Division '${mgrDivision}'.`
+          });
+        }
+        taskPincode = String(pincode).trim();
+        taskPincodeId = pinDoc ? (pinDoc._id || pinDoc.id) : null;
+      } else {
+        taskPincode = '';
+        taskPincodeId = null;
+      }
+      taskState = mgrState;
+      taskDistrict = mgrDistrict;
+      taskDivision = mgrDivision;
+    } else if (mgrRole.includes('dist')) {
+      // 3. DISTRICT MANAGER: authorized for assigned district
+      if (district && mgrDistrict && String(district).trim().toLowerCase() !== mgrDistrict.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected District Manager (${manager.name}) is authorized exclusively for District '${mgrDistrict}'.`
+        });
+      }
+      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected District Manager (${manager.name}) is authorized exclusively under State '${mgrState}'.`
+        });
+      }
+      taskState = mgrState;
+      taskDistrict = mgrDistrict;
+      taskDivision = division ? String(division).trim() : (mgrDivision || '');
+      taskPincode = pincode ? String(pincode).trim() : '';
+    } else if (mgrRole.includes('state')) {
+      // 4. STATE MANAGER: authorized for assigned state
+      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: Selected State Manager (${manager.name}) is authorized exclusively for State '${mgrState}'.`
+        });
+      }
+      taskState = mgrState;
+      taskDistrict = district ? String(district).trim() : '';
+      taskDivision = division ? String(division).trim() : '';
+      taskPincode = pincode ? String(pincode).trim() : '';
+    }
+
+    // Lookup stable IDs from collections if missing
+    if (taskState && !taskStateId && db.states) {
+      const st = Array.from(db.states).find(s => s.name?.toLowerCase() === taskState.toLowerCase());
+      if (st) taskStateId = st._id || st.id;
+    }
+    if (taskDistrict && !taskDistrictId && db.districts) {
+      const ds = Array.from(db.districts).find(d => d.name?.toLowerCase() === taskDistrict.toLowerCase());
+      if (ds) taskDistrictId = ds._id || ds.id;
+    }
+    if (taskDivision && !taskDivisionId && db.divisions) {
+      const dv = Array.from(db.divisions).find(d => d.name?.toLowerCase() === taskDivision.toLowerCase());
+      if (dv) taskDivisionId = dv._id || dv.id;
+    }
+    if (taskPincode && !taskPincodeId && db.pincodes) {
+      const pn = Array.from(db.pincodes).find(p => String(p.code || p.pincode).trim() === taskPincode);
+      if (pn) taskPincodeId = pn._id || pn.id;
     }
 
     // If High priority, auto-accept (no acceptance needed)
@@ -239,15 +411,23 @@ const createTask = async (req, res) => {
       category: category || 'General',
       priority: priority || 'Medium',
       dueDate: dueDate || null,
-      state: state || user.state || manager.state || '',
-      district: district || user.district || manager.district || '',
-      division: division || user.division || manager.division || '',
-      pincode: pincode || user.pincode || manager.pincode || '',
+      state: taskState,
+      stateName: taskState,
+      stateId: taskStateId,
+      district: taskDistrict,
+      districtName: taskDistrict,
+      districtId: taskDistrictId,
+      division: taskDivision,
+      divisionName: taskDivision,
+      divisionId: taskDivisionId,
+      pincode: taskPincode,
+      pincodeId: taskPincodeId,
       location: location || '',
       qcIssueId: qcIssueId || null,
-      assignedManagerId,
+      assignedManagerId: manager._id || manager.id,
       assignedManagerName: manager.name || manager.username,
-      assignedManagerRole: manager.role,
+      assignedManagerRole: mgrRoleTitle,
+      assignedManagerLevel: manager.level || (mgrRole.includes('state') ? 1 : mgrRole.includes('dist') ? 2 : mgrRole.includes('divis') ? 3 : 4),
       createdByAdminId: user._id || user.id,
       createdByAdminName: user.name || user.username,
       createdByAdminRole: user.role,
@@ -264,7 +444,7 @@ const createTask = async (req, res) => {
           by: user.name || 'Admin',
           byRole: user.role,
           at: new Date().toISOString(),
-          notes: `Assigned to ${manager.name}. Priority: ${priority || 'Medium'}.`
+          notes: `Assigned to ${manager.name} (${mgrRoleTitle}). Priority: ${priority || 'Medium'}. Territory: ${[taskState, taskDistrict, taskDivision, taskPincode].filter(Boolean).join(' → ')}.`
         }
       ]
     };
@@ -309,15 +489,16 @@ const getTasks = async (req, res) => {
     let allTasks = Array.from(db.qcTasks || []);
 
     if (isManager(user)) {
-      // Manager sees only their own tasks (match by _id, id, or manager name)
+      // Manager sees only their own tasks matching their authorized territory scope
       const mId1 = String(user._id || '');
       const mId2 = String(user.id || '');
       const mName = (user.name || '').trim().toLowerCase();
-      allTasks = allTasks.filter(t => {
+      let managerTasks = allTasks.filter(t => {
         const aid = String(t.assignedManagerId || '');
         const aname = (t.assignedManagerName || '').trim().toLowerCase();
         return (mId1 && aid === mId1) || (mId2 && aid === mId2) || (mName && aname === mName);
       });
+      allTasks = filterByLocation(managerTasks, user);
     } else if (isAdmin(user)) {
       // Admin sees tasks in their hierarchy scope via unified filterByLocation
       allTasks = filterByLocation(allTasks, user);
@@ -735,16 +916,37 @@ const getManagersForScope = async (req, res) => {
 
     return res.json({
       success: true,
-      data: scoped.map(m => ({
-        id: m._id || m.id,
-        name: m.name || m.username,
-        role: m.role,
-        email: m.email,
-        state: m.state,
-        district: m.district,
-        division: m.division,
-        pincode: m.pincode
-      })),
+      data: scoped.map(m => {
+        const stateName = (m.state || m.assignedState || '').trim();
+        const districtName = (m.district || m.assignedDistrict || '').trim();
+        const divisionName = (m.division || m.assignedDivision || '').trim();
+        const pincodeCode = String(m.pincode || m.assignedPincode || '').trim();
+        const stateId = m.stateId || m.assignedStateId || null;
+        const districtId = m.districtId || m.assignedDistrictId || null;
+        const divisionId = m.divisionId || m.assignedDivisionId || null;
+        const pincodeId = m.pincodeId || m.assignedPincodeId || null;
+        const roleTitle = formatActorRole(m.role, 'Manager');
+        const r = (m.role || '').toLowerCase();
+        const level = m.level || (r.includes('state') ? 1 : r.includes('dist') ? 2 : r.includes('divis') ? 3 : 4);
+
+        return {
+          id: m._id || m.id,
+          name: m.name || m.username,
+          role: m.role,
+          roleTitle,
+          level,
+          email: m.email || '',
+          phone: m.phone || m.mobile || '',
+          state: stateName,
+          stateId,
+          district: districtName,
+          districtId,
+          division: divisionName,
+          divisionId,
+          pincode: pincodeCode,
+          pincodeId
+        };
+      }),
       count: scoped.length
     });
   } catch (err) {
@@ -934,5 +1136,6 @@ module.exports = {
   reviewSuspendRequest,
   getManagersForScope,
   reviewTaskResolution,
-  reviewIssueResolution
+  reviewIssueResolution,
+  formatActorRole
 };

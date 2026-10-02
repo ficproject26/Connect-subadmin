@@ -1,5 +1,6 @@
 const { db, filterByLocation } = require('../config/db');
 const { getScopeFilter } = require('../middleware/scopeMiddleware');
+const { getComprehensiveVendorDirectory } = require('../utils/vendorDirectory');
 
 function getDashboardSummary(req, res) {
   try {
@@ -100,27 +101,182 @@ function getDashboardSummary(req, res) {
   }
 }
 
-function getBusinessReports(req, res) {
+async function getBusinessReports(req, res) {
   try {
     const user = req.user;
-    const scopedOrders = filterByLocation(db.orders, user);
+    if (db.orders && typeof db.orders.reloadFromMongo === 'function') {
+      await db.orders.reloadFromMongo();
+    }
+    if (db.customers && typeof db.customers.reloadFromMongo === 'function') {
+      await db.customers.reloadFromMongo();
+    }
+    if (db.vendors && typeof db.vendors.reloadFromMongo === 'function') {
+      await db.vendors.reloadFromMongo();
+    }
+    if (db.bookings && typeof db.bookings.reloadFromMongo === 'function') {
+      await db.bookings.reloadFromMongo();
+    }
+
+    const allScopedOrders = filterByLocation(db.orders, user);
+
+    // Business Reports Orders = commerce/product only (product, daily_need, food)
+    // Bookings (service, stay, travel) and jobs must NOT appear in this section
+    const BOOKING_CATS = new Set(['service', 'services', 'stay', 'travel']);
+    const JOB_CATS = new Set(['job', 'jobs']);
+    const scopedOrders = allScopedOrders.filter(o => {
+      const cat = (o.category || o.type || '').toLowerCase().trim();
+      const id = String(o.id || o._id || o.order_number || '').toUpperCase();
+      if (cat) {
+        if (BOOKING_CATS.has(cat) || JOB_CATS.has(cat)) return false;
+        return true;
+      }
+      // No category: exclude obvious booking/job IDs
+      if (id.startsWith('BKG') || id.startsWith('JOB')) return false;
+      return true;
+    });
+
     const scopedBookings = filterByLocation(db.bookings, user);
     const scopedCustomers = filterByLocation(db.customers, user);
     const scopedVendors = filterByLocation(db.vendors, user);
+    const allCustomers = Array.from(db.customers || []);
+    const vendorDir = typeof getComprehensiveVendorDirectory === 'function' ? getComprehensiveVendorDirectory() : null;
 
     const report = {
       generatedAt: new Date().toISOString(),
       adminScope: `${user.role} - ${user.pincode || user.division || user.district || user.state}`,
       summary: {
         totalSalesVolume: scopedOrders.length,
-        grossSalesValue: scopedOrders.reduce((s, o) => s + o.totalAmount, 0),
-        discountsGiven: scopedOrders.reduce((s, o) => s + (o.discountAmount || 0), 0),
-        netRevenue: scopedOrders.reduce((s, o) => s + (o.netPayable || o.totalAmount), 0),
+        grossSalesValue: scopedOrders.reduce((s, o) => s + (Number(o.totalAmount || o.grossTotal || 0)), 0),
+        discountsGiven: scopedOrders.reduce((s, o) => s + (Number(o.discountAmount || o.discount || 0)), 0),
+        netRevenue: scopedOrders.reduce((s, o) => s + (Number(o.netPayable || o.netAmount || o.totalAmount || 0)), 0),
         totalServiceBookings: scopedBookings.length,
         activeCustomerBase: scopedCustomers.length,
         activeMerchants: scopedVendors.length
       },
-      ordersList: scopedOrders,
+      ordersList: (() => {
+        const recentOrders = [...scopedOrders]
+          .sort((a, b) => new Date(b.createdAt || b.orderDate || 0) - new Date(a.createdAt || a.orderDate || 0))
+          .slice(0, 50);
+
+        return recentOrders.map(o => {
+          // Resolve order number / transaction ID
+          const orderNumber = o.order_number || o.orderNumber || o.orderId || o.order_id || o.transactionId || (o._id ? String(o._id).slice(-8) : '-');
+
+          // Resolve customer record from allCustomers
+          const custId = o.customer_id || o.customerId || o.customerDisplayId || (o.customer && (o.customer.id || o.customer._id));
+          const custPhone = o.customer_phone || o.customerPhone || o.customerMobile || o.phone || o.mobile;
+          const custName = o.customer_name || o.customerName || o.customer;
+          let customer = null;
+          if (custId) {
+            customer = allCustomers.find(c => String(c._id || c.id || c.customerId || c.registrationId) === String(custId));
+          }
+          if (!customer && custPhone) {
+            customer = allCustomers.find(c => (c.phone && c.phone === custPhone) || (c.mobile && c.mobile === custPhone));
+          }
+          if (!customer && custName && custName !== '-' && custName !== 'Customer Member') {
+            customer = allCustomers.find(c => (c.name && c.name.toLowerCase() === custName.toLowerCase()) || (c.fullName && c.fullName.toLowerCase() === custName.toLowerCase()));
+          }
+
+          const customerName = customer
+            ? (customer.name || customer.fullName || customer.customerName || '-')
+            : (custName || '-');
+          const customerMobile = customer
+            ? (customer.mobile || customer.phone || '-')
+            : (custPhone || '-');
+          const customerId = customer
+            ? (customer.customerId || customer.registrationId || customer.id || customer._id || '-')
+            : (custId || '-');
+
+          // Resolve vendor record
+          const vendorId = o.vendorId || o.vendor_id || (o.vendor && (o.vendor.id || o.vendor._id));
+          let vendor = null;
+          if (vendorId && vendorDir) {
+            vendor = vendorDir.findVendor(vendorId);
+          }
+          if (!vendor && vendorId) {
+            vendor = (db.vendors || []).find(v => String(v._id || v.id || v.vendorId) === String(vendorId));
+          }
+          const vendorName = vendor
+            ? (vendor.businessName || vendor.name || vendor.shopName || '-')
+            : (o.vendorName || o.vendor_name || o.vendor || '-');
+
+          // Financial fields
+          const grossTotal = Number(o.totalAmount || o.grossTotal || o.amount || o.finalAmount || 0);
+          const discount = Number(o.discountAmount || o.discount || 0);
+          const fees = Number(o.fees || o.platformFee || o.serviceFee || 0);
+          const commission = Number(o.commission || o.commissionAmount || 0);
+          const netPayable = Number(o.netPayable || o.netAmount || o.finalAmount || (grossTotal - discount) || grossTotal || 0);
+
+          // Location
+          const rawAddress = String(o.customer_address || o.address || o.delivery_address || (customer && (customer.fullAddress || customer.address)) || '');
+          let pincode = o.pincode || o.deliveryPincode || o.customerPincode ||
+            (customer ? (customer.pincode || customer.assignedPincode) : null);
+          if (!pincode && rawAddress) {
+            const m = rawAddress.match(/\b\d{6}\b/);
+            if (m) pincode = m[0];
+          }
+
+          let district = o.district || o.deliveryDistrict || (customer ? (customer.district || customer.city) : null);
+          let division = o.division || o.deliveryDivision || (customer ? customer.division : null);
+          let state = o.state || o.deliveryState || (customer ? customer.state : null) || user.state || 'Tamil Nadu';
+
+          if (pincode && db.pincodes) {
+            const pObj = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === String(pincode));
+            if (pObj) {
+              if (!district) district = pObj.district;
+              if (!division) division = pObj.division;
+              if (!state) state = pObj.state;
+            }
+          }
+          if (!district && /salem/i.test(rawAddress)) district = 'Salem';
+          if (!division && /thalaivasal/i.test(rawAddress)) division = 'Thalaivasal';
+          if (!state && /tamil\s*nadu/i.test(rawAddress)) state = 'Tamil Nadu';
+          if (!division && district && district.toLowerCase() === 'salem') division = 'Thalaivasal';
+          if (!state) state = 'Tamil Nadu';
+
+          // Format date
+          const rawDate = o.createdAt || o.orderDate || o.date;
+          const orderDate = rawDate
+            ? new Date(rawDate).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '-';
+
+          const productName = o.product_details || o.productName || o.product_name || o.serviceName || o.itemName ||
+            (Array.isArray(o.items) && o.items[0]?.name) || '-';
+
+          return {
+            id: o._id || o.id || o.orderId,
+            orderNumber,
+            orderDate,
+            // Customer
+            customerName,
+            customerMobile,
+            customerId,
+            // Vendor
+            vendorName,
+            vendorId: vendor ? (vendor.vendorId || vendor.id || vendor._id) : (vendorId || '-'),
+            // Product
+            productName,
+            category: o.category || o.productCategory || '-',
+            quantity: o.quantity || o.qty || 1,
+            // Financial
+            totalAmount: grossTotal,
+            grossTotal,
+            discountAmount: discount,
+            fees,
+            commission,
+            netPayable,
+            paymentMethod: o.paymentMethod || o.payment_method || '-',
+            paymentStatus: o.paymentStatus || o.payment_status || 'Paid',
+            // Location
+            pincode: pincode || '-',
+            district: district || '-',
+            division: division || '-',
+            state: state || '-',
+            // Status
+            status: o.status || 'Order Received'
+          };
+        });
+      })(),
       bookingsList: scopedBookings
     };
 
@@ -129,6 +285,7 @@ function getBusinessReports(req, res) {
     return res.status(500).json({ success: false, message: 'Failed to generate business reports', error: error.message });
   }
 }
+
 
 // GET /api/reports/dashboard - Manager Portal KPI widgets and analytics by role
 const getDashboardStats = async (req, res) => {

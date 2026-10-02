@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { TierBadge, StatusBadge } from '../../components/Badge';
@@ -7,6 +8,7 @@ import { CreditCard, Award, Sparkles, TrendingUp, TrendingDown, Minus, MapPin } 
 
 export function DivisionalMembershipCards() {
   const { user } = useAuth();
+  const { isDark } = useTheme();
   const [cardsData, setCardsData] = useState({ cards: [], counts: {} });
   const [loading, setLoading] = useState(true);
   const [tierFilter, setTierFilter] = useState('');
@@ -78,8 +80,6 @@ export function DivisionalMembershipCards() {
         return d.getFullYear() === prevYear && d.getMonth() === prevMonth;
       }).length;
 
-      const totalTierCount = tier ? (counts[tier.toLowerCase()] ?? tierCards.length) : (cards.length);
-
       let pct = 0;
       if (prevCount === 0) {
         pct = curCount > 0 ? 100 : 0;
@@ -87,26 +87,13 @@ export function DivisionalMembershipCards() {
         pct = Math.round(Math.abs((curCount - prevCount) / prevCount) * 100);
       }
 
-      let isIncrease = curCount > prevCount;
-      let isDecrease = curCount < prevCount;
-      let isNeutral = curCount === prevCount;
-
-      if (curCount === 0 && prevCount === 0 && totalTierCount > 0) {
-        const simulatedMonthlyGain = tier === 'Diamond' ? 1 : tier === 'Gold' ? 1 : 0;
-        const simulatedPrev = Math.max(1, totalTierCount - simulatedMonthlyGain);
-        pct = Math.round((simulatedMonthlyGain / simulatedPrev) * 100);
-        isIncrease = simulatedMonthlyGain > 0;
-        isDecrease = simulatedMonthlyGain < 0;
-        isNeutral = simulatedMonthlyGain === 0;
-      }
-
       return {
         curCount,
         prevCount,
         pct,
-        isIncrease,
-        isDecrease,
-        isNeutral
+        isIncrease: curCount > prevCount,
+        isDecrease: curCount < prevCount,
+        isNeutral: curCount === prevCount
       };
     };
 
@@ -124,7 +111,7 @@ export function DivisionalMembershipCards() {
         <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
           <span className="flex items-center gap-0.5">
             <TrendingUp className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            &uarr; {trend.pct}% Increase
+            ↑ {trend.pct}% Increase
           </span>
           <span className="text-slate-400 dark:text-slate-500 font-normal">vs last month</span>
         </div>
@@ -135,7 +122,7 @@ export function DivisionalMembershipCards() {
         <div className="flex items-center gap-1 text-[10px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
           <span className="flex items-center gap-0.5">
             <TrendingDown className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-            &darr; {trend.pct}% Decrease
+            ↓ {trend.pct}% Decrease
           </span>
           <span className="text-slate-400 dark:text-slate-500 font-normal">vs last month</span>
         </div>
@@ -154,13 +141,24 @@ export function DivisionalMembershipCards() {
 
   const columns = [
     {
-      header: 'Cardholder Details',
+      header: 'Card Number & Holder',
       accessor: 'customerName',
       render: (row) => (
-        <div>
-          <div className="font-bold text-slate-900 dark:text-white text-xs">{row.customerName}</div>
-          <div className="font-mono text-[11px] text-blue-600 dark:text-indigo-300 font-bold mt-0.5">{row.cardNumber}</div>
-          <div className="text-[10px] text-slate-500">Issued: {row.issueDate}</div>
+        <div className="space-y-0.5">
+          <div className="font-mono font-bold text-xs text-blue-600 dark:text-indigo-300">{row.cardNumber || '-'}</div>
+          <div className="font-bold text-xs text-slate-900 dark:text-white">{row.customerName || 'Customer Member'}</div>
+          {(row.customerMobile || row.mobile || row.phone) && (
+            <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+              {row.customerMobile || row.mobile || row.phone}
+            </div>
+          )}
+          {(row.customerId || row.customer_id || row.cid) && (
+            <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+              {String(row.customerId || row.customer_id || row.cid).startsWith('CUST')
+                ? (row.customerId || row.customer_id || row.cid)
+                : `CUST-${row.customerId || row.customer_id || row.cid}`}
+            </div>
+          )}
         </div>
       )
     },
@@ -170,43 +168,120 @@ export function DivisionalMembershipCards() {
       render: (row) => <TierBadge tier={row.tier} />
     },
     {
-      header: 'Perk Discount',
-      accessor: 'discountPercent',
-      render: (row) => (
-        <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs">
-          {row.discountPercent}% Instant Off
-        </span>
-      )
-    },
-    {
-      header: 'Reward Points',
-      accessor: 'points',
-      render: (row) => (
-        <span className="font-mono font-bold text-slate-900 dark:text-amber-300 text-xs">
-          {row.points?.toLocaleString()} pts
-        </span>
-      )
-    },
-    {
-      header: 'Jurisdiction & Pincode',
+      header: 'Territory / Pincode',
       accessor: 'pincode',
       render: (row) => (
         <div className="space-y-0.5">
           <div className="font-semibold text-xs text-slate-900 dark:text-white">
-            {divisionName} ({districtName})
+            {divisionName || row.division || '-'} {districtName ? `(${districtName})` : ''}
           </div>
-          <div className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-            <MapPin className="w-3 h-3" /> PIN: {row.pincode}
-          </div>
+          {row.pincode && (
+            <div className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <MapPin className="w-3 h-3" /> {row.pincode}
+            </div>
+          )}
+          {!row.pincode && (
+            <span className="text-slate-400 text-xs">-</span>
+          )}
         </div>
       )
+    },
+    {
+      header: 'Validity Period',
+      accessor: 'issueDate',
+      render: (row) => {
+        const issued = row.issueDate
+          ? new Date(row.issueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '-';
+        const expires = row.expiryDate || row.expiry || row.validUntil || row.expiresAt
+          ? new Date(row.expiryDate || row.expiry || row.validUntil || row.expiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+          : null;
+        return (
+          <div className="space-y-0.5 text-xs">
+            <div className={`${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+              <span className="text-slate-400">Issued:</span> {issued}
+            </div>
+            <div className={`${expires ? (isDark ? 'text-slate-300' : 'text-slate-700') : 'text-rose-400'}`}>
+              <span className="text-slate-400">Expires:</span> {expires || 'Not set'}
+            </div>
+          </div>
+        );
+      }
     },
     {
       header: 'Card Status',
       accessor: 'status',
       render: (row) => <StatusBadge status={row.status} />
+    },
+    {
+      header: 'Purchase Type',
+      accessor: 'purchaseType',
+      render: (row) => {
+        const pType = row.purchaseType || row.transactionType || row.action || '';
+        const prevTier = row.previousTier || row.fromTier || row.upgradedFrom || '';
+        const curTier = row.tier || row.currentTier || '';
+
+        const isUpgrade = pType.toLowerCase().includes('upgrade') || (prevTier && curTier && prevTier !== curTier);
+        const isDowngrade = pType.toLowerCase().includes('downgrade');
+        const isRenewal = pType.toLowerCase().includes('renew');
+        const isReplacement = pType.toLowerCase().includes('replac');
+
+        if (isUpgrade && prevTier && curTier) {
+          return (
+            <div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                UPGRADED
+              </span>
+              <div className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 mt-0.5">
+                {prevTier} → {curTier}
+              </div>
+            </div>
+          );
+        }
+        if (isUpgrade) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+              UPGRADED
+            </span>
+          );
+        }
+        if (isDowngrade) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+              DOWNGRADED
+            </span>
+          );
+        }
+        if (isRenewal) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              RENEWAL
+            </span>
+          );
+        }
+        if (isReplacement) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+              REPLACEMENT
+            </span>
+          );
+        }
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            NEW PURCHASE
+          </span>
+        );
+      }
     }
   ];
+
+  const displayedCards = useMemo(() => {
+    if (!tierFilter) return cardsData.cards || [];
+    if (tierFilter.toLowerCase() === 'no card') {
+      return (cardsData.cards || []).filter(c => c.tier?.toLowerCase() === 'no card' || c.hasCard === false);
+    }
+    return (cardsData.cards || []).filter(c => c.tier?.toLowerCase() === tierFilter.toLowerCase());
+  }, [cardsData.cards, tierFilter]);
 
   return (
     <div className="space-y-6">
@@ -226,7 +301,7 @@ export function DivisionalMembershipCards() {
             <CreditCard className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">
-            {cardsData.cards.length}
+            {cardsData.cards.filter(c => c.tier !== 'No Card').length}
           </div>
           {renderTrendBadge(tierComparison.total)}
         </div>
@@ -238,7 +313,7 @@ export function DivisionalMembershipCards() {
             <Award className="w-4 h-4 text-slate-400" />
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">
-            {cardsData.cards.filter(c => c.tier === 'Silver').length || 1}
+            {cardsData.cards.filter(c => c.tier === 'Silver').length}
           </div>
           {renderTrendBadge(tierComparison.silver)}
         </div>
@@ -250,7 +325,7 @@ export function DivisionalMembershipCards() {
             <Sparkles className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">
-            {cardsData.cards.filter(c => c.tier === 'Gold').length || 1}
+            {cardsData.cards.filter(c => c.tier === 'Gold').length}
           </div>
           {renderTrendBadge(tierComparison.gold)}
         </div>
@@ -262,7 +337,7 @@ export function DivisionalMembershipCards() {
             <Sparkles className="w-4 h-4 text-cyan-400" />
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">
-            {cardsData.cards.filter(c => c.tier === 'Diamond').length || 1}
+            {cardsData.cards.filter(c => c.tier === 'Diamond').length}
           </div>
           {renderTrendBadge(tierComparison.diamond)}
         </div>
@@ -272,14 +347,15 @@ export function DivisionalMembershipCards() {
         title="Active Membership Registry"
         subtitle="Tier classification: Silver (5%), Gold (10%), Diamond (15%)"
         columns={columns}
-        data={cardsData.cards.filter(c => !tierFilter || c.tier === tierFilter)}
+        data={displayedCards}
         loading={loading}
         onRefresh={loadData}
         filterOptions={[
-          { label: 'All Tiers', value: '' },
-          { label: 'Diamond Card', value: 'Diamond' },
-          { label: 'Gold Card', value: 'Gold' },
-          { label: 'Silver Card', value: 'Silver' },
+          { label: 'All', value: '' },
+          { label: 'Diamond', value: 'Diamond' },
+          { label: 'Gold', value: 'Gold' },
+          { label: 'Silver', value: 'Silver' },
+          { label: 'Customer (No Card)', value: 'No Card' }
         ]}
         activeFilter={tierFilter}
         onFilterChange={setTierFilter}

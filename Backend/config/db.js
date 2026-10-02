@@ -685,11 +685,43 @@ const DISTRICT_STATE_MAP = {
 function extractEntityGeo(item, pinLookup) {
   const t = item.territory || {};
   const addr0 = (item.addresses && item.addresses[0]) || {};
+  const sc = item.scope || {};
+  const meta = item.metadata || {};
+  const deliv = item.deliveryAddress || {};
 
-  let state = item.state || item.assignedState || t.state || addr0.state || item.vendorState || '';
-  let district = item.district || item.assignedDistrict || t.district || item.vendorDistrict || addr0.district || addr0.city || item.city || '';
-  let division = item.division || item.assignedDivision || t.division || addr0.division || '';
-  let pincode = String(item.pincode || item.assignedPincode || item.pincodeCode || t.pincode || addr0.pincode || item.postalCode || '').trim();
+  let state = item.state || item.assignedState || t.state || addr0.state || item.vendorState || sc.state || meta.state || deliv.state || '';
+  let district = item.district || item.assignedDistrict || t.district || item.vendorDistrict || addr0.district || addr0.city || item.city || sc.district || meta.district || deliv.district || '';
+  let division = item.division || item.assignedDivision || t.division || addr0.division || sc.division || meta.division || deliv.division || '';
+  let pincode = String(item.pincode || item.assignedPincode || item.pincodeCode || t.pincode || addr0.pincode || item.postalCode || sc.pincode || meta.pincode || deliv.pincode || '').trim();
+
+  // If geo is missing and entityId is present, resolve from entity
+  if (!pincode && !district && item.entityId) {
+    if (item.entityType === 'vendor' && db.vendors) {
+      const v = (db.vendors || []).find(x => String(x._id || x.id || x.vendorId) === String(item.entityId));
+      if (v) {
+        state = state || v.state;
+        district = district || v.district || v.city;
+        division = division || v.division;
+        pincode = pincode || v.pincode;
+      }
+    } else if ((item.entityType === 'task' || item.entityType === 'qc_task') && db.qcTasks) {
+      const tk = (db.qcTasks || []).find(x => String(x._id || x.id || x.taskId) === String(item.entityId));
+      if (tk) {
+        state = state || tk.state;
+        district = district || tk.district;
+        division = division || tk.division;
+        pincode = pincode || tk.pincode;
+      }
+    } else if (item.entityType === 'order' && db.orders) {
+      const od = (db.orders || []).find(x => String(x._id || x.id || x.orderId) === String(item.entityId));
+      if (od) {
+        state = state || od.state;
+        district = district || od.district;
+        division = division || od.division;
+        pincode = pincode || od.pincode;
+      }
+    }
+  }
 
   // If pincode missing, search address text
   const rawAddr = String(item.address || item.fullAddress || item.customer_address || addr0.address || '');

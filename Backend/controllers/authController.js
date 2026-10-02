@@ -251,7 +251,31 @@ const login = async (req, res) => {
     const rawRole = (user.role || '').toLowerCase().replace(/_/g, ' ').trim();
     const levelStr = String(user.level || user.adminLevel || user.adminRole || '').toLowerCase().replace(/_/g, ' ').trim();
 
-    if (rawRole === 'admin' || rawRole === 'super admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'].includes(user.role)) {
+    if (rawRole.includes('manager')) {
+      if (rawRole.includes('pincode')) {
+        normalizedRole = 'Pincode Manager';
+      } else if (rawRole.includes('divis')) {
+        normalizedRole = 'Divisional Manager';
+      } else if (rawRole.includes('dist')) {
+        normalizedRole = 'District Manager';
+      } else if (rawRole.includes('state')) {
+        normalizedRole = 'State Manager';
+      } else {
+        normalizedRole = 'Field Manager';
+      }
+    } else if (rawRole.includes('agent')) {
+      if (rawRole.includes('pincode')) {
+        normalizedRole = 'Pincode Agent';
+      } else if (rawRole.includes('divis')) {
+        normalizedRole = 'Divisional Agent';
+      } else if (rawRole.includes('dist')) {
+        normalizedRole = 'District Agent';
+      } else if (rawRole.includes('state')) {
+        normalizedRole = 'State Agent';
+      } else {
+        normalizedRole = 'Pincode Agent';
+      }
+    } else if (rawRole === 'admin' || rawRole === 'super admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'].includes(user.role)) {
       if (user.pincode || user.assignedPincode || levelStr.includes('pincode') || rawRole.includes('pincode')) {
         normalizedRole = 'Pincode Admin';
       } else if (user.division || user.assignedDivision || levelStr.includes('divis') || rawRole.includes('divis')) {
@@ -274,6 +298,12 @@ const login = async (req, res) => {
       'Divisional Admin': 3,
       'Division Admin': 3,
       'Pincode Admin': 4,
+      'State Manager': 1,
+      'District Manager': 2,
+      'Divisional Manager': 3,
+      'Division Manager': 3,
+      'Pincode Manager': 4,
+      'Field Manager': 4,
       'Manager': 1
     };
     const assignedLevel = roleLevelMap[normalizedRole] || (typeof user.level === 'number' ? user.level : 4);
