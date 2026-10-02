@@ -924,11 +924,17 @@
     "addedBy": {
       "id": "usr_mgr_1790588690346_2iph",
       "name": "Murugan",
-      "role": "Pincode Admin",
+      "role": "Pincode Manager",
       "phone": "+91 98765 43210",
       "email": "murugan@gmail.com",
       "addedAt": "2026-09-28"
     },
+    "createdById": "usr_mgr_1790588690346_2iph",
+    "createdByName": "Murugan",
+    "createdByRole": "Pincode Manager",
+    "onboardedById": "usr_mgr_1790588690346_2iph",
+    "onboardedByName": "Murugan",
+    "onboardedByRole": "Pincode Manager",
     "address": "5/37,2nd cross,Anna Nagar,hosur ",
     "agentName": "",
     "alternatePhone": "",
