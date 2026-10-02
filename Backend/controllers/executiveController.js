@@ -560,7 +560,7 @@ function getAgentActivities(req, res) {
 // ─────────────────────────────────────────────────────────────────
 // POST /operations/agents/activities
 // ─────────────────────────────────────────────────────────────────
-function createAgentActivity(req, res) {
+async function createAgentActivity(req, res) {
   try {
     const {
       vendorName,

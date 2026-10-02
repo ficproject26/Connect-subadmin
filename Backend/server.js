@@ -39,11 +39,49 @@ const app = express();
 const PORT = process.env.PORT || 8006;
 
 // Middleware
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow any origin (including Vercel, localhost, Electron, mobile)
+    callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Cache-Control',
+    'Pragma',
+    'Expires',
+    'x-auth-token'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+// Explicit preflight fallback handler
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma, Expires, x-auth-token');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// Strip /subadmin-api prefix if proxied by Nginx without path rewriting
+app.use((req, res, next) => {
+  if (req.url.startsWith('/subadmin-api')) {
+    req.url = req.url.replace(/^\/subadmin-api/, '') || '/';
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

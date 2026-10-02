@@ -69,59 +69,76 @@ export async function apiRequest(endpoint, options = {}) {
   const noAutoLogoutEndpoints = ['/auth/login', '/auth/me', '/auth/register'];
   const isNoAutoLogout = noAutoLogoutEndpoints.some((e) => endpoint.includes(e));
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, { ...options, headers });
-
-      let data;
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        data = await response.json();
-      } else {
-        const text = await response.text();
-        data = { message: sanitizeErrorMessage(text, response.status) };
-      }
-
-      if (!response.ok) {
-        // Retry on 503 (backend restarting)
-        if (response.status === 503 && attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
-          continue;
-        }
-
-        // 401 on a protected endpoint that is NOT login/me:
-        // clear the stale token and redirect to login.
-        if (response.status === 401 && !isNoAutoLogout) {
-          localStorage.removeItem('ams_token');
-          localStorage.removeItem('ams_user');
-          // In Electron (HashRouter), routes are prefixed with #; in web use pathname
-          const isElectron =
-            (typeof window !== 'undefined' && window.electronAPI?.isElectron === true) ||
-            (typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron'));
-          const loginPath = isElectron ? '/#/login' : '/login';
-          if (window.location.pathname !== '/login' && window.location.hash !== '#/login') {
-            window.location.href = loginPath;
-          }
-        }
-
-        const rawMessage = data?.message || `Request failed with status ${response.status}`;
-        const error = new Error(sanitizeErrorMessage(rawMessage, response.status));
-        error.status = response.status;
-        throw error;
-      }
-
-      return data;
-    } catch (error) {
-      if (attempt < maxRetries && (!error.status || error.status === 503)) {
-        await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
-        continue;
-      }
-
-      const cleanMsg = sanitizeErrorMessage(error.message || '', error.status);
-      const cleanError = new Error(cleanMsg);
-      cleanError.status = error.status;
-      console.error(`API Error [${endpoint}]:`, cleanMsg);
-      throw cleanError;
+  // Determine candidate URLs (primary configured URL and same-origin fallback if applicable)
+  const candidateUrls = [url];
+  if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const relativeUrl = cleanEndpoint.startsWith('/api') ? cleanEndpoint : `/api${cleanEndpoint}`;
+    if (url !== relativeUrl && !candidateUrls.includes(relativeUrl)) {
+      candidateUrls.push(relativeUrl);
     }
   }
+
+  let lastError = null;
+
+  for (const currentUrl of candidateUrls) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(currentUrl, { ...options, headers });
+
+        let data;
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          data = await response.json();
+        } else {
+          const text = await response.text();
+          data = { message: sanitizeErrorMessage(text, response.status) };
+        }
+
+        if (!response.ok) {
+          // Retry on 503 (backend restarting)
+          if (response.status === 503 && attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+            continue;
+          }
+
+          // 401 on a protected endpoint that is NOT login/me:
+          // clear the stale token and redirect to login.
+          if (response.status === 401 && !isNoAutoLogout) {
+            localStorage.removeItem('ams_token');
+            localStorage.removeItem('ams_user');
+            const isElectron =
+              (typeof window !== 'undefined' && window.electronAPI?.isElectron === true) ||
+              (typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron'));
+            const loginPath = isElectron ? '/#/login' : '/login';
+            if (window.location.pathname !== '/login' && window.location.hash !== '#/login') {
+              window.location.href = loginPath;
+            }
+          }
+
+          const rawMessage = data?.message || `Request failed with status ${response.status}`;
+          const error = new Error(sanitizeErrorMessage(rawMessage, response.status));
+          error.status = response.status;
+          throw error;
+        }
+
+        return data;
+      } catch (error) {
+        lastError = error;
+        // If it's a 503 or network failure, retry with backoff on same URL
+        if (attempt < maxRetries && (!error.status || error.status === 503)) {
+          await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+          continue;
+        }
+        // If candidateUrls has another option (e.g. fallback from direct domain to same-origin proxy), break to next URL
+        break;
+      }
+    }
+  }
+
+  const cleanMsg = sanitizeErrorMessage(lastError?.message || '', lastError?.status);
+  const cleanError = new Error(cleanMsg);
+  cleanError.status = lastError?.status;
+  console.error(`API Error [${endpoint}]:`, cleanMsg);
+  throw cleanError;
 }
