@@ -39,6 +39,15 @@ const app = express();
 const PORT = process.env.PORT || 8006;
 
 // Middleware
+// 1. Strip /subadmin-api prefix if proxied by Nginx/Vercel without path rewriting
+app.use((req, res, next) => {
+  if (req.url.startsWith('/subadmin-api')) {
+    req.url = req.url.replace(/^\/subadmin-api/, '') || '/';
+  }
+  next();
+});
+
+// 2. Comprehensive CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow any origin (including Vercel, localhost, Electron, mobile)
@@ -62,22 +71,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Explicit preflight fallback handler
+// 3. Fallback explicit preflight and CORS header guarantee on every response
 app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma, Expires, x-auth-token');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    return res.sendStatus(204);
-  }
-  next();
-});
+  const origin = req.headers.origin || '*';
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma, Expires, x-auth-token');
+  res.header('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range');
 
-// Strip /subadmin-api prefix if proxied by Nginx without path rewriting
-app.use((req, res, next) => {
-  if (req.url.startsWith('/subadmin-api')) {
-    req.url = req.url.replace(/^\/subadmin-api/, '') || '/';
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
   }
   next();
 });
@@ -168,9 +172,14 @@ app.use((req, res) => {
   res.status(404).json({ success: false, message: `Endpoint ${req.originalUrl} not found.` });
 });
 
-// Global Error Handler
+// Global Error Handler with guaranteed CORS headers
 app.use((err, req, res, next) => {
   console.error('Unhandled Error:', err.stack || err.message);
+  const origin = req.headers.origin || '*';
+  res.header('Access-Control-Allow-Origin', origin);
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma, Expires, x-auth-token');
   res.status(err.status || 500).json({ success: false, message: err.message || 'Internal Server Error' });
 });
 
@@ -196,26 +205,21 @@ initRedis().then(() => {
 });
 
 if (require.main === module) {
-  (async () => {
-    try {
-      console.log('Connecting to MongoDB Atlas as single source of truth...');
-      await initDatabase();
-      console.log('✅ MongoDB Atlas connected and all collections ready.');
-    } catch (err) {
-      console.error('CRITICAL: Database initialization failed:', err.message);
-      process.exit(1);
-    }
+  // Start HTTP listener immediately so Nginx / Vercel proxy never encounters a 502 Bad Gateway
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log('================================================================');
+    console.log('🚀 Unified Sub-Admin & Field Manager Backend is running!');
+    console.log('📡 Local URL:   http://localhost:' + PORT);
+    console.log('⚡ WebSocket:   ws://localhost:' + PORT + '/ws');
+    console.log('🩺 Health Check: http://localhost:' + PORT + '/api/health');
+    console.log('📊 Telemetry:   http://localhost:' + PORT + '/api/realtime/metrics');
+    console.log('================================================================');
 
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log('================================================================');
-      console.log('🚀 Unified Sub-Admin & Field Manager Backend is running!');
-      console.log('📡 Local URL:   http://localhost:' + PORT);
-      console.log('⚡ WebSocket:   ws://localhost:' + PORT + '/ws');
-      console.log('🩺 Health Check: http://localhost:' + PORT + '/api/health');
-      console.log('📊 Telemetry:   http://localhost:' + PORT + '/api/realtime/metrics');
-      console.log('================================================================');
-    });
-  })();
+    // Connect to MongoDB Atlas in background
+    initDatabase()
+      .then(() => console.log('✅ MongoDB Atlas connected and all collections ready.'))
+      .catch((err) => console.error('CRITICAL: Database initialization failed:', err.message));
+  });
 }
 
 // Unified API Server - Clean Production Ready Data Store

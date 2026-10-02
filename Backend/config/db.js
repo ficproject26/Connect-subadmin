@@ -467,16 +467,54 @@ function syncHierarchyFromDatabase() {
   const rawDivisions = Array.from(divisionsCollection).filter(v => (v.status || 'Active').toLowerCase() === 'active');
   const rawPincodes = Array.from(pincodesCollection).filter(p => (p.status || 'Active').toLowerCase() === 'active');
 
+  const pinByDivision = new Map();
+  for (const p of rawPincodes) {
+    const kId = String(p.divisionId || p.division_id || '');
+    const kName = (p.division || '').toLowerCase().trim();
+    if (kId) {
+      if (!pinByDivision.has(kId)) pinByDivision.set(kId, []);
+      pinByDivision.get(kId).push(p);
+    }
+    if (kName && kName !== kId) {
+      if (!pinByDivision.has(kName)) pinByDivision.set(kName, []);
+      pinByDivision.get(kName).push(p);
+    }
+  }
+
+  const divByDistrict = new Map();
+  for (const v of rawDivisions) {
+    const kId = String(v.districtId || v.district_id || '');
+    const kName = (v.district || '').toLowerCase().trim();
+    if (kId) {
+      if (!divByDistrict.has(kId)) divByDistrict.set(kId, []);
+      divByDistrict.get(kId).push(v);
+    }
+    if (kName && kName !== kId) {
+      if (!divByDistrict.has(kName)) divByDistrict.set(kName, []);
+      divByDistrict.get(kName).push(v);
+    }
+  }
+
+  const distByState = new Map();
+  for (const d of rawDistricts) {
+    const kId = String(d.stateId || d.state_id || '');
+    const kName = (d.state || '').toLowerCase().trim();
+    if (kId) {
+      if (!distByState.has(kId)) distByState.set(kId, []);
+      distByState.get(kId).push(d);
+    }
+    if (kName && kName !== kId) {
+      if (!distByState.has(kName)) distByState.set(kName, []);
+      distByState.get(kName).push(d);
+    }
+  }
+
   db.hierarchy = {
     states: rawStates.map(s => {
       const sId = String(s._id || s.id || s.stateId);
       const sName = (s.name || '').trim();
 
-      const distList = rawDistricts.filter(d =>
-        String(d.stateId) === sId ||
-        String(d.stateId) === String(s._id) ||
-        (d.state && d.state.toLowerCase() === sName.toLowerCase())
-      );
+      const distList = distByState.get(sId) || distByState.get(sName.toLowerCase()) || [];
 
       return {
         id: sId,
@@ -489,11 +527,7 @@ function syncHierarchyFromDatabase() {
           const dId = String(d._id || d.id || d.districtId);
           const dName = (d.name || '').trim();
 
-          const divList = rawDivisions.filter(v =>
-            String(v.districtId) === dId ||
-            String(v.districtId) === String(d._id) ||
-            (v.district && v.district.toLowerCase() === dName.toLowerCase())
-          );
+          const divList = divByDistrict.get(dId) || divByDistrict.get(dName.toLowerCase()) || [];
 
           return {
             id: dId,
@@ -508,11 +542,7 @@ function syncHierarchyFromDatabase() {
               const vId = String(v._id || v.id || v.divisionId);
               const vName = (v.name || '').trim();
 
-              const pinList = rawPincodes.filter(p =>
-                String(p.divisionId) === vId ||
-                String(p.divisionId) === String(v._id) ||
-                (p.division && p.division.toLowerCase() === vName.toLowerCase())
-              );
+              const pinList = pinByDivision.get(vId) || pinByDivision.get(vName.toLowerCase()) || [];
 
               return {
                 id: vId,
@@ -597,34 +627,31 @@ function initDatabase() {
 
       syncHierarchyFromDatabase();
 
-      // Ensure performance indexes in MongoDB Atlas
-      try {
-        await Promise.allSettled([
-          mongoDb.collection('users').createIndex({ email: 1 }),
-          mongoDb.collection('users').createIndex({ role: 1, status: 1 }),
-          mongoDb.collection('vendors').createIndex({ status: 1, kycStatus: 1 }),
-          mongoDb.collection('vendors').createIndex({ pincode: 1 }),
-          mongoDb.collection('vendors').createIndex({ category: 1, status: 1 }),
-          mongoDb.collection('orders').createIndex({ status: 1, createdAt: -1 }),
-          mongoDb.collection('orders').createIndex({ category: 1, status: 1 }),
-          mongoDb.collection('orders').createIndex({ type: 1, status: 1 }),
-          mongoDb.collection('orders').createIndex({ pincode: 1 }),
-          mongoDb.collection('bookings').createIndex({ status: 1, createdAt: -1 }),
-          mongoDb.collection('bookings').createIndex({ category: 1, status: 1 }),
-          mongoDb.collection('jobs').createIndex({ status: 1, createdAt: -1 }),
-          mongoDb.collection('customers').createIndex({ phone: 1, email: 1 }),
-          mongoDb.collection('cardholders').createIndex({ phone: 1, email: 1, cardNumber: 1 }),
-          mongoDb.collection('delivery_status_history').createIndex({ order_id: 1 }),
-          mongoDb.collection('delivery_status_history').createIndex({ order_number: 1 }),
-          mongoDb.collection('pincodes').createIndex({ code: 1 }),
-          mongoDb.collection('pincodes').createIndex({ divisionId: 1, districtId: 1 }),
-          mongoDb.collection('districts').createIndex({ stateId: 1 }),
-          mongoDb.collection('divisions').createIndex({ districtId: 1 })
-        ]);
+      // Ensure performance indexes in MongoDB Atlas asynchronously (non-blocking)
+      Promise.allSettled([
+        mongoDb.collection('users').createIndex({ email: 1 }),
+        mongoDb.collection('users').createIndex({ role: 1, status: 1 }),
+        mongoDb.collection('vendors').createIndex({ status: 1, kycStatus: 1 }),
+        mongoDb.collection('vendors').createIndex({ pincode: 1 }),
+        mongoDb.collection('vendors').createIndex({ category: 1, status: 1 }),
+        mongoDb.collection('orders').createIndex({ status: 1, createdAt: -1 }),
+        mongoDb.collection('orders').createIndex({ category: 1, status: 1 }),
+        mongoDb.collection('orders').createIndex({ type: 1, status: 1 }),
+        mongoDb.collection('orders').createIndex({ pincode: 1 }),
+        mongoDb.collection('bookings').createIndex({ status: 1, createdAt: -1 }),
+        mongoDb.collection('bookings').createIndex({ category: 1, status: 1 }),
+        mongoDb.collection('jobs').createIndex({ status: 1, createdAt: -1 }),
+        mongoDb.collection('customers').createIndex({ phone: 1, email: 1 }),
+        mongoDb.collection('cardholders').createIndex({ phone: 1, email: 1, cardNumber: 1 }),
+        mongoDb.collection('delivery_status_history').createIndex({ order_id: 1 }),
+        mongoDb.collection('delivery_status_history').createIndex({ order_number: 1 }),
+        mongoDb.collection('pincodes').createIndex({ code: 1 }),
+        mongoDb.collection('pincodes').createIndex({ divisionId: 1, districtId: 1 }),
+        mongoDb.collection('districts').createIndex({ stateId: 1 }),
+        mongoDb.collection('divisions').createIndex({ districtId: 1 })
+      ]).then(() => {
         console.log('⚡ [Database] Performance indexes verified in MongoDB Atlas.');
-      } catch (idxErr) {
-        // Non-blocking index creation
-      }
+      }).catch(() => {});
 
       console.log('✅ [Database] All collections connected to MongoDB Atlas as single source of truth.');
       return true;

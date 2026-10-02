@@ -76,13 +76,16 @@ const getUnreadCount = async (req, res) => {
 const streamNotifications = (req, res) => {
   const user = req.user || extractUserFromRequest(req);
 
+  const origin = req.headers.origin || '*';
+
   // Set SSE HTTP Headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
     'X-Accel-Buffering': 'no', // Disable proxy buffering for Nginx/reverse proxies
-    'Access-Control-Allow-Origin': '*'
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true'
   });
 
   res.flushHeaders?.();
