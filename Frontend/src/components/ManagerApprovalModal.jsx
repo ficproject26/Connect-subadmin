@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { StatusBadge } from './Badge';
 import { dataService } from '../services/dataService';
@@ -27,9 +27,7 @@ import {
   Maximize2,
   Download,
   Clock,
-  Landmark,
-  Upload,
-  Loader2
+  Landmark
 } from 'lucide-react';
 
 export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdated }) {
@@ -46,14 +44,6 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   // Sensitive data masking toggle states
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [showFullPan, setShowFullPan] = useState(false);
-  const [replacingDoc, setReplacingDoc] = useState({}); // { [docKey]: boolean }
-
-  // Hidden file inputs for replacing documents
-  const replaceAadhaarRef = useRef();
-  const replacePanRef = useRef();
-  const replaceBankRef = useRef();
-  const replaceChequeRef = useRef();
-  const replaceSigRef = useRef();
 
   useEffect(() => {
     setCurrentMgr(manager);
@@ -67,9 +57,6 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   const isPending = isPendingAdmin || isPendingKyc;
   const isActive = activeMgr.status === 'active';
   const isRejected = activeMgr.status === 'rejected';
-
-  // Authorization for replacing documents
-  const canEditDocuments = activeMgr.canApprove !== false || (user?.role && String(user.role).toLowerCase().includes('admin'));
 
   // Format relative uploads so they route via current host & Vite proxy cleanly
   const resolveMediaUrl = (url) => {
@@ -125,63 +112,6 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
       setError(err.message || 'Error occurred while rejecting manager.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleReplaceDocument = async (docKey, file) => {
-    if (!file) return;
-    setError('');
-    setSuccessMsg('');
-
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setError('File size exceeds 10MB limit. Please choose a smaller file.');
-      return;
-    }
-    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-    const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
-    if (!allowed.includes(ext)) {
-      setError('Invalid file type. Only PDF, JPG, and PNG files are accepted.');
-      return;
-    }
-
-    setReplacingDoc(prev => ({ ...prev, [docKey]: true }));
-    try {
-      const upRes = await dataService.uploadDocument(file);
-      if (!upRes || !upRes.success || !upRes.file) {
-        throw new Error(upRes?.message || 'File upload failed');
-      }
-
-      const updateData = {};
-      if (docKey === 'aadhaar') {
-        updateData.aadharUrl = upRes.file.url;
-        updateData.aadharFileName = upRes.file.name;
-      } else if (docKey === 'pan') {
-        updateData.panUrl = upRes.file.url;
-        updateData.panFileName = upRes.file.name;
-      } else if (docKey === 'bankPassbook') {
-        updateData.bankPassbookUrl = upRes.file.url;
-        updateData.bankPassbookFileName = upRes.file.name;
-      } else if (docKey === 'cancelledCheque') {
-        updateData.cancelledChequeUrl = upRes.file.url;
-        updateData.cancelledChequeFileName = upRes.file.name;
-      } else if (docKey === 'signature') {
-        updateData.signatureUrl = upRes.file.url;
-        updateData.signatureFileName = upRes.file.name;
-      }
-
-      const res = await dataService.updateManagerDocuments(activeMgr.id || activeMgr._id, updateData);
-      if (res && res.success && res.manager) {
-        setCurrentMgr(res.manager);
-        if (onManagerUpdated) onManagerUpdated(res.manager);
-        setSuccessMsg(`Document updated and verified successfully.`);
-      } else {
-        setError(res?.message || 'Failed to update manager document record.');
-      }
-    } catch (err) {
-      setError(err.message || 'Error occurred while updating document.');
-    } finally {
-      setReplacingDoc(prev => ({ ...prev, [docKey]: false }));
     }
   };
 
@@ -246,24 +176,23 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   const resolvedAvatar = avatarSrc ? resolveMediaUrl(avatarSrc) : null;
 
   // Render a reusable official document card
-  const renderDocCard = ({ title, docUrl, fileName, docKey, fileInputRef, inputAccept = "image/*,.pdf" }) => {
+  const renderDocCard = ({ title, docUrl, fileName }) => {
     const mediaUrl = docUrl ? resolveMediaUrl(docUrl) : null;
     const isPdf = mediaUrl ? mediaUrl.toLowerCase().endsWith('.pdf') : false;
-    const isReplacing = !!replacingDoc[docKey];
 
     return (
       <div className="flex flex-col p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs min-w-0">
             <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="font-bold text-slate-800 dark:text-slate-200">{title}</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200 truncate">{title}</span>
           </div>
           {mediaUrl ? (
-            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0 whitespace-nowrap">
               <CheckCircle2 className="w-3 h-3" /> Uploaded
             </span>
           ) : (
-            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0 whitespace-nowrap">
               <AlertCircle className="w-3 h-3" /> Not Uploaded
             </span>
           )}
@@ -316,52 +245,16 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                 >
                   <ExternalLink className="w-3 h-3" /> New Tab
                 </a>
-                {canEditDocuments && (
-                  <>
-                    <span className="text-slate-300 dark:text-slate-700">|</span>
-                    <button
-                      type="button"
-                      disabled={isReplacing}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      {isReplacing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                      Replace
-                    </button>
-                  </>
-                )}
               </div>
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between py-1">
-            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium italic">
-              Not Uploaded
+          <div className="py-1">
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+              No document file attached
             </span>
-            {canEditDocuments && (
-              <button
-                type="button"
-                disabled={isReplacing}
-                onClick={() => fileInputRef.current?.click()}
-                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
-              >
-                {isReplacing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                Upload Document
-              </button>
-            )}
           </div>
         )}
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={inputAccept}
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files[0];
-            if (f) handleReplaceDocument(docKey, f);
-          }}
-        />
       </div>
     );
   };
@@ -611,9 +504,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                 {renderDocCard({
                   title: 'Aadhaar Document',
                   docUrl: aadhaarDocUrl,
-                  fileName: aadhaarFileName,
-                  docKey: 'aadhaar',
-                  fileInputRef: replaceAadhaarRef
+                  fileName: aadhaarFileName
                 })}
               </div>
 
@@ -638,9 +529,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                 {renderDocCard({
                   title: 'PAN Document',
                   docUrl: panDocUrl,
-                  fileName: panFileName,
-                  docKey: 'pan',
-                  fileInputRef: replacePanRef
+                  fileName: panFileName
                 })}
               </div>
             </div>
@@ -664,17 +553,13 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
               {renderDocCard({
                 title: 'Bank Passbook / Bank Account Document',
                 docUrl: bankDocUrl,
-                fileName: bankFileName,
-                docKey: 'bankPassbook',
-                fileInputRef: replaceBankRef
+                fileName: bankFileName
               })}
 
               {renderDocCard({
                 title: 'Cancelled Cheque',
                 docUrl: cancelledChequeUrl,
-                fileName: cancelledChequeFileName,
-                docKey: 'cancelledCheque',
-                fileInputRef: replaceChequeRef
+                fileName: cancelledChequeFileName
               })}
             </div>
           </div>
@@ -697,9 +582,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
               {renderDocCard({
                 title: 'Digital Signature',
                 docUrl: signatureDocUrl,
-                fileName: signatureFileName,
-                docKey: 'signature',
-                fileInputRef: replaceSigRef
+                fileName: signatureFileName
               })}
             </div>
 
