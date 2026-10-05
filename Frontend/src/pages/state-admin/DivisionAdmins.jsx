@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { DataTable } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { useTheme } from '../../context/ThemeContext';
+import { dataService } from '../../services/dataService';
 import { 
   Layers, 
   Mail, 
@@ -20,8 +21,45 @@ export function StateDivisionAdmins() {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const [selectedAdmin, setSelectedAdmin] = useState(null);
+  const [admins, setAdmins] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [admins] = useState([]);
+  useEffect(() => {
+    let isMounted = true;
+    dataService.getDivisions()
+      .then(res => {
+        if (!isMounted) return;
+        if (res?.success && res.divisions) {
+          const list = res.divisions
+            .filter(d => d.adminId && d.adminName && d.adminName !== 'Unassigned')
+            .map(d => ({
+              id: d.adminId || `ADM-DIV-${d.code || d.name}`,
+              employeeCode: d.adminId || `ADM-DIV-${d.code || d.name}`,
+              name: d.adminName,
+              email: d.adminEmail || '-',
+              phone: d.adminPhone || '-',
+              division: d.name || d.divisionName,
+              district: d.districtName || d.district || '-',
+              state: d.stateName || d.state || user?.state || 'Tamil Nadu',
+              code: d.code || d.divisionId || d.id,
+              status: d.status || 'Active',
+              joinedDate: d.adminCreatedAt
+                ? new Date(d.adminCreatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                : 'Active',
+              pincodes: d.pincodes || [],
+              pincodesCount: d.pincodesCount || 0,
+              address: d.adminAddress || null,
+              avatarUrl: d.adminAvatarUrl || null
+            }));
+          setAdmins(list);
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   const columns = [
     {
@@ -116,7 +154,7 @@ export function StateDivisionAdmins() {
         subtitle="Roster of division administrators, contact channels and credential status"
         columns={columns}
         data={admins}
-        loading={false}
+        loading={loading}
         searchPlaceholder="Search admin by name, division, or email..."
         exportFileName="state_division_admins.csv"
       />

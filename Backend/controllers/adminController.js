@@ -43,14 +43,17 @@ function syncHierarchyWithUsers() {
 function isValidAdminStatus(status) {
   if (!status) return false;
   const s = String(status).trim().toLowerCase();
-  return s === 'active' || s === 'approved' || s === 'verified';
+  // Accept any status that is not explicitly 'deleted' or 'banned'
+  return s !== 'deleted' && s !== 'banned' && s !== 'rejected' && s.length > 0;
 }
 
 function isRealAdminRecord(user) {
   if (!user) return false;
   const name = (user.name || '').trim();
-  if (!name || name === 'Unassigned' || name === '-' || name === 'N/A') return false;
-  return isValidAdminStatus(user.status);
+  if (!name || name === 'Unassigned' || name === '-' || name === 'N/A' || name === 'null' || name === 'undefined') return false;
+  // Must have at least some status (not completely blank/missing)
+  const s = (user.status || '').trim().toLowerCase();
+  return s !== 'deleted' && s !== 'banned' && s !== 'rejected';
 }
 
 function getHierarchyParent(admin, allUsers) {
@@ -1340,30 +1343,30 @@ function getDivisions(req, res) {
         pendingKYC: divKYC.length,
         totalCustomers: divCustomers.length,
         totalMembershipCards: divCustomers.length,
-        adminId: assigned && parent ? (assigned._id || assigned.id) : null,
-        adminName: assigned && parent ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : null,
-        adminEmail: assigned && parent ? (assigned.email || '-') : null,
-        adminPhone: assigned && parent ? (assigned.phone || assigned.mobile || null) : null,
-        adminDob: assigned && parent ? (assigned.dob || null) : null,
-        adminAvatarUrl: assigned && parent ? (assigned.avatarUrl || null) : null,
-        adminAddress: assigned && parent ? (assigned.address || null) : null,
-        adminCity: assigned && parent ? (assigned.city || null) : null,
-        adminPincode: assigned && parent ? (assigned.pincode || null) : null,
-        adminAadharNumber: assigned && parent ? (assigned.aadharNumber || null) : null,
-        adminPanNumber: assigned && parent ? (assigned.panNumber || null) : null,
-        adminAccountHolder: assigned && parent ? (assigned.accountHolderName || null) : null,
-        adminBankName: assigned && parent ? (assigned.bankName || null) : null,
-        adminAccountNumber: assigned && parent ? (assigned.accountNumber || null) : null,
-        adminIfsc: assigned && parent ? (assigned.ifscCode || null) : null,
-        adminBranch: assigned && parent ? (assigned.branchName || null) : null,
-        adminLoginId: assigned && parent ? (assigned.loginId || null) : null,
-        adminCreatedAt: assigned && parent ? (assigned.createdAt || null) : null,
+        adminId: assigned ? (assigned._id || assigned.id) : null,
+        adminName: assigned ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : null,
+        adminEmail: assigned ? (assigned.email || '-') : null,
+        adminPhone: assigned ? (assigned.phone || assigned.mobile || null) : null,
+        adminDob: assigned ? (assigned.dob || null) : null,
+        adminAvatarUrl: assigned ? (assigned.avatarUrl || null) : null,
+        adminAddress: assigned ? (assigned.address || null) : null,
+        adminCity: assigned ? (assigned.city || null) : null,
+        adminPincode: assigned ? (assigned.pincode || null) : null,
+        adminAadharNumber: assigned ? (assigned.aadharNumber || null) : null,
+        adminPanNumber: assigned ? (assigned.panNumber || null) : null,
+        adminAccountHolder: assigned ? (assigned.accountHolderName || null) : null,
+        adminBankName: assigned ? (assigned.bankName || null) : null,
+        adminAccountNumber: assigned ? (assigned.accountNumber || null) : null,
+        adminIfsc: assigned ? (assigned.ifscCode || null) : null,
+        adminBranch: assigned ? (assigned.branchName || null) : null,
+        adminLoginId: assigned ? (assigned.loginId || null) : null,
+        adminCreatedAt: assigned ? (assigned.createdAt || null) : null,
         parentAdminId: parent ? parent.id : null,
         parentAdminName: parent ? parent.name : null,
         parentAdminRole: parent ? parent.role : null,
-        onboardedBy: assigned && parent ? (assigned.onboardedBy || parent.id) : null,
-        onboardedByName: assigned && parent ? (assigned.onboardedByName || parent.name) : null,
-        onboardedByRole: assigned && parent ? (assigned.onboardedByRole || parent.role) : null,
+        onboardedBy: assigned ? (assigned.onboardedBy || (parent ? parent.id : null)) : null,
+        onboardedByName: assigned ? (assigned.onboardedByName || (parent ? parent.name : null)) : null,
+        onboardedByRole: assigned ? (assigned.onboardedByRole || (parent ? parent.role : null)) : null,
       };
     });
 
@@ -1375,8 +1378,7 @@ function getDivisions(req, res) {
         d.adminName &&
         d.adminName !== 'Unassigned' &&
         d.adminName !== '-' &&
-        d.adminName !== 'N/A' &&
-        d.parentAdminId
+        d.adminName !== 'N/A'
       );
     }
 
@@ -1753,29 +1755,29 @@ function getPincodes(req, res) {
         state: sName,
         stateName: sName,
         stateId: String(p.stateId || ''),
-        adminId: assigned && parent ? (assigned._id || assigned.id) : null,
-        adminName: assigned && parent ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : null,
-        adminEmail: assigned && parent ? (assigned.email || '-') : null,
-        adminPhone: assigned && parent ? (assigned.phone || assigned.mobile || '-') : null,
-        adminDob: assigned && parent ? (assigned.dob || null) : null,
-        adminAddress: assigned && parent ? (assigned.address || null) : null,
-        adminCity: assigned && parent ? (assigned.city || null) : null,
-        adminAadharNumber: assigned && parent ? (assigned.aadharNumber || null) : null,
-        adminPanNumber: assigned && parent ? (assigned.panNumber || null) : null,
-        adminAccountHolder: assigned && parent ? (assigned.accountHolderName || null) : null,
-        adminBankName: assigned && parent ? (assigned.bankName || null) : null,
-        adminAccountNumber: assigned && parent ? (assigned.accountNumber || null) : null,
-        adminIfsc: assigned && parent ? (assigned.ifscCode || null) : null,
-        adminBranch: assigned && parent ? (assigned.branchName || null) : null,
-        adminLoginId: assigned && parent ? (assigned.loginId || null) : null,
-        adminCreatedAt: assigned && parent ? (assigned.createdAt || null) : null,
+        adminId: assigned ? (assigned._id || assigned.id) : null,
+        adminName: assigned ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : null,
+        adminEmail: assigned ? (assigned.email || '-') : null,
+        adminPhone: assigned ? (assigned.phone || assigned.mobile || '-') : null,
+        adminDob: assigned ? (assigned.dob || null) : null,
+        adminAddress: assigned ? (assigned.address || null) : null,
+        adminCity: assigned ? (assigned.city || null) : null,
+        adminAadharNumber: assigned ? (assigned.aadharNumber || null) : null,
+        adminPanNumber: assigned ? (assigned.panNumber || null) : null,
+        adminAccountHolder: assigned ? (assigned.accountHolderName || null) : null,
+        adminBankName: assigned ? (assigned.bankName || null) : null,
+        adminAccountNumber: assigned ? (assigned.accountNumber || null) : null,
+        adminIfsc: assigned ? (assigned.ifscCode || null) : null,
+        adminBranch: assigned ? (assigned.branchName || null) : null,
+        adminLoginId: assigned ? (assigned.loginId || null) : null,
+        adminCreatedAt: assigned ? (assigned.createdAt || null) : null,
         parentAdminId: parent ? parent.id : null,
         parentAdminName: parent ? parent.name : null,
         parentAdminRole: parent ? parent.role : null,
-        onboardedBy: assigned && parent ? (assigned.onboardedBy || parent.id) : null,
-        onboardedByName: assigned && parent ? (assigned.onboardedByName || parent.name) : null,
-        onboardedByRole: assigned && parent ? (assigned.onboardedByRole || parent.role) : null,
-        status: assigned && parent ? (assigned.status === 'inactive' ? 'Inactive' : 'Active') : (p.status || 'Active'),
+        onboardedBy: assigned ? (assigned.onboardedBy || (parent ? parent.id : null)) : null,
+        onboardedByName: assigned ? (assigned.onboardedByName || (parent ? parent.name : null)) : null,
+        onboardedByRole: assigned ? (assigned.onboardedByRole || (parent ? parent.role : null)) : null,
+        status: assigned ? (assigned.status === 'inactive' ? 'Inactive' : 'Active') : (p.status || 'Active'),
         customerCount: pinCustomers,
         totalCustomers: pinCustomers,
         customers: pinCustomers,
@@ -1804,8 +1806,7 @@ function getPincodes(req, res) {
         p.adminName &&
         p.adminName !== 'Unassigned' &&
         p.adminName !== '-' &&
-        p.adminName !== 'N/A' &&
-        p.parentAdminId
+        p.adminName !== 'N/A'
       );
     }
 
