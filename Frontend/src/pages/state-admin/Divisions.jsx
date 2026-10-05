@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
@@ -81,26 +81,6 @@ export function StateDivisions() {
   const stateIdFilter = searchParams.get('stateId');
   const divisionFilter = searchParams.get('division');
   const divisionIdFilter = searchParams.get('divisionId');
-
-  // Strict Assignment Mode vs Geographic Directory
-  const [directoryMode, setDirectoryMode] = useState(districtFilter ? 'all' : 'assigned');
-
-  useEffect(() => {
-    if (districtFilter) {
-      setDirectoryMode('all');
-    }
-  }, [districtFilter]);
-
-  const assignedDivisions = useMemo(() => {
-    return divisions.filter(d => Boolean(d.adminId && d.adminName && d.adminName !== 'Unassigned'));
-  }, [divisions]);
-
-  const displayedDivisions = useMemo(() => {
-    if (directoryMode === 'assigned') {
-      return assignedDivisions;
-    }
-    return divisions;
-  }, [directoryMode, assignedDivisions, divisions]);
 
   const loadData = async () => {
     setLoading(true);
@@ -404,64 +384,11 @@ export function StateDivisions() {
         </div>
       )}
 
-      {/* Directory Mode Selector Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
-        <button
-          type="button"
-          onClick={() => setDirectoryMode('assigned')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-            directoryMode === 'assigned'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : isDark
-              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <span>Assigned Admins Directory</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-            directoryMode === 'assigned'
-              ? 'bg-blue-700 text-white'
-              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {assignedDivisions.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setDirectoryMode('all')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-            directoryMode === 'all'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : isDark
-              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <span>All Geographic Divisions</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-            directoryMode === 'all'
-              ? 'bg-blue-700 text-white'
-              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {divisions.length}
-          </span>
-        </button>
-      </div>
-
       <DataTable
-        title={
-          directoryMode === 'assigned'
-            ? (districtFilter ? `Assigned Division Admins in ${districtFilter}` : "Assigned Division Admins Directory")
-            : (districtFilter ? `Divisions in ${districtFilter}` : "Divisions Geographic Directory")
-        }
-        subtitle={
-          directoryMode === 'assigned'
-            ? "Showing only administrative divisions with verified assigned administrators."
-            : "Complete geographic administration divisions under territory jurisdiction."
-        }
+        title={districtFilter ? `Divisions in ${districtFilter}` : "Divisions Directory"}
+        subtitle="Hierarchical administration divisions under state jurisdiction. Click any row to inspect details."
         columns={columns}
-        data={displayedDivisions}
+        data={divisions}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search division name or district..."
@@ -471,9 +398,7 @@ export function StateDivisions() {
           setSelectedDivision(row);
         }}
         emptyMessage={
-          directoryMode === 'assigned'
-            ? "No assigned division administrators found under this territory hierarchy."
-            : (districtFilter ? `No divisions found for this district.` : "No divisions found.")
+          districtFilter ? `No divisions found for this district.` : "No divisions found."
         }
         customFilters={availableDistricts.length > 0 ? ({ isDark: dark }) => (
           <div className={`h-9 inline-flex items-center gap-1.5 ${

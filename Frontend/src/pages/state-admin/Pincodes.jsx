@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
@@ -43,9 +43,6 @@ export function StatePincodes() {
   const divisionFilter = searchParams.get('division');
   const districtFilter = searchParams.get('district');
   const stateFilter = searchParams.get('state');
-
-  // Strict Assignment Mode: default to 'assigned' when viewing Pincode Admins directly, or 'all' if filtering by division/district
-  const [directoryMode, setDirectoryMode] = useState(divisionFilter || districtFilter ? 'all' : 'assigned');
 
   const getAdminDetails = (row) => {
     const adminName = row.adminName || row.assignedAdmin || 'Unassigned';
@@ -290,14 +287,7 @@ export function StatePincodes() {
     }
   ];
 
-  const assignedPincodes = useMemo(() => {
-    return pincodes.filter(p => {
-      const adminName = p.adminName || p.assignedAdmin;
-      return Boolean(p.adminId || (adminName && adminName !== 'Unassigned' && adminName !== '-'));
-    });
-  }, [pincodes]);
 
-  const displayedPincodes = directoryMode === 'assigned' ? assignedPincodes : pincodes;
 
   return (
     <div className="space-y-6">
@@ -371,73 +361,16 @@ export function StatePincodes() {
         </div>
       )}
 
-      {/* Directory Mode Selector Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
-        <button
-          type="button"
-          onClick={() => setDirectoryMode('assigned')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-            directoryMode === 'assigned'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : isDark
-              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <span>Assigned Admins Directory</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-            directoryMode === 'assigned'
-              ? 'bg-blue-700 text-white'
-              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {assignedPincodes.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setDirectoryMode('all')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-            directoryMode === 'all'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : isDark
-              ? 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <span>All Geographic Pincodes</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-            directoryMode === 'all'
-              ? 'bg-blue-700 text-white'
-              : isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {pincodes.length}
-          </span>
-        </button>
-      </div>
-
       <DataTable
-        title={
-          directoryMode === 'assigned'
-            ? (divisionFilter ? `Assigned Pincode Admins in ${divisionFilter}` : "Assigned Pincode Administrators")
-            : (divisionFilter ? `Pincodes in ${divisionFilter} Division` : (districtFilter ? `Pincodes in ${districtFilter}` : "State Pincodes Registry"))
-        }
-        subtitle={
-          directoryMode === 'assigned'
-            ? "Displaying strictly pincodes with appointed Pincode Administrators."
-            : "Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin Profile and Pincode Breakdown."
-        }
+        title={divisionFilter ? `Pincodes in ${divisionFilter} Division` : (districtFilter ? `Pincodes in ${districtFilter}` : "State Pincodes Registry")}
+        subtitle="Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin Profile and Pincode Breakdown."
         columns={columns}
-        data={displayedPincodes}
+        data={pincodes}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search pincode or area name..."
         exportFileName="state_pincodes.csv"
-        emptyMessage={
-          directoryMode === 'assigned'
-            ? "No assigned Pincode Admins found under this territory. Switch to 'All Geographic Pincodes' to view all service zones."
-            : "No pincodes found for this selection."
-        }
+        emptyMessage="No pincodes found for this selection."
         onRowClick={(row) => {
           setSelectedAdmin(getAdminDetails(row));
           setSelectedPincode(row);

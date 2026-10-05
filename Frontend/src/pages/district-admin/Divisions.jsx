@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -109,24 +109,9 @@ export function DistrictDivisions() {
   const [allDistrictDivisions, setAllDistrictDivisions] = useState([]);
   const [customDivMode, setCustomDivMode] = useState(false);
   const [territoryVersion, setTerritoryVersion] = useState(0);
-  const [directoryMode, setDirectoryMode] = useState('assigned'); // 'assigned' | 'all'
   const fileRef = useRef();
   const aadharFileRef = useRef();
   const panFileRef = useRef();
-
-  const assignedDivisions = useMemo(() => {
-    return allDistrictDivisions.filter(d => {
-      const name = d.adminName || d.assignedAdmin;
-      return Boolean(name && name !== 'Unassigned' && name !== '-' && d.status !== 'Suspended');
-    });
-  }, [allDistrictDivisions]);
-
-  const displayedDivisions = useMemo(() => {
-    if (directoryMode === 'assigned') {
-      return assignedDivisions;
-    }
-    return allDistrictDivisions;
-  }, [directoryMode, assignedDivisions, allDistrictDivisions]);
 
   const setF = (patch) => setForm(f => ({ ...f, ...patch }));
 
@@ -964,54 +949,16 @@ export function DistrictDivisions() {
         </div>
       )}
 
-      {/* Directory Mode Selector: Strict Assigned Admins vs All Geographic Divisions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-blue-600 dark:text-cyan-400" />
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Division Directory View:</span>
-        </div>
-        <div className="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs">
-          <button
-            type="button"
-            onClick={() => setDirectoryMode('assigned')}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-              directoryMode === 'assigned'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-cyan-300 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Assigned Division Admins ({assignedDivisions.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setDirectoryMode('all')}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-              directoryMode === 'all'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-cyan-300 shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            All Geographic Divisions ({allDistrictDivisions.length})
-          </button>
-        </div>
-      </div>
-
       <DataTable
-        title={directoryMode === 'assigned' ? "Assigned Division Admins Directory" : "All District Divisions"}
-        subtitle={directoryMode === 'assigned'
-          ? "Roster of division stations with an active appointed Division Admin"
-          : "Full geographic territory hierarchy for this district. Click a row to view details."
-        }
+        title="All District Divisions"
+        subtitle="Full geographic territory hierarchy for this district. Click a row to view details."
         columns={columns}
-        data={displayedDivisions}
+        data={allDistrictDivisions}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search division name or ID..."
         exportFileName="district_divisions.csv"
-        emptyMessage={directoryMode === 'assigned'
-          ? "No assigned division administrators found under this district."
-          : "No divisions found under this district."
-        }
+        emptyMessage="No divisions found under this district."
         onRowClick={(row) => {
           setSelectedAdmin(getAdminDetails(row));
           setSelectedDivision(row);
