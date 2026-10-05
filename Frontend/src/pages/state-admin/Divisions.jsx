@@ -123,8 +123,9 @@ export function StateDivisions() {
       }
 
       if (res?.success) {
-        const list = Array.isArray(res.divisions) ? res.divisions : [];
-        console.log(`[StateDivisions] Loaded ${list.length} divisions from database`);
+        const rawList = Array.isArray(res.divisions) ? res.divisions : [];
+        const list = rawList.filter(d => d.adminId && d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A');
+        console.log(`[StateDivisions] Loaded ${list.length} onboarded division admins from database`);
         setDivisions(list);
         setError(null);
       } else {
@@ -194,10 +195,10 @@ export function StateDivisions() {
     },
     {
       header: 'ADMINS NAME',
-      accessor: (row) => extractTerritoryName(row.adminName || row.assignedAdmin, 'Unassigned'),
+      accessor: (row) => extractTerritoryName(row.adminName || row.assignedAdmin, '-'),
       render: (row) => {
-        const isAssigned = Boolean(row.adminId && row.adminName && row.adminName !== 'Unassigned');
-        const adminName = extractTerritoryName(isAssigned ? row.adminName : 'Unassigned');
+        const isAssigned = Boolean(row.adminId && row.adminName && row.adminName !== 'Unassigned' && row.adminName !== '-');
+        const adminName = extractTerritoryName(row.adminName || row.assignedAdmin, '-');
         const adminEmail = isAssigned && row.adminEmail && row.adminEmail !== '-' ? safeString(row.adminEmail) : '-';
         return (
           <div className="flex items-center gap-2.5">
@@ -206,7 +207,7 @@ export function StateDivisions() {
                 ? (isDark ? 'bg-indigo-950/80 text-cyan-300 border border-indigo-800/60' : 'bg-blue-100 text-blue-700 border border-blue-200')
                 : (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700' : 'bg-slate-100 text-slate-400 border border-slate-200')
             }`}>
-              {(adminName || 'U')[0]}
+              {(adminName || '-')[0]}
             </div>
             <div>
               <div className={`font-bold text-xs ${isDark ? 'text-white' : 'text-slate-900'}`}>
@@ -385,7 +386,7 @@ export function StateDivisions() {
       )}
 
       <DataTable
-        title={districtFilter ? `Divisions in ${districtFilter}` : "Divisions Directory"}
+        title={districtFilter ? `Division Admins in ${districtFilter}` : "Division Admins Directory"}
         subtitle="Hierarchical administration divisions under state jurisdiction. Click any row to inspect details."
         columns={columns}
         data={divisions}
@@ -398,7 +399,7 @@ export function StateDivisions() {
           setSelectedDivision(row);
         }}
         emptyMessage={
-          districtFilter ? `No divisions found for this district.` : "No divisions found."
+          districtFilter ? `No onboarded division admins found for this district.` : "No onboarded division admins found."
         }
         customFilters={availableDistricts.length > 0 ? ({ isDark: dark }) => (
           <div className={`h-9 inline-flex items-center gap-1.5 ${

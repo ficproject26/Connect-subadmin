@@ -118,7 +118,7 @@ export function DivisionalPincodes() {
   }, [user]);
 
   const getPincodeAdminDetails = (row) => {
-    const adminName = row.adminName || row.assignedAdmin || 'Unassigned';
+    const adminName = row.adminName || row.assignedAdmin || '-';
     return {
       id: row.adminId || `ADM-PIN-${row.pincode}`,
       employeeCode: row.employeeCode || `EMP-PIN-${row.pincode.slice(-3)}`,
@@ -176,7 +176,8 @@ export function DivisionalPincodes() {
         dataService.getAgents().catch(() => ({ agents: [] }))
       ]);
 
-      let list = (res?.success && Array.isArray(res.pincodes)) ? res.pincodes : [];
+      let rawList = (res?.success && Array.isArray(res.pincodes)) ? res.pincodes : [];
+      let list = rawList.filter(p => p.adminId && p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-' && p.adminName !== 'N/A');
 
       if (divisionName) {
         const normDiv = divisionName.toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
@@ -870,14 +871,15 @@ export function DivisionalPincodes() {
       </div>
 
       <DataTable
-        title="Division Pincodes Registry"
-        subtitle="Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin details."
+        title="Pincode Admins Directory"
+        subtitle="Manage assigned pincode administrators. Click any row or View Details to inspect Admin details."
         columns={columns}
         data={pincodes}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search pincode or area name..."
         exportFileName="division_pincodes.csv"
+        emptyMessage="No onboarded pincode admins found in this division."
         onRowClick={(row) => {
           setSelectedAdmin(getPincodeAdminDetails(row));
           setSelectedPincode(row);

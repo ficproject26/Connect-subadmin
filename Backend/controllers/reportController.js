@@ -18,18 +18,94 @@ function getDashboardSummary(req, res) {
     const scopedAgentPayments = filterByLocation(db.agentPayments, user);
     const scopedVendorPayments = filterByLocation(db.vendorPayments, user);
     const allUsers = Array.from(db.users || []);
-    const pinAdmins = allUsers.filter(u => {
-      const isPinAdmin = u.role === 'Pincode Admin' || (u.role || '').toLowerCase().includes('pincode admin');
-      return isPinAdmin && u.status === 'active';
+
+    const isValidAdminStatus = (status) => {
+      if (!status) return false;
+      const s = String(status).trim().toLowerCase();
+      return s === 'active' || s === 'approved' || s === 'verified';
+    };
+
+    const isRealAdminRecord = (u) => {
+      if (!u) return false;
+      const name = (u.name || '').trim();
+      if (!name || name === 'Unassigned' || name === '-' || name === 'N/A') return false;
+      return isValidAdminStatus(u.status);
+    };
+
+    const getHierarchyParent = (admin) => {
+      if (!admin) return null;
+      const role = (admin.role || '').toLowerCase();
+      const state = (admin.state || '').trim().toLowerCase();
+      const district = (admin.district || '').trim().toLowerCase();
+      const division = (admin.division || '').trim().toLowerCase();
+
+      const superAdmin = allUsers.find(u => {
+        const r = (u.role || '').toLowerCase();
+        return (r === 'super admin' || r === 'admin' || (u.adminRole || '').toLowerCase().includes('super')) && isValidAdminStatus(u.status);
+      });
+
+      if (role === 'state admin' || role.includes('state admin')) {
+        return superAdmin || null;
+      }
+      if (role === 'district admin' || role.includes('district admin')) {
+        const stateAdmin = allUsers.find(u => {
+          const r = (u.role || '').toLowerCase();
+          const st = (u.state || '').trim().toLowerCase();
+          return (r === 'state admin' || r.includes('state admin')) && st === state && isValidAdminStatus(u.status);
+        });
+        return stateAdmin || superAdmin || null;
+      }
+      if (role === 'division admin' || role === 'divisional admin' || role.includes('division admin') || role.includes('divisional admin')) {
+        const distAdmin = allUsers.find(u => {
+          const r = (u.role || '').toLowerCase();
+          const st = (u.state || '').trim().toLowerCase();
+          const dt = (u.district || '').trim().toLowerCase();
+          return (r === 'district admin' || r.includes('district admin')) && dt === district && (st === state || !st) && isValidAdminStatus(u.status);
+        });
+        return distAdmin || null;
+      }
+      if (role === 'pincode admin' || role.includes('pincode admin')) {
+        const divAdmin = allUsers.find(u => {
+          const r = (u.role || '').toLowerCase();
+          const st = (u.state || '').trim().toLowerCase();
+          const dt = (u.district || '').trim().toLowerCase();
+          const dv = (u.division || '').trim().toLowerCase().replace(/\s+division/g, '');
+          const targetDiv = division.replace(/\s+division/g, '');
+          return (r === 'division admin' || r === 'divisional admin' || r.includes('division admin')) &&
+            (dv === targetDiv || dv.includes(targetDiv) || targetDiv.includes(dv)) &&
+            dt === district && (st === state || !st) && isValidAdminStatus(u.status);
+        });
+        return divAdmin || null;
+      }
+      return null;
+    };
+
+    // Real onboarded admins by level
+    const realStateAdmins = allUsers.filter(u => {
+      const r = (u.role || '').toLowerCase();
+      return (r === 'state admin' || r.includes('state admin')) && isRealAdminRecord(u) && Boolean(getHierarchyParent(u));
     });
+    const realDistrictAdmins = allUsers.filter(u => {
+      const r = (u.role || '').toLowerCase();
+      return (r === 'district admin' || r.includes('district admin')) && isRealAdminRecord(u) && Boolean(getHierarchyParent(u));
+    });
+    const realDivisionalAdmins = allUsers.filter(u => {
+      const r = (u.role || '').toLowerCase();
+      return (r === 'division admin' || r === 'divisional admin' || r.includes('division admin')) && isRealAdminRecord(u) && Boolean(getHierarchyParent(u));
+    });
+    const realPincodeAdmins = allUsers.filter(u => {
+      const r = (u.role || '').toLowerCase();
+      return (r === 'pincode admin' || r.includes('pincode admin')) && isRealAdminRecord(u) && Boolean(getHierarchyParent(u));
+    });
+
+    const scopedStateAdmins = filterByLocation(realStateAdmins, user);
+    const scopedDistrictAdmins = filterByLocation(realDistrictAdmins, user);
+    const scopedDivisionalAdmins = filterByLocation(realDivisionalAdmins, user);
+    const scopedPincodeAdmins = filterByLocation(realPincodeAdmins, user);
+
     const scopedDistricts = filterByLocation(db.districts || [], user);
     const scopedDivisions = filterByLocation(db.divisions || [], user);
     const scopedPincodesList = filterByLocation(db.pincodes || [], user);
-    const subordinateAdmins = allUsers.filter(u => {
-      const isSubAdmin = (u.role || '').toLowerCase().includes('admin') && u.role !== 'Super Admin';
-      return isSubAdmin && u.status === 'active';
-    });
-    const scopedSubAdmins = filterByLocation(subordinateAdmins, user);
 
     const totalRevenue = scopedOrders.reduce((sum, o) => sum + (o.netPayable || o.totalAmount || 0), 0);
     const pendingAgentPayouts = scopedAgentPayments
@@ -86,9 +162,12 @@ function getDashboardSummary(req, res) {
       metrics: {
         totalDistricts: scopedDistricts.length,
         totalDivisions: scopedDivisions.length,
-        totalPincodes: scopedPincodesList.length || scopedPincodes.length,
-        totalAdmins: scopedSubAdmins.length,
-        totalPincodeAdmins: scopedPincodes.length,
+        totalPincodes: scopedPincodesList.length,
+        totalStateAdmins: scopedStateAdmins.length,
+        totalDistrictAdmins: scopedDistrictAdmins.length,
+        totalDivisionalAdmins: scopedDivisionalAdmins.length,
+        totalPincodeAdmins: scopedPincodeAdmins.length,
+        totalAdmins: (scopedStateAdmins.length + scopedDistrictAdmins.length + scopedDivisionalAdmins.length + scopedPincodeAdmins.length),
         totalCustomers: scopedCustomers.length,
         totalVendors: scopedVendors.length,
         totalOrders: scopedOrders.length,

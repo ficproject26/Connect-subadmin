@@ -332,7 +332,7 @@ export function DistrictPincodes() {
       </div>
 
       <DataTable
-        title={divisionFilter ? `District Pincodes Registry (${divisionFilter})` : "District Pincodes Registry"}
+        title={divisionFilter ? `Pincode Admins in ${divisionFilter} Division` : "Pincode Admins Directory"}
         subtitle="Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin details."
         columns={columns}
         data={pincodes}
@@ -340,6 +340,7 @@ export function DistrictPincodes() {
         onRefresh={loadData}
         searchPlaceholder="Search pincode or area name..."
         exportFileName="district_pincodes.csv"
+        emptyMessage="No onboarded pincode admins found under this district."
         onRowClick={(row) => {
           setSelectedAdmin(getPincodeAdminDetails(row));
           setSelectedPincode(row);

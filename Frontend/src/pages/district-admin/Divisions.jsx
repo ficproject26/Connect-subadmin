@@ -128,7 +128,7 @@ export function DistrictDivisions() {
   }, [user]);
 
   const getAdminDetails = (row) => {
-    const adminName = row.adminName || row.assignedAdmin || 'Unassigned';
+    const adminName = row.adminName || row.assignedAdmin || '-';
     return {
       id: row.adminId || `ADM-DIV-${row.id || '001'}`,
       employeeCode: row.employeeCode || '-',
@@ -192,9 +192,9 @@ export function DistrictDivisions() {
               (user.districtId && safeLowerCase(d.districtId) === safeLowerCase(user.districtId))
           );
         }
-        setAllDistrictDivisions(list);
-        // Display all real divisions under the district (including unassigned)
-        setDivisions(list);
+        const realDivisionAdmins = list.filter(d => d.adminId && d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A');
+        setAllDistrictDivisions(realDivisionAdmins);
+        setDivisions(realDivisionAdmins);
         setError(null);
       } else {
         const errMsg = res?.message || 'Failed to retrieve divisions from the database.';
@@ -950,15 +950,15 @@ export function DistrictDivisions() {
       )}
 
       <DataTable
-        title="All District Divisions"
-        subtitle="Full geographic territory hierarchy for this district. Click a row to view details."
+        title="Division Admins Directory"
+        subtitle="Hierarchical administration divisions under district jurisdiction. Click any row to inspect details."
         columns={columns}
-        data={allDistrictDivisions}
+        data={divisions}
         loading={loading}
         onRefresh={loadData}
         searchPlaceholder="Search division name or ID..."
         exportFileName="district_divisions.csv"
-        emptyMessage="No divisions found under this district."
+        emptyMessage="No onboarded division admins found under this district."
         onRowClick={(row) => {
           setSelectedAdmin(getAdminDetails(row));
           setSelectedDivision(row);

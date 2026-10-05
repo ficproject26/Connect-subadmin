@@ -27,7 +27,16 @@ export const dataService = {
   getHierarchy: () => apiRequest('/admin/hierarchy'),
   getTerritoryHierarchy: () => apiRequest('/territory/hierarchy'),
   getSubordinateAdmins: () => apiRequest('/admin/subordinates'),
-  getStates: () => apiRequest('/admin/states'),
+  getStates: async () => {
+    const res = await apiRequest('/admin/states');
+    if (res && res.success && Array.isArray(res.states)) {
+      const qualifying = res.states.filter(s =>
+        s.adminId && s.adminName && s.adminName !== 'Unassigned' && s.adminName !== '-' && s.adminName !== 'N/A'
+      );
+      return { ...res, states: qualifying, total: qualifying.length };
+    }
+    return res;
+  },
   addStateAdmin: (data) => apiRequest('/admin/states', {
     method: 'POST',
     body: JSON.stringify(data)
@@ -40,16 +49,9 @@ export const dataService = {
     const qs = new URLSearchParams(params).toString();
     const res = await apiRequest(`/admin/districts${qs ? `?${qs}` : ''}`);
     if (res && res.success && Array.isArray(res.districts)) {
-      // Exclude districts that have no assigned admin, agent, or manager anywhere in hierarchy
-      const qualifying = res.districts.filter(d => {
-        const hasAdmin = d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-';
-        const hasAdminCount = Number(d.adminCount || 0) > 0;
-        const hasAgents = Number(d.totalAgents || 0) > 0;
-        const hasManagers = Number(d.totalManagers || 0) > 0 || (Array.isArray(d.managers) && d.managers.length > 0);
-        const hasDivisions = Number(d.divisionsCount || 0) > 0;
-        const hasPincodes = Number(d.pincodesCount || 0) > 0;
-        return hasAdmin || hasAdminCount || hasAgents || hasManagers || hasDivisions || hasPincodes;
-      });
+      const qualifying = res.districts.filter(d =>
+        d.adminId && d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A'
+      );
       return { ...res, districts: qualifying, total: qualifying.length };
     }
     return res;
@@ -62,9 +64,16 @@ export const dataService = {
     method: 'PATCH',
     body: JSON.stringify({ status })
   }),
-  getDivisions: (params = {}) => {
+  getDivisions: async (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return apiRequest(`/admin/divisions${qs ? `?${qs}` : ''}`);
+    const res = await apiRequest(`/admin/divisions${qs ? `?${qs}` : ''}`);
+    if (res && res.success && Array.isArray(res.divisions)) {
+      const qualifying = res.divisions.filter(d =>
+        d.adminId && d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A'
+      );
+      return { ...res, divisions: qualifying, total: qualifying.length, count: qualifying.length };
+    }
+    return res;
   },
   addDivisionAdmin: (data) => apiRequest('/admin/divisions', {
     method: 'POST',
@@ -74,9 +83,16 @@ export const dataService = {
     method: 'PATCH',
     body: JSON.stringify({ status })
   }),
-  getPincodes: (params = {}) => {
+  getPincodes: async (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return apiRequest(`/admin/pincodes${qs ? `?${qs}` : ''}`);
+    const res = await apiRequest(`/admin/pincodes${qs ? `?${qs}` : ''}`);
+    if (res && res.success && Array.isArray(res.pincodes)) {
+      const qualifying = res.pincodes.filter(p =>
+        p.adminId && p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-' && p.adminName !== 'N/A'
+      );
+      return { ...res, pincodes: qualifying, total: qualifying.length, count: qualifying.length };
+    }
+    return res;
   },
   addPincodeAdmin: (data) => apiRequest('/admin/pincodes', {
     method: 'POST',

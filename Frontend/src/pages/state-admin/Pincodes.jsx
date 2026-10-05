@@ -103,7 +103,8 @@ export function StatePincodes() {
         dataService.getAgents().catch(() => ({ agents: [] }))
       ]);
 
-      let list = (res?.pincodes && Array.isArray(res.pincodes)) ? res.pincodes : [];
+      let rawList = (res?.pincodes && Array.isArray(res.pincodes)) ? res.pincodes : [];
+      let list = rawList.filter(p => p.adminId && p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-' && p.adminName !== 'N/A');
 
       if (districtFilter) {
         list = list.filter(p => {
@@ -362,7 +363,7 @@ export function StatePincodes() {
       )}
 
       <DataTable
-        title={divisionFilter ? `Pincodes in ${divisionFilter} Division` : (districtFilter ? `Pincodes in ${districtFilter}` : "State Pincodes Registry")}
+        title={divisionFilter ? `Pincode Admins in ${divisionFilter} Division` : (districtFilter ? `Pincode Admins in ${districtFilter}` : "Pincode Admins Directory")}
         subtitle="Manage pincode coverage and serviceability parameters. Click any row or View Details to inspect Admin Profile and Pincode Breakdown."
         columns={columns}
         data={pincodes}
@@ -370,7 +371,7 @@ export function StatePincodes() {
         onRefresh={loadData}
         searchPlaceholder="Search pincode or area name..."
         exportFileName="state_pincodes.csv"
-        emptyMessage="No pincodes found for this selection."
+        emptyMessage="No onboarded pincode admins found."
         onRowClick={(row) => {
           setSelectedAdmin(getAdminDetails(row));
           setSelectedPincode(row);

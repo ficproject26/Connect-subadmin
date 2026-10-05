@@ -198,55 +198,13 @@ export function StateDistricts() {
             if (userDistrict && dName !== userDistrict && dId !== userDistrict) return false;
           }
 
-          // 1. District Admin assigned?
+          // Strictly only show real onboarded District Admins
           const hasDistAdmin = Boolean(
-            (d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-') ||
-            (d.adminId && d.adminId !== 'Unassigned') ||
-            Number(d.adminCount || 0) > 0
+            (d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A') &&
+            d.adminId && d.adminId !== 'Unassigned'
           );
 
-          // 2. District Agent assigned?
-          const hasDistAgent = Boolean(
-            Number(d.totalAgents || 0) > 0 ||
-            agents.some(a => {
-              const aDist = (a.district || '').trim().toLowerCase();
-              return aDist === dName || String(a.districtId || '').toLowerCase() === dId;
-            })
-          );
-
-          // 3. District Manager assigned?
-          const hasDistManager = Boolean(
-            Number(d.totalManagers || 0) > 0 ||
-            (Array.isArray(d.managers) && d.managers.length > 0) ||
-            managers.some(m => {
-              const mDist = (m.districtName || m.district || '').trim().toLowerCase();
-              return mDist === dName || String(m.districtId || '').toLowerCase() === dId;
-            })
-          );
-
-          // 4. Division Admin / Agent / Manager under that district?
-          const hasDivPerson = Boolean(
-            Number(d.divisionsCount || 0) > 0 ||
-            divisions.some(div => {
-              const divDist = (div.districtName || div.district || '').trim().toLowerCase();
-              const isUnderDist = divDist === dName || String(div.districtId || '').toLowerCase() === dId;
-              const hasDivAdmin = div.adminName && div.adminName !== 'Unassigned' && div.adminName !== '-';
-              return isUnderDist && (hasDivAdmin || Number(div.adminCount || 0) > 0 || Number(div.totalManagers || 0) > 0 || Number(div.totalAgents || 0) > 0);
-            })
-          );
-
-          // 5. Pincode Admin / Agent / Manager under that district?
-          const hasPinPerson = Boolean(
-            Number(d.pincodesCount || 0) > 0 ||
-            pincodes.some(pin => {
-              const pinDist = (pin.districtName || pin.district || '').trim().toLowerCase();
-              const isUnderDist = pinDist === dName || String(pin.districtId || '').toLowerCase() === dId;
-              const hasPinAdmin = pin.adminName && pin.adminName !== 'Unassigned' && pin.adminName !== '-';
-              return isUnderDist && (hasPinAdmin || Number(pin.adminCount || 0) > 0 || Number(pin.totalManagers || 0) > 0 || Number(pin.totalAgents || 0) > 0);
-            })
-          );
-
-          return hasDistAdmin || hasDistAgent || hasDistManager || hasDivPerson || hasPinPerson;
+          return hasDistAdmin;
         });
 
         setDistricts(qualifyingDistricts);
@@ -936,7 +894,7 @@ export function StateDistricts() {
 
       {/* Table */}
       <DataTable
-        title="Districts Directory"
+        title="District Admins Directory"
         subtitle="Hierarchical administration under assigned state. Click any row to inspect Admin details."
         columns={columns}
         data={districts}
@@ -944,6 +902,7 @@ export function StateDistricts() {
         onRefresh={loadData}
         searchPlaceholder="Search district name or ID..."
         exportFileName="state_districts.csv"
+        emptyMessage="No onboarded district admins found."
         onRowClick={(row) => {
           setSelectedAdmin(getAdminDetails(row));
           setSelectedDistrict(row);
