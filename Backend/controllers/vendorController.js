@@ -378,7 +378,7 @@ const populateVendorLocations = (vendor, ctx = null) => {
 // GET /api/vendors - Paginated, filtered, strictly scope-enforced
 const getVendors = async (req, res) => {
   try {
-    const user = req.user;
+    const user = req.user || {};
     const allVendors = Array.from(db.vendors);
 
     // Apply location filtering matching caller's scope

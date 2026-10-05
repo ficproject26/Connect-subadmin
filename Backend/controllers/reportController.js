@@ -4,7 +4,7 @@ const { getComprehensiveVendorDirectory } = require('../utils/vendorDirectory');
 
 function getDashboardSummary(req, res) {
   try {
-    const user = req.user;
+    const user = req.user || {};
     const scopedCustomers = filterByLocation(db.customers, user);
     const scopedVendors = filterByLocation(db.vendors, user);
     const scopedOrders = filterByLocation(db.orders, user);
@@ -152,12 +152,12 @@ function getDashboardSummary(req, res) {
 
     return res.json({
       success: true,
-      role: user.role,
+      role: user.role || '',
       scope: {
-        state: user.state,
-        district: user.district,
-        division: user.division,
-        pincode: user.pincode
+        state: user.state || '',
+        district: user.district || '',
+        division: user.division || '',
+        pincode: user.pincode || ''
       },
       metrics: {
         totalDistricts: scopedDistricts.length,
