@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs');
 const { db } = require('../config/db');
 const { validateBankAndAddress, validateKycDocuments } = require('../utils/validation');
 
@@ -230,6 +231,15 @@ const populateManager = async (m, relation, user) => {
     state: resolvedState || m.state || m.assignedState || 'Tamil Nadu',
     pincode: resolvedPincode || m.pincode || m.assignedPincode || null,
     fullAddress: m.fullAddress || [m.address, m.village, resolvedDivision || m.division, resolvedDistrict || m.district, resolvedState || m.state, resolvedPincode || m.pincode].filter(Boolean).join(', '),
+    aadharNumber: m.aadharNumber || m.documents?.aadharNumber || m.kyc?.aadhaarNumber || null,
+    panNumber: m.panNumber || m.documents?.panNumber || m.kyc?.panNumber || null,
+    bankDetails: m.bankDetails || {
+      accountHolderName: m.accountHolderName || m.name || '',
+      bankName: m.bankName || '',
+      accountNumber: m.accountNumber || '',
+      ifscCode: m.ifscCode || '',
+      branchName: m.branchName || ''
+    },
     documents: (() => {
       const rawDocs = m.documents || {};
       const kycDocs = m.kycDocs || {};
@@ -246,8 +256,10 @@ const populateManager = async (m, relation, user) => {
       const panUrl = rawDocs.panUrl || rawDocs.pan ||
         getVal(kycDocs.panCard) || getVal(kycDocs.pan) ||
         kyc.panImage || m.panUrl || m.panPhoto || null;
-      const bankUrl = rawDocs.bankUrl || rawDocs.bankPassbook || rawDocs.passbookUrl || rawDocs.bankDetailsUrl || rawDocs.bank ||
-        getVal(kycDocs.bankPassbook) || getVal(kycDocs.passbook) || m.bankUrl || m.bankPhoto || m.bankPassbook || null;
+      const bankUrl = rawDocs.bankPassbookUrl || rawDocs.bankUrl || rawDocs.bankPassbook || rawDocs.passbookUrl || rawDocs.bankDetailsUrl || rawDocs.bank ||
+        getVal(kycDocs.bankPassbook) || getVal(kycDocs.passbook) || m.bankPassbookUrl || m.bankUrl || m.bankPhoto || m.bankPassbook || m.bankPassbookPhoto || null;
+      const cancelledChequeUrl = rawDocs.cancelledChequeUrl || rawDocs.chequeUrl || rawDocs.cancelledCheque ||
+        getVal(kycDocs.cancelledCheque) || getVal(kycDocs.cheque) || m.cancelledChequeUrl || m.cancelledCheque || m.cancelledChequePhoto || null;
       const signatureUrl = rawDocs.signatureUrl || rawDocs.signature ||
         getVal(kycDocs.signature) || getVal(kycDocs.authorizedSignature) || m.signatureUrl || m.signaturePhoto || m.signature || null;
       const passportUrl = rawDocs.passportUrl || rawDocs.passport ||
@@ -261,9 +273,12 @@ const populateManager = async (m, relation, user) => {
         panUrl,
         panFileName: rawDocs.panFileName || (kycDocs.panCard?.name) || (panUrl ? 'PAN_Document' : null),
         bankUrl,
-        bankFileName: rawDocs.bankFileName || (kycDocs.bankPassbook?.name) || (bankUrl ? 'Bank_Passbook' : null),
+        bankPassbookUrl: bankUrl,
+        bankFileName: rawDocs.bankPassbookFileName || rawDocs.bankFileName || (kycDocs.bankPassbook?.name) || (bankUrl ? 'Bank_Passbook' : null),
+        cancelledChequeUrl,
+        cancelledChequeFileName: rawDocs.cancelledChequeFileName || (kycDocs.cancelledCheque?.name) || (cancelledChequeUrl ? 'Cancelled_Cheque' : null),
         signatureUrl,
-        signatureFileName: rawDocs.signatureFileName || (kycDocs.signature?.name) || (signatureUrl ? 'Specimen_Signature' : null),
+        signatureFileName: rawDocs.signatureFileName || (kycDocs.signature?.name) || (signatureUrl ? 'Digital_Signature' : null),
         passportUrl,
         passportFileName: rawDocs.passportFileName || (kycDocs.passport?.name) || (passportUrl ? 'Passport_Document' : null)
       };
@@ -271,6 +286,9 @@ const populateManager = async (m, relation, user) => {
     kycDocs: m.kycDocs || {},
     aadharPhoto: m.aadharPhoto || m.documents?.aadharUrl || m.kycDocs?.aadhaarFront?.url || null,
     panPhoto: m.panPhoto || m.documents?.panUrl || m.kycDocs?.panCard?.url || null,
+    bankPassbookPhoto: m.bankPassbookPhoto || m.documents?.bankPassbookUrl || m.documents?.bankUrl || m.kycDocs?.bankPassbook?.url || null,
+    cancelledChequePhoto: m.cancelledChequePhoto || m.documents?.cancelledChequeUrl || m.kycDocs?.cancelledCheque?.url || null,
+    signaturePhoto: m.signaturePhoto || m.documents?.signatureUrl || m.kycDocs?.signature?.url || null,
     avatar: m.avatar || m.avatarUrl || null,
     avatarUrl: m.avatarUrl || m.avatar || null,
     declarationAccepted: !!m.declarationAccepted,
@@ -966,95 +984,127 @@ const addManager = async (req, res) => {
     const rolePrefix = mgrRole === 'state_manager' ? 'STM' : mgrRole === 'district_manager' ? 'DTM' : mgrRole === 'division_manager' ? 'DIV' : 'PIN';
     const managerId = req.body.managerId || (`MGR-${rolePrefix}-${Date.now().toString().slice(-6)}`);
 
-      const aadharDocUrl = req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || req.body.documents?.aadhaarUrl || null;
-      const panDocUrl = req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null;
-      const bankDocUrl = req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankUrl || null;
-      const signatureDocUrl = req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null;
-      const passportDocUrl = req.body.passportUrl || req.body.passportPhoto || req.body.documents?.passportUrl || null;
-      const aadharClean = (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '');
-      const panClean = (panNumber || req.body.panNumber || '').toString().trim().toUpperCase();
+    const aadharDocUrl = req.body.aadharUrl || req.body.aadharPhoto || req.body.documents?.aadharUrl || req.body.documents?.aadhaarUrl || null;
+    const aadharFileName = req.body.aadharFileName || (aadharDocUrl ? 'Aadhaar_Document' : null);
 
-      const newManager = {
-        _id: newId,
-        id: newId,
-        managerId,
-        name: mgrName,
-        email: mgrEmail,
-        mobile: mgrMobile,
-        phone: mgrMobile,
-        loginId: loginId || mgrEmail,
-        passwordHash,
-        role: mgrRole,
-        level,
-        status: 'active',
-        registrationType: 'admin',
-        adminApprovalStatus: 'approved',
-        adminApprovedBy: req.user.name || req.user.email,
-        adminApprovedById: req.user.id || req.user._id,
-        adminApprovedByRole: req.user.role,
-        adminApprovedAt: now,
-        kycStatus: 'Verified',
-        state,
-        stateId: stateId || null,
-        assignedState: state,
-        assignedStateId: stateId || null,
-        district: district || null,
-        districtId: districtId || null,
-        assignedDistrict: district || null,
-        assignedDistrictId: districtId || null,
-        division: division || null,
-        divisionId: divisionId || null,
-        assignedDivision: division || null,
-        assignedDivisionId: divisionId || null,
-        pincode: pincode || null,
-        pincodeId: pincodeId || null,
-        assignedPincode: pincode || null,
-        assignedPincodeId: pincodeId || null,
-        targetJurisdiction,
-        targetAdminRole: req.user.role,
-        targetAdminId: req.user.id || req.user._id,
-        targetAdminName: req.user.name,
-        dob: dob || null,
-        gender: gender || null,
-        address: address || doorStreet || `${area || ''} ${city || ''}`.trim() || null,
+    const panDocUrl = req.body.panUrl || req.body.panPhoto || req.body.documents?.panUrl || null;
+    const panFileName = req.body.panFileName || (panDocUrl ? 'PAN_Document' : null);
+
+    const bankDocUrl = req.body.bankPassbookUrl || req.body.bankUrl || req.body.bankPhoto || req.body.documents?.bankPassbookUrl || req.body.documents?.bankUrl || null;
+    const bankFileName = req.body.bankPassbookFileName || req.body.bankFileName || (bankDocUrl ? 'Bank_Passbook' : null);
+
+    const cancelledChequeDocUrl = req.body.cancelledChequeUrl || req.body.cancelledCheque || req.body.cancelledChequePhoto || req.body.documents?.cancelledChequeUrl || null;
+    const cancelledChequeFileName = req.body.cancelledChequeFileName || (cancelledChequeDocUrl ? 'Cancelled_Cheque' : null);
+
+    const signatureDocUrl = req.body.signatureUrl || req.body.signaturePhoto || req.body.documents?.signatureUrl || null;
+    const signatureFileName = req.body.signatureFileName || (signatureDocUrl ? 'Digital_Signature' : null);
+
+    const passportDocUrl = req.body.passportUrl || req.body.passportPhoto || req.body.documents?.passportUrl || null;
+    const aadharClean = (aadharNumber || req.body.aadharNumber || '').toString().trim().replace(/\s+/g, '');
+    const panClean = (panNumber || req.body.panNumber || '').toString().trim().toUpperCase();
+
+    // Strict mandatory validation for Manager Onboarding (all 7 identity & official documents required)
+    if (!aadharClean) return res.status(400).json({ success: false, message: 'Aadhaar Card Number is required.' });
+    if (!/^\d{12}$/.test(aadharClean)) return res.status(400).json({ success: false, message: 'Aadhaar Card Number must be exactly 12 numeric digits.' });
+    if (!aadharDocUrl) return res.status(400).json({ success: false, message: 'Aadhaar Card Document upload is mandatory.' });
+
+    if (!panClean) return res.status(400).json({ success: false, message: 'PAN Card Number is required.' });
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panClean)) return res.status(400).json({ success: false, message: 'PAN Card Number must be valid format (e.g. ABCDE1234F).' });
+    if (!panDocUrl) return res.status(400).json({ success: false, message: 'PAN Card Document upload is mandatory.' });
+
+    if (!bankDocUrl) return res.status(400).json({ success: false, message: 'Bank Passbook / Bank Account Document upload is mandatory.' });
+    if (!cancelledChequeDocUrl) return res.status(400).json({ success: false, message: 'Cancelled Cheque document upload is mandatory.' });
+    if (!signatureDocUrl) return res.status(400).json({ success: false, message: 'Digital Signature upload is mandatory.' });
+
+    const newManager = {
+      _id: newId,
+      id: newId,
+      managerId,
+      name: mgrName,
+      email: mgrEmail,
+      mobile: mgrMobile,
+      phone: mgrMobile,
+      loginId: loginId || mgrEmail,
+      passwordHash,
+      role: mgrRole,
+      level,
+      status: 'active',
+      registrationType: 'admin',
+      adminApprovalStatus: 'approved',
+      adminApprovedBy: req.user.name || req.user.email,
+      adminApprovedById: req.user.id || req.user._id,
+      adminApprovedByRole: req.user.role,
+      adminApprovedAt: now,
+      kycStatus: 'Verified',
+      state,
+      stateId: stateId || null,
+      assignedState: state,
+      assignedStateId: stateId || null,
+      district: district || null,
+      districtId: districtId || null,
+      assignedDistrict: district || null,
+      assignedDistrictId: districtId || null,
+      division: division || null,
+      divisionId: divisionId || null,
+      assignedDivision: division || null,
+      assignedDivisionId: divisionId || null,
+      pincode: pincode || null,
+      pincodeId: pincodeId || null,
+      assignedPincode: pincode || null,
+      assignedPincodeId: pincodeId || null,
+      targetJurisdiction,
+      targetAdminRole: req.user.role,
+      targetAdminId: req.user.id || req.user._id,
+      targetAdminName: req.user.name,
+      dob: dob || null,
+      gender: gender || null,
+      address: address || doorStreet || `${area || ''} ${city || ''}`.trim() || null,
+      aadharNumber: aadharClean || null,
+      panNumber: panClean || null,
+      aadharPhoto: aadharDocUrl,
+      panPhoto: panDocUrl,
+      bankPassbookPhoto: bankDocUrl,
+      cancelledChequePhoto: cancelledChequeDocUrl,
+      signaturePhoto: signatureDocUrl,
+      bankDetails: {
+        accountHolderName: accountHolderName || mgrName,
+        bankName: bankName || null,
+        accountNumber: accountNumber || null,
+        ifscCode: ifscCode || null,
+        branchName: branchName || null
+      },
+      documents: {
         aadharNumber: aadharClean || null,
         panNumber: panClean || null,
-        aadharPhoto: aadharDocUrl,
-        panPhoto: panDocUrl,
-        bankDetails: {
-          accountHolderName: accountHolderName || mgrName,
-          bankName: bankName || null,
-          accountNumber: accountNumber || null,
-          ifscCode: ifscCode || null,
-          branchName: branchName || null
-        },
-        documents: {
-          aadharNumber: aadharClean || null,
-          panNumber: panClean || null,
-          aadharUrl: aadharDocUrl,
-          aadharFileName: req.body.aadharFileName || (aadharDocUrl ? 'Aadhaar_Document' : null),
-          panUrl: panDocUrl,
-          panFileName: req.body.panFileName || (panDocUrl ? 'PAN_Document' : null),
-          bankUrl: bankDocUrl,
-          bankFileName: req.body.bankFileName || (bankDocUrl ? 'Bank_Passbook' : null),
-          signatureUrl: signatureDocUrl,
-          signatureFileName: req.body.signatureFileName || (signatureDocUrl ? 'Specimen_Signature' : null),
-          passportUrl: passportDocUrl,
-          passportFileName: req.body.passportFileName || (passportDocUrl ? 'Passport_Document' : null)
-        },
-        kycDocs: {
-          aadhaarFront: { url: aadharDocUrl, name: req.body.aadharFileName || 'Aadhaar_Document' },
-          panCard: { url: panDocUrl, name: req.body.panFileName || 'PAN_Document' },
-          bankPassbook: { url: bankDocUrl, name: req.body.bankFileName || 'Bank_Passbook' },
-          signature: { url: signatureDocUrl, name: req.body.signatureFileName || 'Specimen_Signature' },
-          passport: { url: passportDocUrl, name: req.body.passportFileName || 'Passport_Document' }
-        },
-        createdByAdmin: req.user.name || req.user.email,
-        createdById: req.user.id || req.user._id,
-        createdByRole: req.user.role,
-        createdAt: now,
-        updatedAt: now
-      };
+        aadharUrl: aadharDocUrl,
+        aadharFileName,
+        panUrl: panDocUrl,
+        panFileName,
+        bankUrl: bankDocUrl,
+        bankPassbookUrl: bankDocUrl,
+        bankFileName,
+        bankPassbookFileName: bankFileName,
+        cancelledChequeUrl: cancelledChequeDocUrl,
+        cancelledChequeFileName,
+        signatureUrl: signatureDocUrl,
+        signatureFileName,
+        passportUrl: passportDocUrl,
+        passportFileName: req.body.passportFileName || (passportDocUrl ? 'Passport_Document' : null)
+      },
+      kycDocs: {
+        aadhaarFront: { url: aadharDocUrl, name: aadharFileName },
+        panCard: { url: panDocUrl, name: panFileName },
+        bankPassbook: { url: bankDocUrl, name: bankFileName },
+        cancelledCheque: { url: cancelledChequeDocUrl, name: cancelledChequeFileName },
+        signature: { url: signatureDocUrl, name: signatureFileName },
+        passport: { url: passportDocUrl, name: req.body.passportFileName || 'Passport_Document' }
+      },
+      createdByAdmin: req.user.name || req.user.email,
+      createdById: req.user.id || req.user._id,
+      createdByRole: req.user.role,
+      createdAt: now,
+      updatedAt: now
+    };
 
     await db.users.insertOne(newManager);
     if (db.managers) {
@@ -1070,7 +1120,7 @@ const addManager = async (req, res) => {
       targetUserId: newManager._id,
       targetUserName: newManager.name,
       targetUserRole: newManager.role,
-      details: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered and activated by ${req.user.role} "${req.user.name}".`,
+      details: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered with complete verified documents and activated by ${req.user.role} "${req.user.name}".`,
       ip: req.ip || '127.0.0.1',
       timestamp: now
     });
@@ -1088,10 +1138,163 @@ const addManager = async (req, res) => {
   }
 };
 
+// PATCH /api/managers/:id/documents - Update/replace manager identity & official documents
+const updateManagerDocuments = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allUsers = Array.from(db.users);
+    const manager = allUsers.find(u => String(u._id || u.id) === String(id));
+
+    if (!manager) {
+      return res.status(404).json({ success: false, message: 'Manager not found' });
+    }
+
+    if (!canAdminManage(req.user, manager)) {
+      return res.status(403).json({ success: false, message: 'You do not have permission to edit this manager.' });
+    }
+
+    const {
+      aadharNumber,
+      aadharUrl,
+      aadharFileName,
+      panNumber,
+      panUrl,
+      panFileName,
+      bankUrl,
+      bankPassbookUrl,
+      bankFileName,
+      bankPassbookFileName,
+      cancelledChequeUrl,
+      cancelledChequeFileName,
+      signatureUrl,
+      signatureFileName
+    } = req.body;
+
+    const updatedFields = {};
+    const updatedDocKeys = [];
+
+    // Aadhaar number / doc
+    if (aadharNumber !== undefined) {
+      const cleanAadhaar = String(aadharNumber).trim().replace(/\s+/g, '');
+      if (cleanAadhaar && !/^\d{12}$/.test(cleanAadhaar)) {
+        return res.status(400).json({ success: false, message: 'Aadhaar Number must be exactly 12 digits.' });
+      }
+      updatedFields.aadharNumber = cleanAadhaar;
+      updatedDocKeys.push('Aadhaar Number');
+    }
+    const finalAadharUrl = aadharUrl || req.body.aadharPhoto;
+    if (finalAadharUrl !== undefined) {
+      updatedFields.aadharPhoto = finalAadharUrl;
+      updatedDocKeys.push('Aadhaar Document');
+    }
+
+    // PAN number / doc
+    if (panNumber !== undefined) {
+      const cleanPan = String(panNumber).trim().toUpperCase();
+      if (cleanPan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
+        return res.status(400).json({ success: false, message: 'PAN Number must be valid format (e.g. ABCDE1234F).' });
+      }
+      updatedFields.panNumber = cleanPan;
+      updatedDocKeys.push('PAN Number');
+    }
+    const finalPanUrl = panUrl || req.body.panPhoto;
+    if (finalPanUrl !== undefined) {
+      updatedFields.panPhoto = finalPanUrl;
+      updatedDocKeys.push('PAN Document');
+    }
+
+    // Bank passbook doc
+    const finalBankUrl = bankPassbookUrl || bankUrl || req.body.bankPassbookPhoto;
+    if (finalBankUrl !== undefined) {
+      updatedFields.bankPassbookPhoto = finalBankUrl;
+      updatedDocKeys.push('Bank Passbook');
+    }
+
+    // Cancelled Cheque doc
+    const finalChequeUrl = cancelledChequeUrl || req.body.cancelledChequePhoto;
+    if (finalChequeUrl !== undefined) {
+      updatedFields.cancelledChequePhoto = finalChequeUrl;
+      updatedDocKeys.push('Cancelled Cheque');
+    }
+
+    // Digital signature doc
+    const finalSigUrl = signatureUrl || req.body.signaturePhoto;
+    if (finalSigUrl !== undefined) {
+      updatedFields.signaturePhoto = finalSigUrl;
+      updatedDocKeys.push('Digital Signature');
+    }
+
+    // Merge into documents and kycDocs sub-objects so existing data is preserved
+    const currentDocs = manager.documents || {};
+    const currentKycDocs = manager.kycDocs || {};
+
+    const newDocuments = {
+      ...currentDocs,
+      ...(updatedFields.aadharNumber !== undefined ? { aadharNumber: updatedFields.aadharNumber } : {}),
+      ...(updatedFields.panNumber !== undefined ? { panNumber: updatedFields.panNumber } : {}),
+      ...(finalAadharUrl !== undefined ? { aadharUrl: finalAadharUrl, aadharFileName: aadharFileName || currentDocs.aadharFileName || 'Aadhaar_Document' } : {}),
+      ...(finalPanUrl !== undefined ? { panUrl: finalPanUrl, panFileName: panFileName || currentDocs.panFileName || 'PAN_Document' } : {}),
+      ...(finalBankUrl !== undefined ? { bankUrl: finalBankUrl, bankPassbookUrl: finalBankUrl, bankFileName: bankPassbookFileName || bankFileName || currentDocs.bankPassbookFileName || currentDocs.bankFileName || 'Bank_Passbook' } : {}),
+      ...(finalChequeUrl !== undefined ? { cancelledChequeUrl: finalChequeUrl, cancelledChequeFileName: cancelledChequeFileName || currentDocs.cancelledChequeFileName || 'Cancelled_Cheque' } : {}),
+      ...(finalSigUrl !== undefined ? { signatureUrl: finalSigUrl, signatureFileName: signatureFileName || currentDocs.signatureFileName || 'Digital_Signature' } : {})
+    };
+
+    const newKycDocs = {
+      ...currentKycDocs,
+      ...(finalAadharUrl !== undefined ? { aadhaarFront: { url: finalAadharUrl, name: aadharFileName || currentKycDocs.aadhaarFront?.name || 'Aadhaar_Document' } } : {}),
+      ...(finalPanUrl !== undefined ? { panCard: { url: finalPanUrl, name: panFileName || currentKycDocs.panCard?.name || 'PAN_Document' } } : {}),
+      ...(finalBankUrl !== undefined ? { bankPassbook: { url: finalBankUrl, name: bankPassbookFileName || bankFileName || currentKycDocs.bankPassbook?.name || 'Bank_Passbook' } } : {}),
+      ...(finalChequeUrl !== undefined ? { cancelledCheque: { url: finalChequeUrl, name: cancelledChequeFileName || currentKycDocs.cancelledCheque?.name || 'Cancelled_Cheque' } } : {}),
+      ...(finalSigUrl !== undefined ? { signature: { url: finalSigUrl, name: signatureFileName || currentKycDocs.signature?.name || 'Digital_Signature' } } : {})
+    };
+
+    const now = new Date().toISOString();
+    const updatePayload = {
+      ...updatedFields,
+      documents: newDocuments,
+      kycDocs: newKycDocs,
+      updatedAt: now
+    };
+
+    Object.assign(manager, updatePayload);
+
+    await db.users.findByIdAndUpdate(manager._id || manager.id, updatePayload);
+    if (db.managers) {
+      await db.managers.findByIdAndUpdate(manager._id || manager.id, updatePayload).catch(() => {});
+    }
+
+    // Audit log
+    await db.auditLogs.insertOne({
+      action: 'MANAGER_DOCUMENT_UPDATED',
+      adminId: req.user.id || req.user._id,
+      adminName: req.user.name,
+      adminRole: req.user.role,
+      targetUserId: manager._id || manager.id,
+      targetUserName: manager.name,
+      targetUserRole: manager.role,
+      details: `Document(s) updated for manager "${manager.name}": ${updatedDocKeys.join(', ')} by ${req.user.role} "${req.user.name}".`,
+      ip: req.ip || '127.0.0.1',
+      timestamp: now
+    });
+
+    const populated = await populateManager(manager, 'subordinate', req.user);
+
+    return res.json({
+      success: true,
+      message: 'Manager document(s) updated successfully.',
+      manager: populated
+    });
+  } catch (err) {
+    console.error('Update manager documents error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update manager documents', error: err.message });
+  }
+};
+
 module.exports = {
   getLowerLevelManagers,
   getManagerById,
   approveManager,
   rejectManager,
-  addManager
+  addManager,
+  updateManagerDocuments
 };

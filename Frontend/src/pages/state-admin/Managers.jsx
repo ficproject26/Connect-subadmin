@@ -45,7 +45,8 @@ import {
   Upload,
   X,
   ArrowRight,
-  Lock
+  Lock,
+  Loader2
 } from 'lucide-react';
 import { ALL_INDIAN_STATES, getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/indiaPostalData';
 import {
@@ -57,12 +58,12 @@ import {
 } from '../../utils/formValidation';
 
 const STEPS = [
-  { id: 1, label: 'Personal',   icon: User },
-  { id: 2, label: 'Assignment', icon: ShieldCheck },
-  { id: 3, label: 'Address',    icon: Home },
-  { id: 4, label: 'KYC Docs',   icon: FileText },
-  { id: 5, label: 'Bank',       icon: Landmark },
-  { id: 6, label: 'Login',      icon: KeyRound },
+  { id: 1, label: 'Personal',      icon: User },
+  { id: 2, label: 'Assignment',    icon: ShieldCheck },
+  { id: 3, label: 'Address',       icon: Home },
+  { id: 4, label: 'Official Docs', icon: FileText },
+  { id: 5, label: 'Bank',          icon: Landmark },
+  { id: 6, label: 'Login',         icon: KeyRound },
 ];
 
 const EMPTY_MGR_FORM = {
@@ -89,11 +90,27 @@ const EMPTY_MGR_FORM = {
   state: '',
   pincode: '',
   aadharNumber: '',
+  aadharUrl: '',
+  aadharFileName: '',
   aadharPhoto: null,
   aadharPhotoPreview: '',
   panNumber: '',
+  panUrl: '',
+  panFileName: '',
   panPhoto: null,
   panPhotoPreview: '',
+  bankPassbookUrl: '',
+  bankPassbookFileName: '',
+  bankPassbookPhoto: null,
+  bankPassbookPhotoPreview: '',
+  cancelledChequeUrl: '',
+  cancelledChequeFileName: '',
+  cancelledChequePhoto: null,
+  cancelledChequePhotoPreview: '',
+  signatureUrl: '',
+  signatureFileName: '',
+  signaturePhoto: null,
+  signaturePhotoPreview: '',
   accountHolderName: '',
   bankName: '',
   accountNumber: '',
@@ -381,6 +398,24 @@ export function StateManagers({ level }) {
   const fileRef = useRef();
   const aadharFileRef = useRef();
   const panFileRef = useRef();
+  const bankFileRef = useRef();
+  const chequeFileRef = useRef();
+  const sigFileRef = useRef();
+  const [uploadingDocs, setUploadingDocs] = useState({
+    aadhar: false,
+    pan: false,
+    bankPassbook: false,
+    cancelledCheque: false,
+    signature: false
+  });
+  const [docErrors, setDocErrors] = useState({
+    aadhar: '',
+    pan: '',
+    bankPassbook: '',
+    cancelledCheque: '',
+    signature: ''
+  });
+  const [previewDocModal, setPreviewDocModal] = useState({ isOpen: false, url: '', title: '', isPdf: false });
   const [registeredDistrictList, setRegisteredDistrictList] = useState([]);
 
   useEffect(() => {
@@ -501,23 +536,84 @@ export function StateManagers({ level }) {
     setF({ profilePhoto: file, profilePhotoPreview: preview });
   };
 
+  const handleDocUpload = async (docKey, file) => {
+    if (!file) return;
+    setDocErrors(prev => ({ ...prev, [docKey]: '' }));
+
+    // File validation: Size (10MB limit) & Type
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setDocErrors(prev => ({ ...prev, [docKey]: 'File size exceeds 10MB limit. Please choose a smaller file.' }));
+      return;
+    }
+    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+    if (!allowed.includes(ext)) {
+      setDocErrors(prev => ({ ...prev, [docKey]: 'Invalid file type. Only PDF, JPG, and PNG files are accepted.' }));
+      return;
+    }
+
+    setUploadingDocs(prev => ({ ...prev, [docKey]: true }));
+    try {
+      const res = await dataService.uploadDocument(file);
+      if (res && res.success && res.file) {
+        const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+        if (docKey === 'aadhar') {
+          setF({ aadharPhoto: file, aadharUrl: res.file.url, aadharFileName: res.file.name, aadharPhotoPreview: preview });
+        } else if (docKey === 'pan') {
+          setF({ panPhoto: file, panUrl: res.file.url, panFileName: res.file.name, panPhotoPreview: preview });
+        } else if (docKey === 'bankPassbook') {
+          setF({ bankPassbookPhoto: file, bankPassbookUrl: res.file.url, bankPassbookFileName: res.file.name, bankPassbookPhotoPreview: preview });
+        } else if (docKey === 'cancelledCheque') {
+          setF({ cancelledChequePhoto: file, cancelledChequeUrl: res.file.url, cancelledChequeFileName: res.file.name, cancelledChequePhotoPreview: preview });
+        } else if (docKey === 'signature') {
+          setF({ signaturePhoto: file, signatureUrl: res.file.url, signatureFileName: res.file.name, signaturePhotoPreview: preview });
+        }
+      } else {
+        setDocErrors(prev => ({ ...prev, [docKey]: res?.message || 'Document upload failed. Please try again.' }));
+      }
+    } catch (err) {
+      setDocErrors(prev => ({ ...prev, [docKey]: err.message || 'Document upload failed. Please try again.' }));
+    } finally {
+      setUploadingDocs(prev => ({ ...prev, [docKey]: false }));
+    }
+  };
+
   const handleAadharUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-    const preview = URL.createObjectURL(file);
-    setF({ aadharPhoto: file, aadharPhotoPreview: preview });
+    if (file) handleDocUpload('aadhar', file);
   };
 
   const handlePanUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-    const preview = URL.createObjectURL(file);
-    setF({ panPhoto: file, panPhotoPreview: preview });
+    if (file) handleDocUpload('pan', file);
+  };
+
+  const handleBankUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) handleDocUpload('bankPassbook', file);
+  };
+
+  const handleChequeUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) handleDocUpload('cancelledCheque', file);
+  };
+
+  const handleSigUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) handleDocUpload('signature', file);
   };
 
   const handleAddSubmit = async () => {
     setAddError('');
     setAddSuccess('');
+
+    const isUploadingAny = Object.values(uploadingDocs).some(Boolean);
+    if (isUploadingAny) {
+      setAddError('Please wait for document uploads to complete before submitting.');
+      return;
+    }
+
     for (let s = 1; s <= 6; s++) {
       const err = validateStep(s);
       if (err) {
@@ -548,8 +644,25 @@ export function StateManagers({ level }) {
         doorStreet: form.doorStreet,
         area: form.area,
         city: form.city,
-        aadharNumber: form.aadharNumber,
-        panNumber: form.panNumber,
+        aadharNumber: form.aadharNumber.trim(),
+        aadharUrl: form.aadharUrl,
+        aadharPhoto: form.aadharUrl,
+        aadharFileName: form.aadharFileName,
+        panNumber: form.panNumber.trim().toUpperCase(),
+        panUrl: form.panUrl,
+        panPhoto: form.panUrl,
+        panFileName: form.panFileName,
+        bankPassbookUrl: form.bankPassbookUrl,
+        bankPassbookPhoto: form.bankPassbookUrl,
+        bankPassbookFileName: form.bankPassbookFileName,
+        bankUrl: form.bankPassbookUrl,
+        bankFileName: form.bankPassbookFileName,
+        cancelledChequeUrl: form.cancelledChequeUrl,
+        cancelledChequePhoto: form.cancelledChequeUrl,
+        cancelledChequeFileName: form.cancelledChequeFileName,
+        signatureUrl: form.signatureUrl,
+        signaturePhoto: form.signatureUrl,
+        signatureFileName: form.signatureFileName,
         accountHolderName: form.accountHolderName || form.fullName.trim(),
         bankName: form.bankName,
         accountNumber: form.accountNumber,
@@ -583,7 +696,7 @@ export function StateManagers({ level }) {
 
       const res = await dataService.addManager(payload);
       if (res.success) {
-        setAddSuccess(res.message || 'Manager registered successfully!');
+        setAddSuccess(res.message || 'Manager registered successfully with verified documents!');
         loadData();
         loadTerritoryTree();
         setTimeout(() => {
@@ -654,6 +767,21 @@ export function StateManagers({ level }) {
       return validateAddressDetails(form, { requiresDistrict: false });
     }
     if (step === 4) {
+      // All 7 identity and official documents are strictly mandatory
+      const aadharNum = (form.aadharNumber || '').trim();
+      if (!aadharNum) return 'Please enter the 12-digit Aadhaar Card Number.';
+      if (!/^\d{12}$/.test(aadharNum)) return 'Aadhaar Card Number must be exactly 12 numeric digits.';
+      if (!form.aadharUrl && !form.aadharPhoto) return 'Aadhaar Card Document is mandatory. Please upload Aadhaar front/back document.';
+
+      const panNum = (form.panNumber || '').trim().toUpperCase();
+      if (!panNum) return 'Please enter the PAN Card Number.';
+      if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panNum)) return 'PAN Card Number must be valid format (e.g. ABCDE1234F - 5 uppercase letters, 4 digits, 1 uppercase letter).';
+      if (!form.panUrl && !form.panPhoto) return 'PAN Card Document is mandatory. Please upload PAN card scan.';
+
+      if (!form.bankPassbookUrl && !form.bankPassbookPhoto) return 'Bank Passbook / Bank Account Document is mandatory. Please upload the bank document.';
+      if (!form.cancelledChequeUrl && !form.cancelledChequePhoto) return 'Cancelled Cheque document is mandatory. Please upload the cancelled cheque.';
+      if (!form.signatureUrl && !form.signaturePhoto) return 'Digital Signature is mandatory. Please upload the manager\'s digital signature.';
+
       return null;
     }
     if (step === 5) {
@@ -1168,8 +1296,18 @@ export function StateManagers({ level }) {
       case 4:
         return (
           <div className="space-y-4">
+            <div className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
+              isDark ? 'bg-slate-800/60 border-slate-700 text-slate-300' : 'bg-blue-50 border-blue-200 text-blue-900'
+            }`}>
+              <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <strong>Identity & Official Documents:</strong> All 7 items below are mandatory for onboarding this manager. Documents must be clear PDF, JPG, or PNG files under 10MB.
+              </div>
+            </div>
+
+            {/* Aadhaar Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FieldInput label="Aadhaar Card Number">
+              <FieldInput label="Aadhaar Card Number" required>
                 <input
                   type="text"
                   className={inputCls}
@@ -1178,27 +1316,68 @@ export function StateManagers({ level }) {
                   value={form.aadharNumber}
                   onChange={(e) => setF({ aadharNumber: e.target.value.replace(/\D/g, '') })}
                 />
+                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                  <span>Exact 12 numeric digits</span>
+                  {form.aadharNumber && form.aadharNumber.length === 12 && (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Valid length
+                    </span>
+                  )}
+                </div>
               </FieldInput>
-              <FieldInput label="Aadhaar Document Photo">
-                <div
-                  onClick={() => aadharFileRef.current?.click()}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
-                    isDark
-                      ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400'
-                      : 'border-slate-300 bg-slate-50 hover:border-blue-400'
-                  }`}
-                >
-                  <Upload className="w-4 h-4 text-slate-400" />
-                  <span className="text-xs text-slate-400">
-                    {form.aadharPhoto ? form.aadharPhoto.name : 'Upload Aadhaar front/back'}
-                  </span>
-                  <input ref={aadharFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleAadharUpload} />
+
+              <FieldInput label="Aadhaar Document Photo" required>
+                <div className="space-y-1">
+                  <div
+                    onClick={() => !uploadingDocs.aadhar && aadharFileRef.current?.click()}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
+                      docErrors.aadhar
+                        ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/20'
+                        : form.aadharUrl || form.aadharPhoto
+                        ? 'border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 dark:border-emerald-800'
+                        : isDark
+                        ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400'
+                        : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {uploadingDocs.aadhar ? (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                      ) : form.aadharUrl || form.aadharPhoto ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                      <span className={`text-xs truncate ${form.aadharUrl || form.aadharPhoto ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+                        {uploadingDocs.aadhar
+                          ? 'Uploading Aadhaar to secure storage...'
+                          : form.aadharPhoto?.name || form.aadharFileName || 'Upload Aadhaar front/back'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {(form.aadharUrl || form.aadharPhoto) && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">
+                          Uploaded
+                        </span>
+                      )}
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                        {form.aadharUrl || form.aadharPhoto ? 'Replace' : 'Browse'}
+                      </span>
+                    </div>
+                    <input ref={aadharFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleAadharUpload} />
+                  </div>
+                  {docErrors.aadhar && (
+                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" /> {docErrors.aadhar}
+                    </p>
+                  )}
                 </div>
               </FieldInput>
             </div>
 
+            {/* PAN Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FieldInput label="PAN Card Number">
+              <FieldInput label="PAN Card Number" required>
                 <input
                   type="text"
                   className={inputCls}
@@ -1207,21 +1386,211 @@ export function StateManagers({ level }) {
                   value={form.panNumber}
                   onChange={(e) => setF({ panNumber: e.target.value.toUpperCase() })}
                 />
+                <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                  <span>5 letters + 4 digits + 1 letter</span>
+                  {form.panNumber && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.panNumber) && (
+                    <span className="text-emerald-500 font-semibold flex items-center gap-0.5">
+                      <Check className="w-3 h-3" /> Valid PAN format
+                    </span>
+                  )}
+                </div>
               </FieldInput>
-              <FieldInput label="PAN Document Photo">
-                <div
-                  onClick={() => panFileRef.current?.click()}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
-                    isDark
-                      ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400'
-                      : 'border-slate-300 bg-slate-50 hover:border-blue-400'
-                  }`}
-                >
-                  <Upload className="w-4 h-4 text-slate-400" />
-                  <span className="text-xs text-slate-400">
-                    {form.panPhoto ? form.panPhoto.name : 'Upload PAN card scan'}
-                  </span>
-                  <input ref={panFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handlePanUpload} />
+
+              <FieldInput label="PAN Document Photo" required>
+                <div className="space-y-1">
+                  <div
+                    onClick={() => !uploadingDocs.pan && panFileRef.current?.click()}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
+                      docErrors.pan
+                        ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/20'
+                        : form.panUrl || form.panPhoto
+                        ? 'border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 dark:border-emerald-800'
+                        : isDark
+                        ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400'
+                        : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {uploadingDocs.pan ? (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                      ) : form.panUrl || form.panPhoto ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                      <span className={`text-xs truncate ${form.panUrl || form.panPhoto ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+                        {uploadingDocs.pan
+                          ? 'Uploading PAN to secure storage...'
+                          : form.panPhoto?.name || form.panFileName || 'Upload PAN card scan'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {(form.panUrl || form.panPhoto) && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">
+                          Uploaded
+                        </span>
+                      )}
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                        {form.panUrl || form.panPhoto ? 'Replace' : 'Browse'}
+                      </span>
+                    </div>
+                    <input ref={panFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handlePanUpload} />
+                  </div>
+                  {docErrors.pan && (
+                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" /> {docErrors.pan}
+                    </p>
+                  )}
+                </div>
+              </FieldInput>
+            </div>
+
+            {/* Bank Passbook & Cancelled Cheque */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldInput label="Bank Passbook / Bank Account Document" required>
+                <div className="space-y-1">
+                  <div
+                    onClick={() => !uploadingDocs.bankPassbook && bankFileRef.current?.click()}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
+                      docErrors.bankPassbook
+                        ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/20'
+                        : form.bankPassbookUrl || form.bankPassbookPhoto
+                        ? 'border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 dark:border-emerald-800'
+                        : isDark
+                        ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400'
+                        : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {uploadingDocs.bankPassbook ? (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                      ) : form.bankPassbookUrl || form.bankPassbookPhoto ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                      <span className={`text-xs truncate ${form.bankPassbookUrl || form.bankPassbookPhoto ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+                        {uploadingDocs.bankPassbook
+                          ? 'Uploading bank doc to secure storage...'
+                          : form.bankPassbookPhoto?.name || form.bankPassbookFileName || 'Upload Bank Passbook / Statement'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {(form.bankPassbookUrl || form.bankPassbookPhoto) && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">
+                          Uploaded
+                        </span>
+                      )}
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                        {form.bankPassbookUrl || form.bankPassbookPhoto ? 'Replace' : 'Browse'}
+                      </span>
+                    </div>
+                    <input ref={bankFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleBankUpload} />
+                  </div>
+                  {docErrors.bankPassbook && (
+                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" /> {docErrors.bankPassbook}
+                    </p>
+                  )}
+                </div>
+              </FieldInput>
+
+              <FieldInput label="Cancelled Cheque" required>
+                <div className="space-y-1">
+                  <div
+                    onClick={() => !uploadingDocs.cancelledCheque && chequeFileRef.current?.click()}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
+                      docErrors.cancelledCheque
+                        ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/20'
+                        : form.cancelledChequeUrl || form.cancelledChequePhoto
+                        ? 'border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 dark:border-emerald-800'
+                        : isDark
+                        ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400'
+                        : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {uploadingDocs.cancelledCheque ? (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                      ) : form.cancelledChequeUrl || form.cancelledChequePhoto ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                      <span className={`text-xs truncate ${form.cancelledChequeUrl || form.cancelledChequePhoto ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+                        {uploadingDocs.cancelledCheque
+                          ? 'Uploading cheque to secure storage...'
+                          : form.cancelledChequePhoto?.name || form.cancelledChequeFileName || 'Upload Cancelled Cheque'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {(form.cancelledChequeUrl || form.cancelledChequePhoto) && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">
+                          Uploaded
+                        </span>
+                      )}
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                        {form.cancelledChequeUrl || form.cancelledChequePhoto ? 'Replace' : 'Browse'}
+                      </span>
+                    </div>
+                    <input ref={chequeFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleChequeUpload} />
+                  </div>
+                  {docErrors.cancelledCheque && (
+                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" /> {docErrors.cancelledCheque}
+                    </p>
+                  )}
+                </div>
+              </FieldInput>
+            </div>
+
+            {/* Digital Signature */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FieldInput label="Digital Signature" required>
+                <div className="space-y-1">
+                  <div
+                    onClick={() => !uploadingDocs.signature && sigFileRef.current?.click()}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
+                      docErrors.signature
+                        ? 'border-rose-400 bg-rose-50/50 dark:bg-rose-950/20'
+                        : form.signatureUrl || form.signaturePhoto
+                        ? 'border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 dark:border-emerald-800'
+                        : isDark
+                        ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400'
+                        : 'border-slate-300 bg-slate-50 hover:border-blue-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {uploadingDocs.signature ? (
+                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                      ) : form.signatureUrl || form.signaturePhoto ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      ) : (
+                        <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                      <span className={`text-xs truncate ${form.signatureUrl || form.signaturePhoto ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+                        {uploadingDocs.signature
+                          ? 'Uploading signature to secure storage...'
+                          : form.signaturePhoto?.name || form.signatureFileName || 'Upload Digital Signature (image or PDF)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {(form.signatureUrl || form.signaturePhoto) && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">
+                          Uploaded
+                        </span>
+                      )}
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                        {form.signatureUrl || form.signaturePhoto ? 'Replace' : 'Browse'}
+                      </span>
+                    </div>
+                    <input ref={sigFileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleSigUpload} />
+                  </div>
+                  {docErrors.signature && (
+                    <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" /> {docErrors.signature}
+                    </p>
+                  )}
                 </div>
               </FieldInput>
             </div>
@@ -2509,7 +2878,7 @@ export function StateManagers({ level }) {
               {currentStep === 1 && 'Enter manager personal, contact, and identity details.'}
               {currentStep === 2 && 'Assign operational tier, designated administrative jurisdiction, and service zone.'}
               {currentStep === 3 && 'Residential permanent/correspondence address details.'}
-              {currentStep === 4 && 'KYC identification documents verification (Aadhaar & PAN).'}
+              {currentStep === 4 && 'Identity & Official Documents verification (Aadhaar, PAN, Bank Passbook, Cheque & Signature). All mandatory.'}
               {currentStep === 5 && 'Bank account details for commissions, allowances, and settlements.'}
               {currentStep === 6 && 'Create manager portal login credentials and finalize status.'}
             </p>

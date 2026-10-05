@@ -269,6 +269,10 @@ export const dataService = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  updateManagerDocuments: (id, data) => apiRequest(`/managers/${id}/documents`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
   uploadDocument: (file) => {
     const formData = new FormData();
     formData.append('document', file);

@@ -20,4 +20,7 @@ router.post('/:id/approve', managerDirectoryController.approveManager);
 // POST /api/managers/:id/reject - Reject manager registration
 router.post('/:id/reject', managerDirectoryController.rejectManager);
 
+// PATCH /api/managers/:id/documents - Update/replace manager identity & official documents
+router.patch('/:id/documents', managerDirectoryController.updateManagerDocuments);
+
 module.exports = router;
