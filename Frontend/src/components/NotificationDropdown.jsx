@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -45,26 +46,99 @@ export default function NotificationDropdown({ isOpen, onClose, anchorRef }) {
     if (role.includes('pincode') && !role.includes('manager')) return '/pincode-admin';
     return '/state-admin';
   };
+
   const [dropdownStyle, setDropdownStyle] = useState({});
   const dropdownRef = useRef(null);
 
-  // Compute fixed position relative to the anchor (bell icon) on open
-  useEffect(() => {
-    if (isOpen && anchorRef?.current) {
-      const rect = anchorRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const dropdownWidth = Math.min(384, viewportWidth * 0.92);
-      // Align right edge of dropdown with right edge of anchor
-      let left = rect.right - dropdownWidth;
-      if (left < 8) left = 8;
-      setDropdownStyle({
-        position: 'fixed',
-        top: rect.bottom + 8,
-        left,
-        width: dropdownWidth,
-      });
+  // Compute viewport-safe fixed position relative to the anchor (bell icon)
+  const updatePosition = useCallback(() => {
+    if (!anchorRef?.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Keep safe margin from edges
+    const minMargin = 16;
+    // Standard dropdown width between 360px and 400px, bounded by viewport
+    const targetWidth = 384;
+    const width = Math.min(targetWidth, vw - minMargin * 2);
+
+    // Anchor directly below the notification bell with 8px-12px gap
+    const top = rect.bottom + 8;
+
+    // Max height to guarantee it stays inside viewport (capped at 70vh)
+    const availableHeightBelow = Math.max(220, vh - top - minMargin);
+    const maxHeight = Math.min(availableHeightBelow, Math.floor(vh * 0.70));
+
+    // Align right edge of dropdown with right edge of the bell button
+    let left = rect.right - width + 4;
+
+    // Right-edge protection: ensure dropdown never extends beyond viewport
+    if (left + width > vw - minMargin) {
+      left = vw - width - minMargin;
     }
-  }, [isOpen, anchorRef]);
+    // Left-edge protection: ensure dropdown never extends past left edge
+    if (left < minMargin) {
+      left = minMargin;
+    }
+
+    setDropdownStyle({
+      position: 'fixed',
+      top: `${Math.round(top)}px`,
+      left: `${Math.round(left)}px`,
+      width: `${Math.round(width)}px`,
+      maxHeight: `${Math.round(maxHeight)}px`,
+    });
+  }, [anchorRef]);
+
+  // Compute position immediately before paint when opened
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+    }
+  }, [isOpen, updatePosition]);
+
+  // Handle resize, scroll, Escape key, and outside click
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleReposition = () => {
+      updatePosition();
+    };
+
+    window.addEventListener('resize', handleReposition, { passive: true });
+    window.addEventListener('scroll', handleReposition, { passive: true });
+
+    // Escape key closes popup
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Outside pointer click detection
+    const handlePointerDown = (e) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target) &&
+        anchorRef?.current &&
+        !anchorRef.current.contains(e.target)
+      ) {
+        onClose?.();
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown, { passive: true });
+
+    return () => {
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [isOpen, updatePosition, onClose, anchorRef]);
 
   if (!isOpen) return null;
 
@@ -141,173 +215,177 @@ export default function NotificationDropdown({ isOpen, onClose, anchorRef }) {
     }
   };
 
-  return (
+  return createPortal(
     <>
       {/* Invisible backdrop to catch outside clicks, especially on mobile */}
       <div
-        className="fixed inset-0 z-[998]"
+        className="fixed inset-0 z-[65] bg-transparent"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
         ref={dropdownRef}
         style={dropdownStyle}
-        className={`z-[999] rounded-2xl border shadow-2xl backdrop-blur-xl overflow-hidden transition-all duration-200 animate-in fade-in slide-in-from-top-2 ${
+        role="dialog"
+        aria-modal="true"
+        aria-label="Notifications"
+        className={`z-[70] flex flex-col rounded-2xl border shadow-2xl backdrop-blur-xl overflow-hidden transition-all duration-200 animate-in fade-in slide-in-from-top-2 ${
           isDark
             ? 'bg-[#0f1b2e]/98 border-slate-700/80 text-white'
             : 'bg-white/98 border-slate-200 text-slate-900 shadow-slate-200/80'
         }`}
       >
-      {/* Header */}
-      <div
-        className={`px-4 py-3 border-b flex items-center justify-between ${
-          isDark ? 'border-slate-800 bg-[#132238]/60' : 'border-slate-100 bg-slate-50/70'
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold tracking-tight">Notifications</h3>
+        {/* Header (Pinned) */}
+        <div
+          className={`shrink-0 px-4 py-3 border-b flex items-center justify-between ${
+            isDark ? 'border-slate-800 bg-[#132238]/60' : 'border-slate-100 bg-slate-50/70'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold tracking-tight">Notifications</h3>
+            {unreadCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-900 shadow-sm animate-pulse">
+                {unreadCount} new
+              </span>
+            )}
+          </div>
+
           {unreadCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-900 shadow-sm animate-pulse">
-              {unreadCount} new
-            </span>
+            <button
+              type="button"
+              onClick={() => markAllAsRead()}
+              className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              Mark all read
+            </button>
           )}
         </div>
 
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            onClick={() => markAllAsRead()}
-            className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <Check className="w-3.5 h-3.5" />
-            Mark all read
-          </button>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div
-        className={`flex items-center gap-1 px-3 pt-2 pb-1 border-b ${
-          isDark ? 'border-slate-800' : 'border-slate-100'
-        }`}
-      >
-        {[
-          { id: 'all', label: 'All' },
-          { id: 'vendors', label: 'Vendors' },
-          { id: 'tasks', label: 'Tasks' }
-        ].map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
-              tab === t.id
-                ? isDark
-                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                  : 'bg-amber-100 text-amber-800 border border-amber-200'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* List */}
-      <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 custom-scrollbar">
-        {filteredNotifications.length === 0 ? (
-          <div className="p-8 text-center">
-            <Bell className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              No notifications found
-            </p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-              Live updates for vendor onboarding and task progress will appear here
-            </p>
-          </div>
-        ) : (
-          filteredNotifications.map(n => {
-            const notifId = n._id || n.id;
-            return (
-              <div
-                key={notifId}
-                onClick={() => handleNotificationClick(n)}
-                className={`p-3.5 flex items-start gap-3 transition cursor-pointer relative group ${
-                  !n.isRead
-                    ? isDark
-                      ? 'bg-slate-800/40 hover:bg-slate-800/80'
-                      : 'bg-amber-50/40 hover:bg-amber-50/80'
-                    : isDark
-                    ? 'hover:bg-slate-800/30'
-                    : 'hover:bg-slate-50'
-                }`}
-              >
-                {/* Unread indicator dot */}
-                {!n.isRead && (
-                  <span className="absolute top-4 right-3 w-2 h-2 rounded-full bg-amber-500" />
-                )}
-
-                {getItemIcon(n)}
-
-                <div className="flex-1 min-w-0 pr-4">
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <h4
-                      className={`text-xs font-bold truncate ${
-                        !n.isRead ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      {n.title}
-                    </h4>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                    {n.message}
-                  </p>
-                  <div className="flex items-center justify-between mt-1.5 pt-0.5">
-                    <span className="text-[10px] font-medium text-slate-400">
-                      {getRelativeTime(n.createdAt)}
-                    </span>
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold opacity-0 group-hover:opacity-100 transition inline-flex items-center gap-0.5">
-                      Open <ChevronRight className="w-3 h-3" />
-                    </span>
-                  </div>
-                </div>
-
-                {/* Dismiss button */}
-                <button
-                  type="button"
-                  title="Dismiss notification"
-                  onClick={e => {
-                    e.stopPropagation();
-                    removeNotification(notifId);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 transition p-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Footer */}
-      <div
-        className={`p-2.5 text-center border-t ${
-          isDark ? 'border-slate-800 bg-[#132238]/40' : 'border-slate-100 bg-slate-50/50'
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            onClose?.();
-            navigate(getNotifPath());
-          }}
-          className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+        {/* Tabs (Pinned) */}
+        <div
+          className={`shrink-0 flex items-center gap-1 px-3 pt-2 pb-1.5 border-b ${
+            isDark ? 'border-slate-800' : 'border-slate-100'
+          }`}
         >
-          View All Notifications <ExternalLink className="w-3 h-3" />
-        </button>
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'vendors', label: 'Vendors' },
+            { id: 'tasks', label: 'Tasks' }
+          ].map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                tab === t.id
+                  ? isDark
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* List (Scrollable) */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 custom-scrollbar">
+          {filteredNotifications.length === 0 ? (
+            <div className="p-8 text-center">
+              <Bell className="w-8 h-8 mx-auto mb-2 text-slate-400 opacity-60" />
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                No notifications found
+              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                Live updates for vendor onboarding and task progress will appear here
+              </p>
+            </div>
+          ) : (
+            filteredNotifications.map(n => {
+              const notifId = n._id || n.id;
+              return (
+                <div
+                  key={notifId}
+                  onClick={() => handleNotificationClick(n)}
+                  className={`p-3.5 flex items-start gap-3 transition cursor-pointer relative group ${
+                    !n.isRead
+                      ? isDark
+                        ? 'bg-slate-800/40 hover:bg-slate-800/80'
+                        : 'bg-amber-50/40 hover:bg-amber-50/80'
+                      : isDark
+                      ? 'hover:bg-slate-800/30'
+                      : 'hover:bg-slate-50'
+                  }`}
+                >
+                  {/* Unread indicator dot */}
+                  {!n.isRead && (
+                    <span className="absolute top-4 right-3 w-2 h-2 rounded-full bg-amber-500" />
+                  )}
+
+                  {getItemIcon(n)}
+
+                  <div className="flex-1 min-w-0 pr-4">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <h4
+                        className={`text-xs font-bold truncate ${
+                          !n.isRead ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        {n.title}
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed break-words">
+                      {n.message}
+                    </p>
+                    <div className="flex items-center justify-between mt-1.5 pt-0.5">
+                      <span className="text-[10px] font-medium text-slate-400">
+                        {getRelativeTime(n.createdAt)}
+                      </span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold opacity-0 group-hover:opacity-100 transition inline-flex items-center gap-0.5">
+                        Open <ChevronRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Dismiss button */}
+                  <button
+                    type="button"
+                    title="Dismiss notification"
+                    onClick={e => {
+                      e.stopPropagation();
+                      removeNotification(notifId);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 transition p-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer (Pinned) */}
+        <div
+          className={`shrink-0 p-2.5 text-center border-t ${
+            isDark ? 'border-slate-800 bg-[#132238]/40' : 'border-slate-100 bg-slate-50/50'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              onClose?.();
+              navigate(getNotifPath());
+            }}
+            className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+          >
+            View All Notifications <ExternalLink className="w-3 h-3" />
+          </button>
+        </div>
       </div>
-    </div>
-    </>
+    </>,
+    document.body
   );
 }

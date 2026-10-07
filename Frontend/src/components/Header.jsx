@@ -149,6 +149,9 @@ export function Header({ setIsSidebarOpen }) {
           <button
             type="button"
             title="Notifications"
+            aria-label="Notifications"
+            aria-expanded={showNotifications}
+            aria-haspopup="dialog"
             onClick={() => setShowNotifications(prev => !prev)}
             className={`relative p-2 rounded-xl border ${
               isDark
