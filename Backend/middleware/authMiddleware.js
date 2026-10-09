@@ -39,6 +39,25 @@ function authMiddleware(req, res, next) {
     if ((userPayload.role === 'admin' || userPayload.role === 'super-admin') && (userPayload.adminRole === 'super-admin' || !userPayload.adminRole)) {
       userPayload.role = 'Super Admin';
     }
+
+    // Strictly forbid non-admin roles from accessing the Sub-Admin portal
+    const rawRole = String(userPayload.role || '').toLowerCase();
+    if (rawRole.includes('manager') || rawRole.includes('agent') || rawRole.includes('vendor') || rawRole.includes('customer') || rawRole === 'member') {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Tokens issued to this role cannot access the Sub-Admin Management system.'
+      });
+    }
+
+    // Check account status if present on token payload
+    const currentStatus = String(userPayload.status || '').toLowerCase().trim();
+    if (currentStatus === 'suspended' || currentStatus === 'blocked' || currentStatus === 'revoked' || currentStatus === 'inactive') {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Account status is ' + currentStatus + '. Access revoked.'
+      });
+    }
+
     req.user = userPayload;
     req.userId = userPayload.id || userPayload._id;
 

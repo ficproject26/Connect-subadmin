@@ -5,12 +5,7 @@ export const ROLE_HIERARCHY_LEVELS = {
   'District Admin': 3,
   'Divisional Admin': 2,
   'Division Admin': 2,
-  'Pincode Admin': 1,
-  'Manager': 1,
-  'state_manager': 1,
-  'district_manager': 1,
-  'division_manager': 1,
-  'pincode_manager': 1
+  'Pincode Admin': 1
 };
 
 /**
@@ -24,22 +19,22 @@ export function normalizeRole(role) {
   if (r === 'district admin' || r === 'districtadmin') return 'District Admin';
   if (r === 'division admin' || r === 'divisional admin' || r === 'divisionadmin' || r === 'divisionaladmin') return 'Divisional Admin';
   if (r === 'pincode admin' || r === 'pincodeadmin') return 'Pincode Admin';
-  if (r.includes('manager') && !r.includes('admin')) return 'Manager';
   return role;
 }
 
 /**
  * Get the authorized dashboard route for a given user role.
  * Ensures each role maps strictly to its designated dashboard.
+ * Non-admin roles (Managers, Agents, Vendors, etc.) are restricted to /login.
  */
 export function getRoleDashboardPath(role) {
   if (!role) return '/login';
   const norm = normalizeRole(role);
   const raw = (role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
 
-  // Super Admin / Admin -> /dashboard
+  // Super Admin / Admin -> /state-admin/dashboard (or /dashboard)
   if (norm === 'Super Admin' || raw === 'admin' || raw.includes('super admin') || raw.includes('main admin')) {
-    return '/dashboard';
+    return '/state-admin/dashboard';
   }
   // State Admin -> /state-admin/dashboard
   if (norm === 'State Admin' || raw.includes('state admin')) {
@@ -57,12 +52,9 @@ export function getRoleDashboardPath(role) {
   if (norm === 'Pincode Admin' || raw.includes('pincode admin')) {
     return '/pincode-admin/dashboard';
   }
-  // Manager -> /manager/dashboard
-  if (norm === 'Manager' || raw.includes('manager')) {
-    return '/manager/dashboard';
-  }
 
-  return '/dashboard';
+  // Strictly deny non-admin roles access to any dashboard
+  return '/login';
 }
 
 /**
@@ -90,10 +82,6 @@ export function isRoleAllowed(userRole, allowedRoles = []) {
 
     // Divisional Admin aliases
     if (userNorm === 'Divisional Admin' && allowedNorm === 'Divisional Admin') return true;
-
-    // Manager umbrella role matching
-    if (allowedNorm === 'Manager' && (userNorm === 'Manager' || userRaw.includes('manager'))) return true;
-    if (userNorm === 'Manager' && (allowedNorm === 'Manager' || allowedRaw.includes('manager'))) return true;
 
     return false;
   });

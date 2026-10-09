@@ -12,18 +12,103 @@ const ROLE_LIMITS = {
 };
 
 const ROLE_LEVELS = {
+  'Super Admin': 0,
   'State Admin': 1,
   'District Admin': 2,
   'Divisional Admin': 3,
   'Division Admin': 3,
-  'Pincode Admin': 4,
-  'Super Admin': 0,
-  'Manager': 1,
-  state_manager: 1,
-  district_manager: 2,
-  division_manager: 3,
-  pincode_manager: 4
+  'Pincode Admin': 4
 };
+
+// Authoritative role resolution: strictly maps only valid Sub-Admin management roles.
+// Non-admin roles (Manager, Agent, Vendor, Customer, Staff) are strictly rejected (isAdmin: false).
+const resolveAdminRole = (user) => {
+  if (!user) return { role: '', level: 4, isAdmin: false };
+
+  const rawRole = String(user.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const adminRole = String(user.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const adminLevel = String(user.adminLevel || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const levelStr = typeof user.level === 'string' ? user.level.toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim() : '';
+
+  // Explicitly deny non-admin roles
+  if (
+    rawRole.includes('manager') ||
+    rawRole.includes('agent') ||
+    rawRole.includes('vendor') ||
+    rawRole.includes('customer') ||
+    rawRole === 'member' ||
+    adminRole === 'staff'
+  ) {
+    return { role: user.role, level: 4, isAdmin: false };
+  }
+
+  // 1. Super Admin / Main Admin
+  if (
+    rawRole === 'super admin' || rawRole === 'main admin' || rawRole === 'superadmin' ||
+    adminRole === 'super admin' || adminRole === 'main admin' ||
+    adminLevel === 'super' || adminLevel === 'main' ||
+    (rawRole === 'admin' && (adminRole === 'super admin' || (!adminRole && !user.assignedState && !user.state)))
+  ) {
+    return { role: 'Super Admin', level: 0, isAdmin: true };
+  }
+
+  // 2. State Admin (Must check State BEFORE Pincode/Division/District to prevent schema default corruption)
+  if (
+    rawRole === 'state admin' ||
+    adminRole === 'state admin' ||
+    adminLevel === 'state' ||
+    levelStr === 'state' ||
+    (rawRole === 'admin' && (adminRole === 'state admin' || (!adminRole && (user.assignedState || user.state) && !user.assignedDistrict && !user.district && !user.assignedDivision && !user.division && !user.assignedPincode && !user.pincode)))
+  ) {
+    return { role: 'State Admin', level: 1, isAdmin: true };
+  }
+
+  // 3. District Admin
+  if (
+    rawRole === 'district admin' ||
+    adminRole === 'district admin' ||
+    adminLevel === 'district' ||
+    levelStr === 'district' ||
+    (rawRole === 'admin' && (adminRole === 'district admin' || (!adminRole && (user.assignedDistrict || user.district) && !user.assignedDivision && !user.division && !user.assignedPincode && !user.pincode)))
+  ) {
+    return { role: 'District Admin', level: 2, isAdmin: true };
+  }
+
+  // 4. Divisional / Division Admin
+  if (
+    rawRole === 'divisional admin' || rawRole === 'division admin' ||
+    adminRole === 'divisional admin' || adminRole === 'division admin' ||
+    adminLevel === 'division' || adminLevel === 'divisional' ||
+    levelStr === 'division' || levelStr === 'divisional' ||
+    (rawRole === 'admin' && (adminRole.includes('divis') || adminLevel.includes('divis'))) ||
+    (rawRole === 'admin' && (!adminRole && (user.assignedDivision || user.division) && !user.assignedPincode && !user.pincode))
+  ) {
+    return { role: 'Divisional Admin', level: 3, isAdmin: true };
+  }
+
+  // 5. Pincode Admin
+  if (
+    rawRole === 'pincode admin' ||
+    adminRole === 'pincode admin' ||
+    adminLevel === 'pincode' ||
+    (rawRole === 'admin' && (adminRole === 'pincode admin' || user.assignedPincode || user.pincode))
+  ) {
+    return { role: 'Pincode Admin', level: 4, isAdmin: true };
+  }
+
+  // Fallback for generic 'admin' role
+  if (rawRole === 'admin') {
+    if (adminRole.includes('state') || adminLevel === 'state') return { role: 'State Admin', level: 1, isAdmin: true };
+    if (adminRole.includes('dist') || adminLevel === 'district') return { role: 'District Admin', level: 2, isAdmin: true };
+    if (adminRole.includes('divis') || adminLevel === 'division') return { role: 'Divisional Admin', level: 3, isAdmin: true };
+    if (adminRole.includes('pincode') || adminLevel === 'pincode') return { role: 'Pincode Admin', level: 4, isAdmin: true };
+    if (user.assignedState || user.state) return { role: 'State Admin', level: 1, isAdmin: true };
+    return { role: 'Super Admin', level: 0, isAdmin: true };
+  }
+
+  return { role: user.role, level: 4, isAdmin: false };
+};
+
 
 // Calculate occupancy for a location and role
 const getOccupancy = async (role, { stateId, districtId, divisionId, pincodeId }) => {
@@ -183,28 +268,27 @@ const login = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials. User not found.' });
     }
 
-    // Detect Administrator role (State Admin, District Admin, Super Admin, Main Admin, etc.)
-    const rawRole = (user.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-    const levelStr = String(user.level || user.adminLevel || user.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-    const isAdmin =
-      rawRole.includes('admin') ||
-      rawRole === 'admin' ||
-      rawRole === 'super admin' ||
-      rawRole === 'main admin' ||
-      levelStr.includes('state') ||
-      levelStr.includes('district') ||
-      levelStr.includes('divis') ||
-      levelStr.includes('pincode') ||
-      levelStr.includes('super') ||
-      levelStr.includes('main') ||
-      Boolean(user.adminRole) ||
-      ['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin', 'Main Admin'].includes(user.role);
+    // 1. Authoritative Role & Hierarchy Evaluation
+    const roleInfo = resolveAdminRole(user);
 
+    // Strictly enforce authorized Sub-Admin management portal access
+    // Non-admin roles (Managers, Agents, Vendors, Customers) are denied access
+    if (!roleInfo.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account does not have permission to access this application.'
+      });
+    }
+
+    // 2. Authoritative Password Verification
     let isMatch = false;
     const userHash = user.passwordHash || user.hash || user.hashedPassword;
     if (userHash) {
       try {
         isMatch = bcrypt.compareSync(password, userHash);
+        if (!isMatch && typeof password === 'string') {
+          isMatch = bcrypt.compareSync(password.trim(), userHash);
+        }
       } catch (e) {}
     }
 
@@ -213,57 +297,31 @@ const login = async (req, res) => {
       try {
         if (typeof rawPassword === 'string' && (rawPassword.startsWith('$2a$') || rawPassword.startsWith('$2b$') || rawPassword.startsWith('$2y$'))) {
           isMatch = bcrypt.compareSync(password, rawPassword);
-        } else if (rawPassword === password) {
+          if (!isMatch && typeof password === 'string') {
+            isMatch = bcrypt.compareSync(password.trim(), rawPassword);
+          }
+        } else if (rawPassword === password || (typeof password === 'string' && rawPassword === password.trim())) {
           isMatch = true;
         }
       } catch (e) {}
-    }
-
-    // Default / standard passwords support
-    if (!isMatch) {
-      const userPhone = (user.mobile || user.phone || '').replace(/[^0-9]/g, '');
-      if (
-        password === 'admin123' ||
-        password === 'admin@123' ||
-        password === 'connect123' ||
-        password === 'Connect@123' ||
-        password === 'Connect123' ||
-        password === '123456' ||
-        (user.password && password === user.password) ||
-        (userPhone && userPhone.length >= 10 && password.replace(/[^0-9]/g, '') === userPhone.slice(-10))
-      ) {
-        isMatch = true;
-      }
-    }
-
-    // If an onboarded admin record in MongoDB has NO password or hash configured yet:
-    // Accept the entered password and persist it so they can log in seamlessly
-    if (!isMatch && !userHash && !rawPassword && isAdmin) {
-      isMatch = true;
-      try {
-        const newHash = bcrypt.hashSync(password, 10);
-        user.passwordHash = newHash;
-        user.password = password;
-        const mdb = await getMongoDb();
-        if (mdb && user._id) {
-          await mdb.collection('users').updateOne(
-            { _id: user._id },
-            { $set: { passwordHash: newHash, password: password } }
-          );
-        }
-      } catch (pwSyncErr) {
-        console.warn('Admin initial password sync warning:', pwSyncErr.message);
-      }
     }
 
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid credentials. Incorrect password.' });
     }
 
-    // Status evaluation
+    // 3. Status Evaluation
     let currentStatus = (user.status || 'active').toLowerCase().trim();
     if (currentStatus === 'approved' || currentStatus === 'active') {
       currentStatus = 'active';
+    }
+
+    if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
+      return res.status(403).json({
+        success: false,
+        status: currentStatus,
+        message: 'Your account is currently ' + currentStatus.replace(/_/g, ' ') + '. Please contact the administrator.'
+      });
     }
 
     if (currentStatus === 'rejected') {
@@ -271,69 +329,8 @@ const login = async (req, res) => {
         success: false,
         status: 'rejected',
         rejectionReason: user.rejectionReason || 'Application rejected by administrator.',
-        message: 'Your registration application was rejected by the administrator. Reason: ' + (user.rejectionReason || 'Documents or eligibility criteria not met.')
+        message: 'Your registration application was rejected by the administrator.'
       });
-    }
-
-    // Administrators onboarded by Main/Super Admin are intrinsically authorized & active
-    if (isAdmin) {
-      if (currentStatus !== 'suspended' && currentStatus !== 'blocked') {
-        currentStatus = 'active';
-        user.status = 'approved';
-        user.isActive = true;
-        user.kycStatus = 'Verified';
-        user.adminApprovalStatus = 'approved';
-        try {
-          const mdb = await getMongoDb();
-          if (mdb && user._id) {
-            await mdb.collection('users').updateOne(
-              { _id: user._id },
-              { $set: { status: 'approved', isActive: true, kycStatus: 'Verified', adminApprovalStatus: 'approved' } }
-            );
-          }
-        } catch (syncErr) {
-          console.warn('Admin status sync warning:', syncErr.message);
-        }
-      } else {
-        return res.status(403).json({
-          success: false,
-          status: currentStatus,
-          message: 'Your account is currently ' + currentStatus.replace(/_/g, ' ') + '. Login is disabled.'
-        });
-      }
-    } else {
-      if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
-        return res.status(403).json({
-          success: false,
-          status: currentStatus,
-          message: 'Your account is currently ' + currentStatus.replace(/_/g, ' ') + '. Login is disabled.'
-        });
-      }
-
-      // Non-admin roles (field agents, applicants)
-      if (currentStatus === 'pending_admin_approval' || currentStatus === 'under_review' || currentStatus === 'pending' || currentStatus === 'pending_approval' || currentStatus === 'in_review') {
-        const targetAdmin = user.targetAdminRole || 'Respective Administrator';
-        return res.status(403).json({
-          success: false,
-          status: 'pending_admin_approval',
-          message: 'Your registration is pending approval by your designated ' + targetAdmin + '. Login is disabled until admin approval.'
-        });
-      }
-    }
-
-      if (currentStatus === 'pending_kyc' || currentStatus === 'kyc_pending') {
-        if (user.adminApprovalStatus === 'approved' || user.status === 'approved') {
-          currentStatus = 'active';
-          user.kycStatus = 'Verified';
-          try { await db.users.update(user); } catch (e) {}
-        } else {
-          return res.status(403).json({
-            success: false,
-            status: 'pending_admin_approval',
-            message: 'Your registration is pending approval by ' + (user.targetAdminRole || 'the administrator') + '. Login is disabled until admin approval.'
-          });
-        }
-      }
     }
 
     if (currentStatus !== 'active') {
@@ -344,77 +341,45 @@ const login = async (req, res) => {
       });
     }
 
-    // Role mapping
-    let normalizedRole = user.role;
-
-    if (rawRole.includes('manager')) {
-      if (rawRole.includes('pincode')) {
-        normalizedRole = 'Pincode Manager';
-      } else if (rawRole.includes('divis')) {
-        normalizedRole = 'Divisional Manager';
-      } else if (rawRole.includes('dist')) {
-        normalizedRole = 'District Manager';
-      } else if (rawRole.includes('state')) {
-        normalizedRole = 'State Manager';
-      } else {
-        normalizedRole = 'Field Manager';
-      }
-    } else if (rawRole.includes('agent')) {
-      if (rawRole.includes('pincode')) {
-        normalizedRole = 'Pincode Agent';
-      } else if (rawRole.includes('divis')) {
-        normalizedRole = 'Divisional Agent';
-      } else if (rawRole.includes('dist')) {
-        normalizedRole = 'District Agent';
-      } else if (rawRole.includes('state')) {
-        normalizedRole = 'State Agent';
-      } else {
-        normalizedRole = 'Pincode Agent';
-      }
-    } else if (rawRole === 'admin' || rawRole === 'super admin' || rawRole === 'main admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'].includes(user.role)) {
-      if (user.pincode || user.assignedPincode || levelStr.includes('pincode') || rawRole.includes('pincode')) {
-        normalizedRole = 'Pincode Admin';
-      } else if (user.division || user.assignedDivision || levelStr.includes('divis') || rawRole.includes('divis')) {
-        normalizedRole = 'Divisional Admin';
-      } else if (user.district || user.assignedDistrict || levelStr.includes('dist') || rawRole.includes('dist')) {
-        normalizedRole = 'District Admin';
-      } else if (user.state || user.assignedState || levelStr.includes('state') || rawRole.includes('state')) {
-        normalizedRole = 'State Admin';
-      } else if (levelStr.includes('super') || rawRole.includes('super') || levelStr.includes('main') || rawRole.includes('main')) {
-        normalizedRole = 'Super Admin';
-      } else {
-        normalizedRole = 'Super Admin';
+    // Ensure active administrator is consistently marked active in database
+    if (user.isActive === false || user.status !== 'approved') {
+      user.isActive = true;
+      user.status = 'approved';
+      try {
+        const mdb = await getMongoDb();
+        if (mdb && user._id) {
+          await mdb.collection('users').updateOne(
+            { _id: user._id },
+            { $set: { status: 'approved', isActive: true, kycStatus: 'Verified', adminApprovalStatus: 'approved' } }
+          );
+        }
+      } catch (syncErr) {
+        console.warn('Admin status sync warning:', syncErr.message);
       }
     }
 
-    const roleLevelMap = {
-      'Super Admin': 0,
-      'State Admin': 1,
-      'District Admin': 2,
-      'Divisional Admin': 3,
-      'Division Admin': 3,
-      'Pincode Admin': 4,
-      'State Manager': 1,
-      'District Manager': 2,
-      'Divisional Manager': 3,
-      'Division Manager': 3,
-      'Pincode Manager': 4,
-      'Field Manager': 4,
-      'Manager': 1
-    };
-    const assignedLevel = roleLevelMap[normalizedRole] || (typeof user.level === 'number' ? user.level : 4);
+    // 4. Territory Synchronization & User Mapping
+    const finalState = user.state || user.assignedState || '';
+    const finalDistrict = user.district || user.assignedDistrict || '';
+    const finalDivision = user.division || user.assignedDivision || '';
+    const finalPincode = user.pincode || user.assignedPincode || '';
 
     const mappedUser = {
       ...user,
       _id: user._id || user.id,
       id: user._id || user.id,
-      role: normalizedRole,
-      level: assignedLevel,
+      role: roleInfo.role,
+      level: roleInfo.level,
       status: 'active',
-      state: user.state || user.assignedState || '',
-      district: user.district || user.assignedDistrict || '',
-      division: user.division || user.assignedDivision || '',
-      pincode: user.pincode || user.assignedPincode || '',
+      isActive: true,
+      state: finalState,
+      assignedState: finalState,
+      district: finalDistrict,
+      assignedDistrict: finalDistrict,
+      division: finalDivision,
+      assignedDivision: finalDivision,
+      pincode: finalPincode,
+      assignedPincode: finalPincode,
       mobile: user.mobile || user.phone || '',
       phone: user.phone || user.mobile || ''
     };
@@ -433,72 +398,87 @@ const login = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Login failed', error: err.message });
   }
 };
+
 const getMe = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
-    const allUsers = Array.from(db.users);
-    let user = allUsers.find(u => String(u._id || u.id) === String(userId));
+    let user = null;
+
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        const { ObjectId } = require('mongodb');
+        try {
+          user = await mdb.collection('users').findOne({ _id: new ObjectId(userId) });
+        } catch (e) {
+          user = await mdb.collection('users').findOne({ _id: String(userId) });
+        }
+      }
+    } catch (mErr) {
+      console.warn('MongoDB getMe lookup warning:', mErr.message);
+    }
 
     if (!user) {
-      try {
-        const mdb = await getMongoDb();
-        if (mdb) {
-          const { ObjectId } = require('mongodb');
-          let mongoUser = null;
-          try {
-            mongoUser = await mdb.collection("users").findOne({ _id: new ObjectId(userId) });
-          } catch (e) {
-            mongoUser = await mdb.collection("users").findOne({ _id: String(userId) });
-          }
-          if (mongoUser) {
-            let normalizedRole = mongoUser.role;
-            const rawRole = (mongoUser.role || '').toLowerCase().replace(/_/g, ' ').trim();
-            const levelStr = String(mongoUser.level || mongoUser.adminLevel || mongoUser.adminRole || '').toLowerCase().replace(/_/g, ' ').trim();
-
-            if (rawRole === 'admin' || rawRole === 'super admin' || rawRole === 'main admin' || !['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'].includes(mongoUser.role)) {
-              if (mongoUser.pincode || mongoUser.assignedPincode || levelStr.includes('pincode') || rawRole.includes('pincode')) {
-                normalizedRole = 'Pincode Admin';
-              } else if (mongoUser.division || mongoUser.assignedDivision || levelStr.includes('divis') || rawRole.includes('divis')) {
-                normalizedRole = 'Divisional Admin';
-              } else if (mongoUser.district || mongoUser.assignedDistrict || levelStr.includes('dist') || rawRole.includes('dist')) {
-                normalizedRole = 'District Admin';
-              } else if (mongoUser.state || mongoUser.assignedState || levelStr.includes('state') || rawRole.includes('state')) {
-                normalizedRole = 'State Admin';
-              } else if (levelStr.includes('super') || rawRole.includes('super') || levelStr.includes('main') || rawRole.includes('main')) {
-                normalizedRole = 'Super Admin';
-              } else {
-                normalizedRole = 'Super Admin';
-              }
-            }
-
-            user = {
-              ...mongoUser,
-              _id: mongoUser._id || mongoUser.id,
-              id: mongoUser._id || mongoUser.id,
-              role: normalizedRole,
-              state: mongoUser.state || mongoUser.assignedState || '',
-              district: mongoUser.district || mongoUser.assignedDistrict || '',
-              division: mongoUser.division || mongoUser.assignedDivision || '',
-              pincode: mongoUser.pincode || mongoUser.assignedPincode || '',
-              mobile: mongoUser.mobile || mongoUser.phone || '',
-              phone: mongoUser.phone || mongoUser.mobile || ''
-            };
-          }
-        }
-      } catch (err) {}
+      const allUsers = Array.from(db.users);
+      user = allUsers.find(u => String(u._id || u.id) === String(userId));
     }
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const profile = await buildUserProfile(user);
+    // Role check
+    const roleInfo = resolveAdminRole(user);
+    if (!roleInfo.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account does not have permission to access this application.'
+      });
+    }
+
+    // Status check
+    const currentStatus = (user.status || 'active').toLowerCase().trim();
+    if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
+      return res.status(403).json({
+        success: false,
+        status: currentStatus,
+        message: 'Your account is currently ' + currentStatus.replace(/_/g, ' ') + '. Access is disabled.'
+      });
+    }
+
+    const finalState = user.state || user.assignedState || '';
+    const finalDistrict = user.district || user.assignedDistrict || '';
+    const finalDivision = user.division || user.assignedDivision || '';
+    const finalPincode = user.pincode || user.assignedPincode || '';
+
+    const mappedUser = {
+      ...user,
+      _id: user._id || user.id,
+      id: user._id || user.id,
+      role: roleInfo.role,
+      level: roleInfo.level,
+      status: 'active',
+      isActive: true,
+      state: finalState,
+      assignedState: finalState,
+      district: finalDistrict,
+      assignedDistrict: finalDistrict,
+      division: finalDivision,
+      assignedDivision: finalDivision,
+      pincode: finalPincode,
+      assignedPincode: finalPincode,
+      mobile: user.mobile || user.phone || '',
+      phone: user.phone || user.mobile || ''
+    };
+
+    const profile = await buildUserProfile(mappedUser);
     return res.json({ success: true, user: profile });
   } catch (err) {
     console.error('Get profile error:', err);
     return res.status(500).json({ success: false, message: 'Failed to retrieve profile', error: err.message });
   }
 };
+
 const getDemoAdmins = (req, res) => {
   const demoList = db.admins.map(a => ({
     id: a.id || a._id,
@@ -511,28 +491,6 @@ const getDemoAdmins = (req, res) => {
     pincode: a.pincode,
     avatar: a.avatar || a.avatarUrl
   }));
-
-  // Also include a demo manager for comprehensive 4-role RBAC testing
-  const managerUser = Array.from(db.users).find(u => 
-    u.status === 'active' && (
-      u.role === 'Manager' || 
-      u.role === 'state_manager' || 
-      u.role === 'district_manager'
-    )
-  );
-  if (managerUser && !demoList.some(d => d.email === managerUser.email)) {
-    demoList.push({
-      id: managerUser.id || managerUser._id,
-      name: managerUser.name,
-      email: managerUser.email,
-      role: 'Manager',
-      state: managerUser.state,
-      district: managerUser.district,
-      division: managerUser.division,
-      pincode: managerUser.pincode,
-      avatar: managerUser.avatar || managerUser.avatarUrl
-    });
-  }
 
   return res.json({ success: true, admins: demoList });
 };

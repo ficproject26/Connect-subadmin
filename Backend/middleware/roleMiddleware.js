@@ -27,7 +27,7 @@ const normalizeRoleName = (role) => {
   return r;
 };
 
-const checkRole = (allowedRoles = [...ALLOWED_MANAGER_ROLES, ...ALLOWED_ADMIN_ROLES]) => {
+const checkRole = (allowedRoles = ALLOWED_ADMIN_ROLES) => {
   return (req, res, next) => {
     if (!req.user || !req.user.role) {
       return res.status(401).json({ success: false, message: 'Unauthorized: User role not established.' });

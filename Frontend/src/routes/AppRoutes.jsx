@@ -330,14 +330,6 @@ export function AppRoutes() {
             <Route path="/pincode-admin/settings" element={<PincodeSettings />} />
           </Route>
 
-          {/* Manager Routes */}
-          <Route element={<RoleBasedRoute allowedRoles={['Manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager']} />}>
-            <Route path="/manager/dashboard" element={<ManagerDashboard />} />
-            <Route path="/manager/overview" element={<Navigate to="/manager/dashboard" replace />} />
-            <Route path="/manager/profile" element={<StateProfile />} />
-            <Route path="/manager/settings" element={<StateSettings />} />
-          </Route>
-
         </Route>
       </Route>
 
