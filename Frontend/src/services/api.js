@@ -180,6 +180,11 @@ async function executeFetch(endpoint, options, headers) {
         break;
       }
     }
+
+    // Stop trying candidate fallback URLs if we got an authoritative client HTTP response (4xx except 408)
+    if (lastError?.status && lastError.status >= 400 && lastError.status < 500 && lastError.status !== 408) {
+      break;
+    }
   }
 
   const cleanMsg = sanitizeErrorMessage(lastError?.message || '', lastError?.status);

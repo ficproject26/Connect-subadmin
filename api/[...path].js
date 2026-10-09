@@ -28,9 +28,26 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    let subPath = req.url || '';
-    if (!subPath.startsWith('/api') && !subPath.startsWith('/uploads')) {
-      subPath = `/api${subPath.startsWith('/') ? subPath : `/${subPath}`}`;
+    let subPath = '';
+    if (req.query && req.query.path) {
+      const p = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
+      const queryParams = new URLSearchParams();
+      for (const [k, v] of Object.entries(req.query)) {
+        if (k !== 'path') {
+          if (Array.isArray(v)) {
+            v.forEach(val => queryParams.append(k, val));
+          } else {
+            queryParams.append(k, v);
+          }
+        }
+      }
+      const qs = queryParams.toString();
+      subPath = `/api/${p}${qs ? `?${qs}` : ''}`;
+    } else {
+      subPath = req.url || '';
+      if (!subPath.startsWith('/api') && !subPath.startsWith('/uploads')) {
+        subPath = `/api${subPath.startsWith('/') ? subPath : `/${subPath}`}`;
+      }
     }
 
     const targetUrl = new URL(`${BACKEND_URL}${subPath}`);
@@ -45,21 +62,25 @@ module.exports = async function handler(req, res) {
 
     let bodyBuffer = null;
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      if (req.body) {
+      if (req.body && (typeof req.body === 'string' || Buffer.isBuffer(req.body) || Object.keys(req.body).length > 0)) {
         if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
           bodyBuffer = Buffer.from(req.body);
         } else {
           bodyBuffer = Buffer.from(JSON.stringify(req.body));
         }
         requestHeaders['content-length'] = Buffer.byteLength(bodyBuffer);
-      } else {
-        const chunks = [];
-        for await (const chunk of req) {
-          chunks.push(chunk);
-        }
-        if (chunks.length > 0) {
-          bodyBuffer = Buffer.concat(chunks);
-          requestHeaders['content-length'] = bodyBuffer.length;
+      } else if (!req.readableEnded && !req.complete) {
+        try {
+          const chunks = [];
+          for await (const chunk of req) {
+            chunks.push(chunk);
+          }
+          if (chunks.length > 0) {
+            bodyBuffer = Buffer.concat(chunks);
+            requestHeaders['content-length'] = bodyBuffer.length;
+          }
+        } catch (streamErr) {
+          console.warn('Proxy req stream read warning:', streamErr.message);
         }
       }
     }
