@@ -17,8 +17,12 @@ const ALLOWED_ADMIN_ROLES = [
 
 const normalizeRoleName = (role) => {
   if (!role) return '';
-  const r = role.toLowerCase().replace(/_/g, ' ').trim();
+  const r = role.toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  if (r === 'super admin' || r === 'main admin' || r === 'superadmin' || r === 'admin') return 'super admin';
   if (r === 'division admin' || r === 'divisional admin') return 'divisional admin';
+  if (r === 'state admin' || r === 'stateadmin') return 'state admin';
+  if (r === 'district admin' || r === 'districtadmin') return 'district admin';
+  if (r === 'pincode admin' || r === 'pincodeadmin') return 'pincode admin';
   if (r.includes('manager') && !r.includes('admin')) return 'manager';
   return r;
 };
@@ -30,11 +34,16 @@ const checkRole = (allowedRoles = [...ALLOWED_MANAGER_ROLES, ...ALLOWED_ADMIN_RO
     }
 
     const userNormalized = normalizeRoleName(req.user.role);
-    const rawUserRole = req.user.role.toLowerCase().replace(/_/g, ' ').trim();
+    const rawUserRole = req.user.role.toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+
+    // Super Admin / Main Admin has universal authority
+    if (userNormalized === 'super admin' || rawUserRole === 'super admin' || rawUserRole === 'main admin' || rawUserRole === 'admin') {
+      return next();
+    }
 
     const isAllowed = allowedRoles.some(role => {
       const allowedNormalized = normalizeRoleName(role);
-      const rawAllowed = role.toLowerCase().replace(/_/g, ' ').trim();
+      const rawAllowed = role.toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
       return allowedNormalized === userNormalized || rawAllowed === rawUserRole || req.user.role === role;
     });
 

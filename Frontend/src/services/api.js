@@ -135,7 +135,12 @@ async function executeFetch(endpoint, options, headers) {
         let data;
         const contentType = response.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
-          data = await response.json();
+          try {
+            data = await response.json();
+          } catch (jsonErr) {
+            const text = await response.text().catch(() => '');
+            data = { message: sanitizeErrorMessage(text, response.status) || `Request failed with status ${response.status}` };
+          }
         } else {
           const text = await response.text();
           data = { message: sanitizeErrorMessage(text, response.status) };
@@ -159,7 +164,7 @@ async function executeFetch(endpoint, options, headers) {
             }
           }
 
-          const rawMessage = data?.message || `Request failed with status ${response.status}`;
+          const rawMessage = data?.message || data?.msg || `Request failed with status ${response.status}`;
           const error = new Error(sanitizeErrorMessage(rawMessage, response.status));
           error.status = response.status;
           throw error;

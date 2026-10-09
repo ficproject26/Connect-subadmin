@@ -755,7 +755,7 @@ const addManager = async (req, res) => {
     const mgrEmail = (email || '').trim().toLowerCase();
     const mgrMobile = (mobile || phone || '').trim();
     const adminRoleLower = (req.user.role || '').toLowerCase().replace(/_/g, ' ');
-    const isSuperAdmin = adminRoleLower === 'super admin' || adminRoleLower.includes('super');
+    const isSuperAdmin = adminRoleLower === 'super admin' || adminRoleLower.includes('super') || adminRoleLower === 'main admin' || adminRoleLower === 'admin';
     const isStateAdmin = adminRoleLower.includes('state') && !adminRoleLower.includes('manager');
     const isDistrictAdmin = adminRoleLower.includes('district') && !adminRoleLower.includes('manager');
     const isDivisionalAdmin = (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && !adminRoleLower.includes('manager');

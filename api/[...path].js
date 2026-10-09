@@ -5,6 +5,7 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const zlib = require('zlib');
 
 const BACKEND_URL = (
   process.env.BACKEND_API_URL ||
@@ -40,6 +41,7 @@ module.exports = async function handler(req, res) {
     delete requestHeaders.host;
     delete requestHeaders.connection;
     requestHeaders['x-forwarded-host'] = req.headers.host;
+    requestHeaders['accept-encoding'] = 'identity';
 
     let bodyBuffer = null;
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
@@ -72,7 +74,8 @@ module.exports = async function handler(req, res) {
       (proxyRes) => {
         res.statusCode = proxyRes.statusCode || 200;
         for (const [key, val] of Object.entries(proxyRes.headers)) {
-          if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'transfer-encoding') {
+          const lKey = key.toLowerCase();
+          if (lKey !== 'content-encoding' && lKey !== 'transfer-encoding' && lKey !== 'content-length') {
             try {
               res.setHeader(key, val);
             } catch (e) {}
@@ -82,7 +85,23 @@ module.exports = async function handler(req, res) {
         const chunks = [];
         proxyRes.on('data', (c) => chunks.push(c));
         proxyRes.on('end', () => {
-          const body = Buffer.concat(chunks);
+          let body = Buffer.concat(chunks);
+          const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
+          try {
+            if (encoding === 'gzip') {
+              body = zlib.gunzipSync(body);
+            } else if (encoding === 'br') {
+              body = zlib.brotliDecompressSync(body);
+            } else if (encoding === 'deflate') {
+              body = zlib.inflateSync(body);
+            }
+          } catch (decompErr) {
+            console.warn('Decompression warning in proxy:', decompErr.message);
+          }
+
+          if (!res.headersSent) {
+            res.setHeader('content-length', Buffer.byteLength(body));
+          }
           res.end(body);
         });
       }

@@ -13,18 +13,34 @@ function authMiddleware(req, res, next) {
     try {
       decoded = verifyToken(token);
     } catch (err) {
-      // Also try fallback manager secret in case an old token from Manager is presented
       const jwt = require('jsonwebtoken');
-      try {
-        decoded = jwt.verify(token, 'super_secret_agent_manager_jwt_key_2026');
-      } catch (innerErr) {
+      const fallbackSecrets = [
+        'super_secret_agent_manager_jwt_key_2026',
+        'connect_secret_key_prod_2026'
+      ];
+      let verified = false;
+      for (const secret of fallbackSecrets) {
+        try {
+          decoded = jwt.verify(token, secret);
+          verified = true;
+          break;
+        } catch (innerErr) {}
+      }
+      if (!verified) {
         throw err;
       }
     }
 
-    // Attach decoded user token payload to request
-    req.user = decoded;
-    req.userId = decoded.id || decoded._id;
+    // Attach decoded user token payload to request (supporting nested payload from admin ConnectApp)
+    const userPayload = decoded.user ? { ...decoded.user, ...decoded } : decoded;
+    if (!userPayload.role && userPayload.adminRole) {
+      userPayload.role = userPayload.adminRole;
+    }
+    if ((userPayload.role === 'admin' || userPayload.role === 'super-admin') && (userPayload.adminRole === 'super-admin' || !userPayload.adminRole)) {
+      userPayload.role = 'Super Admin';
+    }
+    req.user = userPayload;
+    req.userId = userPayload.id || userPayload._id;
 
     next();
   } catch (error) {
@@ -39,15 +55,32 @@ function optionalAuth(req, res, next) {
       const token = authHeader.split(' ')[1];
       try {
         const decoded = verifyToken(token);
-        req.user = decoded;
-        req.userId = decoded.id || decoded._id;
+        const userPayload = decoded.user ? { ...decoded.user, ...decoded } : decoded;
+        if (!userPayload.role && userPayload.adminRole) userPayload.role = userPayload.adminRole;
+        if ((userPayload.role === 'admin' || userPayload.role === 'super-admin') && (userPayload.adminRole === 'super-admin' || !userPayload.adminRole)) {
+          userPayload.role = 'Super Admin';
+        }
+        req.user = userPayload;
+        req.userId = userPayload.id || userPayload._id;
       } catch (err) {
         const jwt = require('jsonwebtoken');
-        try {
-          const decoded = jwt.verify(token, 'super_secret_agent_manager_jwt_key_2026');
-          req.user = decoded;
-          req.userId = decoded.id || decoded._id;
-        } catch (inner) {}
+        const fallbackSecrets = [
+          'super_secret_agent_manager_jwt_key_2026',
+          'connect_secret_key_prod_2026'
+        ];
+        for (const secret of fallbackSecrets) {
+          try {
+            const decoded = jwt.verify(token, secret);
+            const userPayload = decoded.user ? { ...decoded.user, ...decoded } : decoded;
+            if (!userPayload.role && userPayload.adminRole) userPayload.role = userPayload.adminRole;
+            if ((userPayload.role === 'admin' || userPayload.role === 'super-admin') && (userPayload.adminRole === 'super-admin' || !userPayload.adminRole)) {
+              userPayload.role = 'Super Admin';
+            }
+            req.user = userPayload;
+            req.userId = userPayload.id || userPayload._id;
+            break;
+          } catch (inner) {}
+        }
       }
     }
   } catch (e) {}
