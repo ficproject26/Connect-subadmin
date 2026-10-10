@@ -1,11 +1,8 @@
-// Vercel Serverless Function API Proxy
-// Proxies /api/* requests server-side to avoid Edge router non-standard port errors
-// and HTTPS -> HTTP mixed content issues.
-
-const http = require('http');
-const https = require('https');
-const { URL } = require('url');
-const zlib = require('zlib');
+// Vercel Serverless Function API Proxy for Frontend root deployment
+import http from 'http';
+import https from 'https';
+import { URL } from 'url';
+import zlib from 'zlib';
 
 const BACKEND_URL = (
   process.env.BACKEND_API_URL ||
@@ -14,7 +11,7 @@ const BACKEND_URL = (
   'https://api.ficapp.in/subadmin-api'
 ).replace(/\/+$/, '');
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS Headers
   const origin = req.headers.origin || '*';
   res.setHeader('Access-Control-Allow-Origin', origin);
@@ -182,4 +179,4 @@ module.exports = async function handler(req, res) {
       }));
     }
   }
-};
+}
