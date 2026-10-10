@@ -60,10 +60,18 @@ export function Login() {
         navigate(getRoleDashboardPath(res.user.role), { replace: true });
       }
     } catch (err) {
-      if (err?.status && err.status >= 500) {
+      const errMsg = (err?.message || '').toLowerCase();
+      const status = err?.status;
+
+      if (
+        (status && status >= 500) ||
+        (!status && (errMsg.includes('connect') || errMsg.includes('network') || errMsg.includes('fetch') || errMsg.includes('timeout') || errMsg.includes('failed')))
+      ) {
         setError('Unable to connect to the server. Please try again.');
+      } else if (status === 403 || errMsg.includes('pending') || errMsg.includes('inactive') || errMsg.includes('suspended')) {
+        setError(err.message || 'Account access is not permitted. Please contact administrator.');
       } else {
-        // In accordance with security & RBAC guidelines, show strictly generic "Invalid credentials"
+        // In accordance with security & RBAC guidelines, show generic "Invalid credentials" on credential mismatch
         setError('Invalid credentials');
       }
     } finally {

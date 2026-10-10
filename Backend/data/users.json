@@ -4954,5 +4954,27 @@
     "targetAdminRole": "Pincode Admin",
     "targetJurisdiction": "PIN: 636112",
     "updatedAt": "2026-09-29T07:18:01.762Z"
+  },
+  {
+    "_id": "6ac87ff7e5911dd6ea10bbd6",
+    "id": "6ac87ff7e5911dd6ea10bbd6",
+    "name": "Dinesh",
+    "email": "dinesh12@gmail.com",
+    "role": "admin",
+    "adminRole": "State Admin",
+    "status": "approved",
+    "isActive": true,
+    "adminApprovalStatus": "approved",
+    "kycStatus": "Verified",
+    "mobile": "8493844583",
+    "phone": "8493844583",
+    "passwordHash": ".ks6bkYCoU0zQbmYeGyaafelAXv2KQfQjOwrdqP7qq3bW6yS",
+    "password": "Dhanush12@",
+    "state": "Karnataka",
+    "assignedState": "Karnataka",
+    "dob": "2008-09-03",
+    "gender": "Male",
+    "createdAt": "2026-10-09T05:47:35.482Z",
+    "updatedAt": "2026-10-10T13:27:37.918Z"
   }
 ]

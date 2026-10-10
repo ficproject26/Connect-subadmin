@@ -108,16 +108,31 @@ module.exports = async function handler(req, res) {
         proxyRes.on('end', () => {
           let body = Buffer.concat(chunks);
           const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
+          let decompressed = false;
+
+          const isGzip = encoding.includes('gzip') || (body.length >= 2 && body[0] === 0x1f && body[1] === 0x8b);
+          const isBr = encoding.includes('br');
+          const isDeflate = encoding.includes('deflate');
+
           try {
-            if (encoding === 'gzip') {
+            if (isGzip) {
               body = zlib.gunzipSync(body);
-            } else if (encoding === 'br') {
+              decompressed = true;
+            } else if (isBr) {
               body = zlib.brotliDecompressSync(body);
-            } else if (encoding === 'deflate') {
+              decompressed = true;
+            } else if (isDeflate) {
               body = zlib.inflateSync(body);
+              decompressed = true;
             }
           } catch (decompErr) {
             console.warn('Decompression warning in proxy:', decompErr.message);
+          }
+
+          if (!decompressed && encoding) {
+            try {
+              res.setHeader('content-encoding', encoding);
+            } catch (e) {}
           }
 
           if (!res.headersSent) {

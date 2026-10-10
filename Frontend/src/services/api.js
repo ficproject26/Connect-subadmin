@@ -166,12 +166,40 @@ async function executeFetch(endpoint, options, headers) {
           try {
             data = await response.json();
           } catch (jsonErr) {
-            const text = await response.text().catch(() => '');
-            data = { message: sanitizeErrorMessage(text, response.status) || `Request failed with status ${response.status}` };
+            // Attempt client-side decompression recovery if the proxy sent gzip bytes without content-encoding header
+            let recovered = false;
+            if (typeof DecompressionStream !== 'undefined' && response.clone) {
+              try {
+                const clone = response.clone();
+                const buf = await clone.arrayBuffer();
+                const u8 = new Uint8Array(buf);
+                if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
+                  const ds = new DecompressionStream('gzip');
+                  const decompressedStream = new Response(buf).body.pipeThrough(ds);
+                  const text = await new Response(decompressedStream).text();
+                  data = JSON.parse(text);
+                  recovered = true;
+                }
+              } catch (recErr) {}
+            }
+            if (!recovered) {
+              const text = await response.text().catch(() => '');
+              if (!response.ok) {
+                data = { message: sanitizeErrorMessage(text, response.status) || `Request failed with status ${response.status}` };
+              } else {
+                // If 200 OK returned non-parseable JSON, treat as corrupted response to trigger candidate URL fallback
+                throw new Error(`Corrupted JSON response from endpoint (${jsonErr.message})`);
+              }
+            }
           }
         } else {
           const text = await response.text();
           data = { message: sanitizeErrorMessage(text, response.status) };
+        }
+
+        // For auth login, a valid 200 OK response MUST contain user and token
+        if (response.ok && endpoint.includes('/auth/login') && (!data || (!data.token && !data.user))) {
+          throw new Error('Malformed login response: token or user profile missing from proxy');
         }
 
         if (!response.ok) {

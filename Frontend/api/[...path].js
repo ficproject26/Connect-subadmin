@@ -1,7 +1,11 @@
-// Vercel Serverless Function API Proxy for Frontend root deployment
-import http from 'http';
-import https from 'https';
-import { URL } from 'url';
+// Vercel Serverless Function API Proxy
+// Proxies /api/* requests server-side to avoid Edge router non-standard port errors
+// and HTTPS -> HTTP mixed content issues.
+
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
+const zlib = require('zlib');
 
 const BACKEND_URL = (
   process.env.BACKEND_API_URL ||
@@ -10,7 +14,8 @@ const BACKEND_URL = (
   'https://api.ficapp.in/subadmin-api'
 ).replace(/\/+$/, '');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
+  // CORS Headers
   const origin = req.headers.origin || '*';
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -53,24 +58,29 @@ export default async function handler(req, res) {
     delete requestHeaders.host;
     delete requestHeaders.connection;
     requestHeaders['x-forwarded-host'] = req.headers.host;
+    requestHeaders['accept-encoding'] = 'identity';
 
     let bodyBuffer = null;
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      if (req.body) {
+      if (req.body && (typeof req.body === 'string' || Buffer.isBuffer(req.body) || Object.keys(req.body).length > 0)) {
         if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
           bodyBuffer = Buffer.from(req.body);
         } else {
           bodyBuffer = Buffer.from(JSON.stringify(req.body));
         }
         requestHeaders['content-length'] = Buffer.byteLength(bodyBuffer);
-      } else {
-        const chunks = [];
-        for await (const chunk of req) {
-          chunks.push(chunk);
-        }
-        if (chunks.length > 0) {
-          bodyBuffer = Buffer.concat(chunks);
-          requestHeaders['content-length'] = bodyBuffer.length;
+      } else if (!req.readableEnded && !req.complete) {
+        try {
+          const chunks = [];
+          for await (const chunk of req) {
+            chunks.push(chunk);
+          }
+          if (chunks.length > 0) {
+            bodyBuffer = Buffer.concat(chunks);
+            requestHeaders['content-length'] = bodyBuffer.length;
+          }
+        } catch (streamErr) {
+          console.warn('Proxy req stream read warning:', streamErr.message);
         }
       }
     }
@@ -85,7 +95,8 @@ export default async function handler(req, res) {
       (proxyRes) => {
         res.statusCode = proxyRes.statusCode || 200;
         for (const [key, val] of Object.entries(proxyRes.headers)) {
-          if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'transfer-encoding') {
+          const lKey = key.toLowerCase();
+          if (lKey !== 'content-encoding' && lKey !== 'transfer-encoding' && lKey !== 'content-length') {
             try {
               res.setHeader(key, val);
             } catch (e) {}
@@ -95,7 +106,38 @@ export default async function handler(req, res) {
         const chunks = [];
         proxyRes.on('data', (c) => chunks.push(c));
         proxyRes.on('end', () => {
-          const body = Buffer.concat(chunks);
+          let body = Buffer.concat(chunks);
+          const encoding = (proxyRes.headers['content-encoding'] || '').toLowerCase();
+          let decompressed = false;
+
+          const isGzip = encoding.includes('gzip') || (body.length >= 2 && body[0] === 0x1f && body[1] === 0x8b);
+          const isBr = encoding.includes('br');
+          const isDeflate = encoding.includes('deflate');
+
+          try {
+            if (isGzip) {
+              body = zlib.gunzipSync(body);
+              decompressed = true;
+            } else if (isBr) {
+              body = zlib.brotliDecompressSync(body);
+              decompressed = true;
+            } else if (isDeflate) {
+              body = zlib.inflateSync(body);
+              decompressed = true;
+            }
+          } catch (decompErr) {
+            console.warn('Decompression warning in proxy:', decompErr.message);
+          }
+
+          if (!decompressed && encoding) {
+            try {
+              res.setHeader('content-encoding', encoding);
+            } catch (e) {}
+          }
+
+          if (!res.headersSent) {
+            res.setHeader('content-length', Buffer.byteLength(body));
+          }
           res.end(body);
         });
       }
@@ -140,4 +182,4 @@ export default async function handler(req, res) {
       }));
     }
   }
-}
+};
