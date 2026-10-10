@@ -83,6 +83,7 @@ export function getTerritoryLocking(user) {
     };
   }
 
+  const rawRole = safeLowerCase(user.role || user.adminRole || '');
   const normalizedRole = normalizeRole(user.role, user);
   const userState = safeString(user.state || user.assignedState || 'Tamil Nadu');
   const userDistrict = safeString(user.district || user.assignedDistrict || '');
@@ -90,7 +91,12 @@ export function getTerritoryLocking(user) {
   const userPincode = safeString(user.pincode || user.assignedPincode || '');
 
   // 1. Super Admin: full access, nothing locked
-  const isSuperAdmin = normalizedRole === ROLES.SUPER_ADMIN || normalizedRole === 'super-admin';
+  const isSuperAdmin =
+    normalizedRole === ROLES.SUPER_ADMIN ||
+    normalizedRole === 'super-admin' ||
+    rawRole.includes('super') ||
+    rawRole === 'admin' ||
+    rawRole === 'main admin';
 
   if (isSuperAdmin) {
     return {
