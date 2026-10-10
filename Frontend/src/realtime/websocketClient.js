@@ -5,7 +5,7 @@
  * catchup state sync on reconnect.
  */
 
-import { API_BASE_URL } from '../services/api';
+import { API_BASE_URL, BACKEND_DIRECT_URL } from '../services/api';
 
 export const ConnectionStatus = {
   CONNECTING: 'connecting',
@@ -100,6 +100,8 @@ class RealtimeWebSocketClient {
       // In Vite dev mode, backend is typically on port 8006
       if (loc.port === '5173' || loc.port === '3000') {
         wsBase = `${protocol}//${loc.hostname}:8006`;
+      } else if (BACKEND_DIRECT_URL) {
+        wsBase = BACKEND_DIRECT_URL.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
       } else {
         wsBase = `${protocol}//${loc.host}`;
       }

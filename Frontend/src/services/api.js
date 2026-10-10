@@ -1,12 +1,32 @@
 // Centralized fetch wrapper with Bearer token injection, resilient startup retry,
 // client-side in-memory caching (SWR), request deduplication, and controlled error handling.
 
-export const API_BASE_URL = (
+// Detect if running inside Electron desktop runtime (file:// protocol or preload flag)
+export const isElectron =
+  (typeof window !== 'undefined' && window.electronAPI?.isElectron === true) ||
+  (typeof navigator !== 'undefined' && (navigator.userAgent || '').toLowerCase().includes('electron')) ||
+  (typeof window !== 'undefined' && window.location?.protocol === 'file:');
+
+// Detect if running in a standard web browser served over HTTP/HTTPS
+export const isWebBrowser =
+  typeof window !== 'undefined' &&
+  window.location &&
+  (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+  !isElectron;
+
+// Direct backend URL for standalone/desktop/Electron contexts or fallback
+export const BACKEND_DIRECT_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_BASE ||
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? 'https://api.ficapp.in/subadmin-api' : '')
+  'https://api.ficapp.in/subadmin-api'
 ).trim().replace(/\/+$/, '');
+
+// In a web browser (Vercel production or Vite dev), default to relative '' so all requests
+// route through the same-origin proxy (/api/*). This completely prevents cross-origin
+// net::ERR_CONNECTION_RESET and CORS errors in browser devtools.
+// In Electron / file:// runtime, use the direct backend URL.
+export const API_BASE_URL = isWebBrowser ? '' : BACKEND_DIRECT_URL;
 
 // Sanitizes raw server/proxy/network error messages to keep UI clean and secure
 export function sanitizeErrorMessage(message, status) {
@@ -97,16 +117,28 @@ function invalidateRelatedCaches(endpoint) {
 
 // Internal core HTTP fetch execution
 async function executeFetch(endpoint, options, headers) {
-  let url;
+  let candidateUrls = [];
+
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
-    url = endpoint;
+    candidateUrls = [endpoint];
   } else {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    if (API_BASE_URL) {
-      const hasApiPrefix = API_BASE_URL.endsWith('/api') || cleanEndpoint.startsWith('/api');
-      url = `${API_BASE_URL}${hasApiPrefix ? '' : '/api'}${cleanEndpoint}`;
+    const relativeUrl = cleanEndpoint.startsWith('/api') ? cleanEndpoint : `/api${cleanEndpoint}`;
+    const directUrl = `${BACKEND_DIRECT_URL}${cleanEndpoint.startsWith('/api') ? '' : '/api'}${cleanEndpoint}`;
+
+    if (isWebBrowser) {
+      // In web browser: Prioritize same-origin relative proxy (/api/...) to eliminate ERR_CONNECTION_RESET
+      // Direct backend URL acts as a secondary fallback if the local or Vercel proxy fails.
+      candidateUrls = [relativeUrl];
+      if (directUrl !== relativeUrl) {
+        candidateUrls.push(directUrl);
+      }
     } else {
-      url = cleanEndpoint.startsWith('/api') ? cleanEndpoint : `/api${cleanEndpoint}`;
+      // In Electron / desktop / file://: Relative paths cannot resolve; prioritize direct backend URL.
+      candidateUrls = [directUrl];
+      if (relativeUrl !== directUrl) {
+        candidateUrls.push(relativeUrl);
+      }
     }
   }
 
@@ -116,19 +148,15 @@ async function executeFetch(endpoint, options, headers) {
   const noAutoLogoutEndpoints = ['/auth/login', '/auth/me', '/auth/register'];
   const isNoAutoLogout = noAutoLogoutEndpoints.some((e) => endpoint.includes(e));
 
-  const candidateUrls = [url];
-  if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const relativeUrl = cleanEndpoint.startsWith('/api') ? cleanEndpoint : `/api${cleanEndpoint}`;
-    if (url !== relativeUrl && !candidateUrls.includes(relativeUrl)) {
-      candidateUrls.push(relativeUrl);
-    }
-  }
-
   let lastError = null;
 
   for (const currentUrl of candidateUrls) {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // If we have an alternative candidate URL, retry network errors at most once on the primary URL before trying fallback
+    const retriesForThisUrl = (candidateUrls.length > 1 && currentUrl === candidateUrls[0] && !isElectron)
+      ? Math.min(maxRetries, 1)
+      : maxRetries;
+
+    for (let attempt = 0; attempt <= retriesForThisUrl; attempt++) {
       try {
         const response = await fetch(currentUrl, { ...options, headers });
 
@@ -147,7 +175,7 @@ async function executeFetch(endpoint, options, headers) {
         }
 
         if (!response.ok) {
-          if (response.status === 503 && attempt < maxRetries) {
+          if (response.status === 503 && attempt < retriesForThisUrl) {
             await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
             continue;
           }
@@ -155,9 +183,6 @@ async function executeFetch(endpoint, options, headers) {
           if (response.status === 401 && !isNoAutoLogout) {
             localStorage.removeItem('ams_token');
             localStorage.removeItem('ams_user');
-            const isElectron =
-              (typeof window !== 'undefined' && window.electronAPI?.isElectron === true) ||
-              (typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron'));
             const loginPath = isElectron ? '/#/login' : '/login';
             if (window.location.pathname !== '/login' && window.location.hash !== '#/login') {
               window.location.href = loginPath;
@@ -173,7 +198,7 @@ async function executeFetch(endpoint, options, headers) {
         return data;
       } catch (error) {
         lastError = error;
-        if (attempt < maxRetries && (!error.status || error.status === 503)) {
+        if (attempt < retriesForThisUrl && (!error.status || error.status === 503)) {
           await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
           continue;
         }

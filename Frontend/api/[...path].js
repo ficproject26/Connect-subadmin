@@ -23,9 +23,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    let subPath = req.url || '';
-    if (!subPath.startsWith('/api') && !subPath.startsWith('/uploads')) {
-      subPath = `/api${subPath.startsWith('/') ? subPath : `/${subPath}`}`;
+    let subPath = '';
+    if (req.query && req.query.path) {
+      const p = Array.isArray(req.query.path) ? req.query.path.join('/') : req.query.path;
+      const queryParams = new URLSearchParams();
+      for (const [k, v] of Object.entries(req.query)) {
+        if (k !== 'path') {
+          if (Array.isArray(v)) {
+            v.forEach(val => queryParams.append(k, val));
+          } else {
+            queryParams.append(k, v);
+          }
+        }
+      }
+      const qs = queryParams.toString();
+      subPath = `/api/${p}${qs ? `?${qs}` : ''}`;
+    } else {
+      subPath = req.url || '';
+      if (!subPath.startsWith('/api') && !subPath.startsWith('/uploads')) {
+        subPath = `/api${subPath.startsWith('/') ? subPath : `/${subPath}`}`;
+      }
     }
 
     const targetUrl = new URL(`${BACKEND_URL}${subPath}`);
