@@ -3354,7 +3354,7 @@
     "name": "Dhanu",
     "email": "dhanushiyasri1924@gmail.com",
     "phone": "8765432134",
-    "password": "$2b$10$rLavvphk0.Ko8iBDMoVcy.TY85j0ca0vJMGfrGMTuLZo73YJhEFeS",
+    "password": "",
     "role": "admin",
     "level": "state",
     "adminRole": "branch-admin",
@@ -3391,7 +3391,7 @@
     "isPaid": false,
     "balance": 0,
     "commissionEarned": 0,
-    "failedLoginAttempts": 1,
+    "failedLoginAttempts": 0,
     "lockUntil": null,
     "isLocked": false,
     "requireCaptcha": false,
@@ -3403,7 +3403,8 @@
     "__v": 0,
     "paymentPinConfigured": false,
     "paymentPinFailedAttempts": 0,
-    "paymentPinHash": ""
+    "paymentPinHash": "",
+    "passwordHash": ""
   },
   {
     "_id": "6ab4d476457d2cf75d44eff9",

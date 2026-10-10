@@ -1785,7 +1785,7 @@
     "_id": "6ab79e8c071d56fd60635115",
     "name": "Dhanu",
     "email": "dhanushiyasri1924@gmail.com",
-    "password": "$2a$10$vBIXnc5zI1xgRMxYxUTx7u03wkPN3dqH///rSTNtA8lkMIITbMvgi",
+    "password": "",
     "phone": "8765432134",
     "role": "state",
     "registrationId": "ADM-TA-20260924-5683",
@@ -1811,6 +1811,8 @@
     },
     "createdAt": "2026-09-26T10:29:33.007Z",
     "updatedAt": "2026-09-26T10:29:34.619Z",
-    "__v": 0
+    "__v": 0,
+    "passwordHash": "",
+    "isActive": true
   }
 ]
