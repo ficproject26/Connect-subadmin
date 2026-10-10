@@ -350,8 +350,18 @@ export function DistrictDivisions() {
         state: form.state || form.assignedState,
         pincode: form.pincode,
         // documents
-        aadharNumber: form.aadharNumber,
-        panNumber: form.panNumber,
+        aadharNumber: form.aadharNumber ? String(form.aadharNumber).trim() : '',
+        aadharUrl: form.aadharUrl || form.aadharPhotoPreview || (form.aadharPhoto ? form.aadharPhoto.name : ''),
+        aadharPhoto: form.aadharUrl || form.aadharPhotoPreview || '',
+        panNumber: form.panNumber ? String(form.panNumber).trim().toUpperCase() : '',
+        panUrl: form.panUrl || form.panPhotoPreview || (form.panPhoto ? form.panPhoto.name : ''),
+        panPhoto: form.panUrl || form.panPhotoPreview || '',
+        documents: {
+          aadharNumber: form.aadharNumber ? String(form.aadharNumber).trim() : '',
+          aadharUrl: form.aadharUrl || form.aadharPhotoPreview || '',
+          panNumber: form.panNumber ? String(form.panNumber).trim().toUpperCase() : '',
+          panUrl: form.panUrl || form.panPhotoPreview || ''
+        },
         accountHolderName: form.accountHolderName,
         bankName: form.bankName,
         accountNumber: form.accountNumber,

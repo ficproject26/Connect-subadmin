@@ -208,7 +208,7 @@ export function StateManagers({ level }) {
   }, [user]);
 
   const rawRole = (effectiveUser?.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-  const normalizedUserRole = normalizeRole(effectiveUser?.role || '');
+  const normalizedUserRole = normalizeRole(effectiveUser?.role || '', effectiveUser);
 
   // Determine active level from path or prop
   let activeLevel = 'state';
@@ -2798,6 +2798,7 @@ export function StateManagers({ level }) {
         <div className="space-y-4">
           {/* Dynamic Territory Hierarchy Filter Toolbar (State -> District -> Division -> Pincode) */}
           <TerritoryHierarchyFilter
+            managerLevel={activeLevel}
             selectedState={selectedFilterState}
             onStateChange={(st) => setSelectedFilterState(st)}
             selectedDistrict={selectedFilterDistrict}

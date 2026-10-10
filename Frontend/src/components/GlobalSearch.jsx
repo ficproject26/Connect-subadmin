@@ -106,7 +106,7 @@ export function GlobalSearch({ isDark: isDarkProp }) {
   const { isDark: isDarkCtx } = useTheme();
   const isDark = isDarkProp !== undefined ? isDarkProp : isDarkCtx;
   const navigate = useNavigate();
-  const role = normalizeRole(user?.role);
+  const role = normalizeRole(user?.role, user);
 
   const [query, setQuery] = useState('');
   const [moduleResults, setModuleResults] = useState([]);

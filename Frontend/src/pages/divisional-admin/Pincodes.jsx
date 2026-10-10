@@ -311,9 +311,19 @@ export function DivisionalPincodes() {
         address: form.doorStreet,
         city: form.city,
         state: form.state,
-        pincode: form.pincode,
-        aadharNumber: form.aadharNumber,
-        panNumber: form.panNumber,
+        // documents
+        aadharNumber: form.aadharNumber ? String(form.aadharNumber).trim() : '',
+        aadharUrl: form.aadharUrl || form.aadharPhotoPreview || (form.aadharPhoto ? form.aadharPhoto.name : ''),
+        aadharPhoto: form.aadharUrl || form.aadharPhotoPreview || '',
+        panNumber: form.panNumber ? String(form.panNumber).trim().toUpperCase() : '',
+        panUrl: form.panUrl || form.panPhotoPreview || (form.panPhoto ? form.panPhoto.name : ''),
+        panPhoto: form.panUrl || form.panPhotoPreview || '',
+        documents: {
+          aadharNumber: form.aadharNumber ? String(form.aadharNumber).trim() : '',
+          aadharUrl: form.aadharUrl || form.aadharPhotoPreview || '',
+          panNumber: form.panNumber ? String(form.panNumber).trim().toUpperCase() : '',
+          panUrl: form.panUrl || form.panPhotoPreview || ''
+        },
         accountHolderName: form.accountHolderName,
         bankName: form.bankName,
         accountNumber: form.accountNumber,

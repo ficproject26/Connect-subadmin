@@ -77,8 +77,16 @@ function validateKycDocuments(data = {}) {
     data.aadharUrl ||
     data.aadhaarPhoto ||
     data.aadhaarUrl ||
+    data.aadharFileName ||
+    data.aadhaarFileName ||
+    data.aadharPhotoPreview ||
+    data.aadhaarPhotoPreview ||
+    data.aadharFile ||
+    data.aadhaarFile ||
     docs.aadharUrl ||
     docs.aadhaarUrl ||
+    docs.aadharPhoto ||
+    docs.aadhaarPhoto ||
     docs.aadhaarFront ||
     docs.aadhar ||
     docs.aadhaar ||
@@ -103,7 +111,11 @@ function validateKycDocuments(data = {}) {
   const hasPanDoc = !!(
     data.panPhoto ||
     data.panUrl ||
+    data.panFileName ||
+    data.panPhotoPreview ||
+    data.panFile ||
     docs.panUrl ||
+    docs.panPhoto ||
     docs.panCard ||
     docs.pan ||
     (kycDocs.panCard && (typeof kycDocs.panCard === 'object' ? kycDocs.panCard.url : kycDocs.panCard)) ||

@@ -265,7 +265,8 @@ const login = async (req, res) => {
     }
 
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials. User not found.' });
+      console.warn(`[AUTH] Failed login: User identifier '${loginId}' not found in database or local users.`);
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // 1. Authoritative Role & Hierarchy Evaluation
@@ -274,9 +275,10 @@ const login = async (req, res) => {
     // Strictly enforce authorized Sub-Admin management portal access
     // Non-admin roles (Managers, Agents, Vendors, Customers) are denied access
     if (!roleInfo.isAdmin) {
-      return res.status(403).json({
+      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' has role '${user.role}' which is not permitted for the Sub-Admin Portal.`);
+      return res.status(401).json({
         success: false,
-        message: 'Your account does not have permission to access this application.'
+        message: 'Invalid credentials'
       });
     }
 
@@ -307,7 +309,8 @@ const login = async (req, res) => {
     }
 
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials. Incorrect password.' });
+      console.warn(`[AUTH] Failed login: Incorrect password for user '${user.email || loginId}'.`);
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // 3. Status Evaluation
@@ -317,27 +320,26 @@ const login = async (req, res) => {
     }
 
     if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
-      return res.status(403).json({
+      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${currentStatus}'.`);
+      return res.status(401).json({
         success: false,
-        status: currentStatus,
-        message: 'Your account is currently ' + currentStatus.replace(/_/g, ' ') + '. Please contact the administrator.'
+        message: 'Invalid credentials'
       });
     }
 
     if (currentStatus === 'rejected') {
-      return res.status(403).json({
+      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' application was rejected.`);
+      return res.status(401).json({
         success: false,
-        status: 'rejected',
-        rejectionReason: user.rejectionReason || 'Application rejected by administrator.',
-        message: 'Your registration application was rejected by the administrator.'
+        message: 'Invalid credentials'
       });
     }
 
     if (currentStatus !== 'active') {
-      return res.status(403).json({
+      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${user.status || 'inactive'}'.`);
+      return res.status(401).json({
         success: false,
-        status: user.status || 'inactive',
-        message: 'Your account is currently ' + String(user.status || 'inactive').replace(/_/g, ' ') + '. Login is disabled.'
+        message: 'Invalid credentials'
       });
     }
 

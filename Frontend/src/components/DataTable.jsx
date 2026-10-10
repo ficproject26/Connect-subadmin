@@ -2,12 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { SearchBar } from './SearchBar';
 import { Pagination } from './Pagination';
 import { useTheme } from '../context/ThemeContext';
-import { Download, Filter, RefreshCw, LayoutGrid, Table as TableIcon } from 'lucide-react';
+import { Download, Filter, RefreshCw, LayoutGrid, Table as TableIcon, AlertCircle } from 'lucide-react';
 
 export function DataTable({
   columns,
   data = [],
   loading = false,
+  error = null,
   searchPlaceholder = 'Search records...',
   filterOptions = null,
   activeFilter = '',
@@ -79,9 +80,18 @@ export function DataTable({
   const handleExportCSV = () => {
     if (filteredData.length === 0) return;
     const headers = columns.map(c => c.header).join(',');
-    const rows = filteredData.map(item => {
+    const rows = filteredData.map((item, idx) => {
       return columns.map(c => {
-        const val = typeof c.accessor === 'function' ? c.accessor(item) : item[c.accessor];
+        let val;
+        if (typeof c.accessor === 'function') {
+          val = c.accessor(item, idx);
+        } else if (c.accessor) {
+          val = item[c.accessor];
+        } else if (c.header && (c.header.toLowerCase() === 's.no' || c.header.toLowerCase() === '#' || c.header.toLowerCase() === 'sl.no')) {
+          val = idx + 1;
+        } else {
+          val = '';
+        }
         return `"${String(val || '').replace(/"/g, '""')}"`;
       }).join(',');
     });
@@ -267,6 +277,22 @@ export function DataTable({
                 </div>
               ))}
             </div>
+          ) : error ? (
+            <div className="py-12 text-center">
+              <div className="flex flex-col items-center justify-center gap-2">
+                <AlertCircle className="w-8 h-8 text-rose-500" />
+                <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{error}</p>
+                {onRefresh && (
+                  <button
+                    type="button"
+                    onClick={onRefresh}
+                    className="mt-2 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+                  >
+                    Retry Loading
+                  </button>
+                )}
+              </div>
+            </div>
           ) : paginatedData.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
               <p className={`text-sm font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -275,11 +301,14 @@ export function DataTable({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 sm:gap-4">
-              {paginatedData.map((row, idx) => (
-                <div key={row.id || idx} onClick={() => onRowClick && onRowClick(row)}>
-                  {renderCard({ row, index: idx, isDark })}
-                </div>
-              ))}
+              {paginatedData.map((row, idx) => {
+                const globalIndex = (currentPage - 1) * itemsPerPage + idx;
+                return (
+                  <div key={row.id || idx} onClick={() => onRowClick && onRowClick(row)}>
+                    {renderCard({ row, index: globalIndex, isDark })}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -315,6 +344,24 @@ export function DataTable({
                     ))}
                   </tr>
                 ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <AlertCircle className="w-8 h-8 text-rose-500" />
+                      <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{error}</p>
+                      {onRefresh && (
+                        <button
+                          type="button"
+                          onClick={onRefresh}
+                          className="mt-2 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+                        >
+                          Retry Loading
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ) : paginatedData.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-12 text-center text-slate-400">
@@ -329,21 +376,24 @@ export function DataTable({
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((row, rowIdx) => (
-                  <tr
-                    key={row.id || rowIdx}
-                    onClick={() => onRowClick && onRowClick(row)}
-                    className={`${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'} ${onRowClick ? 'cursor-pointer' : ''} transition-colors`}
-                  >
-                    {columns.map((col, colIdx) => (
-                      <td key={colIdx} className={`${cellClassName || 'px-3.5 sm:px-4 py-3.5'} align-middle ${col.className || ''}`}>
-                        {col.render ? col.render(row) : (
-                          typeof col.accessor === 'function' ? col.accessor(row) : row[col.accessor]
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                paginatedData.map((row, rowIdx) => {
+                  const globalIndex = (currentPage - 1) * itemsPerPage + rowIdx;
+                  return (
+                    <tr
+                      key={row.id || rowIdx}
+                      onClick={() => onRowClick && onRowClick(row)}
+                      className={`${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'} ${onRowClick ? 'cursor-pointer' : ''} transition-colors`}
+                    >
+                      {columns.map((col, colIdx) => (
+                        <td key={colIdx} className={`${cellClassName || 'px-3.5 sm:px-4 py-3.5'} align-middle ${col.className || ''}`}>
+                          {col.render ? col.render(row, globalIndex) : (
+                            typeof col.accessor === 'function' ? col.accessor(row, globalIndex) : row[col.accessor]
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

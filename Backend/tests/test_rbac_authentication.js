@@ -132,24 +132,24 @@ async function request(path, options = {}) {
       assert.strictEqual(res.data.user.state, 'Karnataka');
     });
 
-    await test('2. Incorrect password is rejected with 401', async () => {
+    await test('2. Incorrect password is rejected with 401 Invalid credentials', async () => {
       const res = await request('/api/auth/login', {
         method: 'POST',
         body: { email: testAdminEmail, password: 'WrongPassword123!' }
       });
       assert.strictEqual(res.status, 401);
       assert.strictEqual(res.data.success, false);
-      assert.ok(res.data.message.includes('Incorrect password'));
+      assert.strictEqual(res.data.message, 'Invalid credentials');
     });
 
-    await test('3. Unknown account is rejected safely with 401', async () => {
+    await test('3. Unknown account is rejected safely with 401 Invalid credentials', async () => {
       const res = await request('/api/auth/login', {
         method: 'POST',
         body: { email: 'nonexistent_account_999@example.com', password: 'SomePassword123!' }
       });
       assert.strictEqual(res.status, 401);
       assert.strictEqual(res.data.success, false);
-      assert.ok(res.data.message.includes('not found') || res.data.message.includes('Invalid credentials'));
+      assert.strictEqual(res.data.message, 'Invalid credentials');
     });
 
     await test('4. Password with whitespace is trimmed safely and authenticated', async () => {
@@ -162,24 +162,24 @@ async function request(path, options = {}) {
     });
 
     // --- ROLE-BASED ACCESS CONTROL TESTS ---
-    await test('5. Manager credentials are STRICTLY rejected on Sub-Admin login with 403', async () => {
+    await test('5. Manager credentials are strictly rejected without role leakage with 401 Invalid credentials', async () => {
       const res = await request('/api/auth/login', {
         method: 'POST',
         body: { email: testManagerEmail, password: testManagerPw }
       });
-      assert.strictEqual(res.status, 403, `Expected 403 Forbidden, got ${res.status}`);
+      assert.strictEqual(res.status, 401, `Expected 401, got ${res.status}`);
       assert.strictEqual(res.data.success, false);
-      assert.ok(res.data.message.includes('does not have permission'));
+      assert.strictEqual(res.data.message, 'Invalid credentials');
     });
 
-    await test('6. Inactive / suspended account is rejected on login with 403', async () => {
+    await test('6. Inactive / suspended account is rejected without status leakage with 401 Invalid credentials', async () => {
       const res = await request('/api/auth/login', {
         method: 'POST',
         body: { email: testSuspendedEmail, password: testAdminPw }
       });
-      assert.strictEqual(res.status, 403);
+      assert.strictEqual(res.status, 401);
       assert.strictEqual(res.data.success, false);
-      assert.ok(res.data.message.includes('suspended'));
+      assert.strictEqual(res.data.message, 'Invalid credentials');
     });
 
     await test('7. Authenticated State Admin profile via /api/auth/me returns authoritative role', async () => {

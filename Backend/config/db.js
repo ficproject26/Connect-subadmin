@@ -35,7 +35,15 @@ class Collection extends Array {
       throw new Error(`MongoDB client instance is required to initialize collection '${this.name}'`);
     }
     this._mongoCol = mongoDb.collection(this.mongoName);
-    const docs = await this._mongoCol.find({}).toArray();
+    const projection = (this.name === 'users' || this.name === 'agents') ? {
+      kyc: 0,
+      kycDocs: 0,
+      documents: 0,
+      aadhaarImage: 0,
+      panImage: 0,
+      selfie: 0
+    } : {};
+    const docs = await this._mongoCol.find({}, { projection }).toArray();
     this.length = 0;
     if (docs && docs.length > 0) {
       super.push(...docs);
@@ -54,7 +62,15 @@ class Collection extends Array {
         return Array.from(this);
       }
       this._lastReload = now;
-      const docs = await this._mongoCol.find({}).toArray();
+      const projection = (this.name === 'users' || this.name === 'agents') ? {
+        kyc: 0,
+        kycDocs: 0,
+        documents: 0,
+        aadhaarImage: 0,
+        panImage: 0,
+        selfie: 0
+      } : {};
+      const docs = await this._mongoCol.find({}, { projection }).toArray();
       this.length = 0;
       if (docs && docs.length > 0) {
         super.push(...docs);
@@ -444,16 +460,24 @@ const db = {
   jobapplieds: jobappliedsCollection,
 
   get admins() {
-    return Array.from(usersCollection).filter(u =>
-      u.role === 'State Admin' ||
-      u.role === 'District Admin' ||
-      u.role === 'Divisional Admin' ||
-      u.role === 'Division Admin' ||
-      u.role === 'Pincode Admin' ||
-      u.role === 'Super Admin' ||
-      u.role === 'QC Team' ||
-      u.role === 'qc_team'
-    );
+    return Array.from(usersCollection).filter(u => {
+      if (!u) return false;
+      const r = String(u.role || '').toLowerCase().trim();
+      const ar = String(u.adminRole || '').toLowerCase().trim();
+      const al = String(u.adminLevel || '').toLowerCase().trim();
+      return (
+        r.includes('admin') ||
+        ar.includes('admin') ||
+        al.includes('state') ||
+        al.includes('district') ||
+        al.includes('division') ||
+        al.includes('pincode') ||
+        al.includes('main') ||
+        al.includes('super') ||
+        r === 'qc team' ||
+        r === 'qc_team'
+      );
+    });
   },
 
   hierarchy: { states: [] },

@@ -36,7 +36,8 @@ import {
   Truck,
   Wrench,
   Award,
-  CreditCard
+  CreditCard,
+  Loader2
 } from 'lucide-react';
 import { getDistrictsForState, ALL_INDIAN_STATES, getDivisionsForDistrict } from '../../utils/indiaPostalData';
 import {
@@ -63,8 +64,8 @@ const EMPTY_FORM = {
   // step 2
   doorStreet: '', area: '', city: '', district: '', state: '', pincode: '',
   // step 3 - Documents
-  aadharNumber: '', aadharPhoto: null, aadharPhotoPreview: '',
-  panNumber: '', panPhoto: null, panPhotoPreview: '',
+  aadharNumber: '', aadharPhoto: null, aadharPhotoPreview: '', aadharUrl: '', aadharFileName: '',
+  panNumber: '', panPhoto: null, panPhotoPreview: '', panUrl: '', panFileName: '',
   // step 4
   accountHolderName: '', bankName: '', accountNumber: '', ifscCode: '', branchName: '',
   // step 5
@@ -90,6 +91,7 @@ export function StateDistricts() {
   const { user: authUser } = useAuth();
   const [districts, setDistricts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [allDivisions, setAllDivisions] = useState([]);
@@ -105,11 +107,79 @@ export function StateDistricts() {
   const [addSuccess, setAddSuccess] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [uploadingAadhaar, setUploadingAadhaar] = useState(false);
+  const [uploadingPan, setUploadingPan] = useState(false);
   const fileRef = useRef();
   const aadharFileRef = useRef();
   const panFileRef = useRef();
 
   const setF = (patch) => setForm(f => ({ ...f, ...patch }));
+
+  const handleAadhaarUpload = async (file) => {
+    if (!file) return;
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+    setF({ aadharPhoto: file, aadharFileName: file.name, aadharPhotoPreview: preview });
+    setUploadingAadhaar(true);
+    setAddError('');
+    try {
+      const res = await dataService.uploadDocument(file);
+      if (res && res.success && res.file) {
+        setF({
+          aadharUrl: res.file.url,
+          aadharPhoto: res.file.url,
+          aadharFileName: res.file.name || file.name,
+          aadharPhotoPreview: preview
+        });
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setF({ aadharUrl: reader.result, aadharPhoto: reader.result, aadharPhotoPreview: preview });
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setF({ aadharUrl: reader.result, aadharPhoto: reader.result, aadharPhotoPreview: preview });
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploadingAadhaar(false);
+    }
+  };
+
+  const handlePanUpload = async (file) => {
+    if (!file) return;
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+    setF({ panPhoto: file, panFileName: file.name, panPhotoPreview: preview });
+    setUploadingPan(true);
+    setAddError('');
+    try {
+      const res = await dataService.uploadDocument(file);
+      if (res && res.success && res.file) {
+        setF({
+          panUrl: res.file.url,
+          panPhoto: res.file.url,
+          panFileName: res.file.name || file.name,
+          panPhotoPreview: preview
+        });
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setF({ panUrl: reader.result, panPhoto: reader.result, panPhotoPreview: preview });
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setF({ panUrl: reader.result, panPhoto: reader.result, panPhotoPreview: preview });
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setUploadingPan(false);
+    }
+  };
 
   // ---- auto-fill assigned state from logged-in admin ----
   useEffect(() => {
@@ -157,6 +227,7 @@ export function StateDistricts() {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [distRes, divRes, pinRes, mgrRes, agtRes] = await Promise.all([
         dataService.getDistricts({ state: authUser?.state }),
@@ -173,6 +244,10 @@ export function StateDistricts() {
 
       if (divisions.length > 0) setAllDivisions(divisions);
       if (pincodes.length > 0) setAllPincodes(pincodes);
+
+      if (!distRes?.success && distRes?.message) {
+        setLoadError(distRes.message);
+      }
 
       if (distRes?.success && Array.isArray(distRes.districts)) {
         // Enforce strict qualifying rule:
@@ -211,6 +286,7 @@ export function StateDistricts() {
       }
     } catch (e) {
       console.error(e);
+      setLoadError(e.message || 'Failed to fetch district admins');
     } finally {
       setLoading(false);
     }
@@ -256,8 +332,20 @@ export function StateDistricts() {
         state: form.state || form.assignedState,
         pincode: form.pincode,
         // documents
-        aadharNumber: form.aadharNumber,
-        panNumber: form.panNumber,
+        aadharNumber: form.aadharNumber.trim(),
+        aadharUrl: form.aadharUrl || form.aadharPhotoPreview || '',
+        aadharPhoto: form.aadharUrl || form.aadharPhotoPreview || '',
+        aadharFileName: form.aadharFileName || '',
+        panNumber: form.panNumber.trim().toUpperCase(),
+        panUrl: form.panUrl || form.panPhotoPreview || '',
+        panPhoto: form.panUrl || form.panPhotoPreview || '',
+        panFileName: form.panFileName || '',
+        documents: {
+          aadharNumber: form.aadharNumber.trim(),
+          aadharUrl: form.aadharUrl || form.aadharPhotoPreview || '',
+          panNumber: form.panNumber.trim().toUpperCase(),
+          panUrl: form.panUrl || form.panPhotoPreview || ''
+        },
         // bank
         accountHolderName: form.accountHolderName,
         bankName: form.bankName,
@@ -345,6 +433,18 @@ export function StateDistricts() {
       return validateAddressDetails(form, { requiresDistrict: true });
     }
     if (step === 3) {
+      if (!form.aadharNumber.trim()) return 'Please enter the 12-digit Aadhaar Number.';
+      if (form.aadharNumber.trim().length !== 12) return 'Aadhaar Number must be exactly 12 digits.';
+      if (!form.aadharUrl && !form.aadharPhoto && !form.aadharPhotoPreview && !form.aadharFileName) {
+        return 'Aadhaar Card document upload is mandatory.';
+      }
+      if (!form.panNumber.trim()) return 'Please enter the PAN Number.';
+      if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(form.panNumber.trim().toUpperCase())) {
+        return 'PAN Number must be in valid format (e.g. ABCDE1234F).';
+      }
+      if (!form.panUrl && !form.panPhoto && !form.panPhotoPreview && !form.panFileName) {
+        return 'PAN Card document upload is mandatory.';
+      }
       return null;
     }
     if (step === 4) {
@@ -375,6 +475,16 @@ export function StateDistricts() {
   }`;
 
   const columns = [
+    {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
     {
       header: 'District Name / ID',
       accessor: 'name',
@@ -647,7 +757,7 @@ export function StateDistricts() {
         return (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FieldInput label="Aadhaar Number">
+              <FieldInput label="Aadhaar Number" required>
                 <input
                   type="text"
                   className={inputCls}
@@ -658,16 +768,22 @@ export function StateDistricts() {
                 />
               </FieldInput>
 
-              <FieldInput label="Aadhaar Photo">
+              <FieldInput label="Aadhaar Document / Card" required>
                 <div
-                  onClick={() => aadharFileRef.current?.click()}
+                  onClick={() => !uploadingAadhaar && aadharFileRef.current?.click()}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
                     isDark ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400' : 'border-slate-300 bg-slate-50 hover:border-blue-400'
-                  }`}
+                  } ${uploadingAadhaar ? 'opacity-60 cursor-wait' : ''}`}
                 >
-                  <Upload className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="text-xs text-slate-500 truncate">
-                    {form.aadharPhoto ? form.aadharPhoto.name : 'Upload Aadhaar Photo'}
+                  {uploadingAadhaar ? (
+                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                  ) : form.aadharUrl || form.aadharFileName ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  ) : (
+                    <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                  )}
+                  <span className={`text-xs truncate ${form.aadharUrl || form.aadharFileName ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                    {uploadingAadhaar ? 'Uploading document...' : (form.aadharFileName || (form.aadharPhoto ? form.aadharPhoto.name : 'Upload Aadhaar Card (PDF/Image)'))}
                   </span>
                   <input
                     ref={aadharFileRef}
@@ -676,9 +792,7 @@ export function StateDistricts() {
                     className="hidden"
                     onChange={e => {
                       const file = e.target.files?.[0];
-                      if (file) {
-                        setF({ aadharPhoto: file, aadharPhotoPreview: URL.createObjectURL(file) });
-                      }
+                      if (file) handleAadhaarUpload(file);
                     }}
                   />
                 </div>
@@ -686,7 +800,7 @@ export function StateDistricts() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FieldInput label="PAN Card Number">
+              <FieldInput label="PAN Card Number" required>
                 <input
                   type="text"
                   className={inputCls}
@@ -697,16 +811,22 @@ export function StateDistricts() {
                 />
               </FieldInput>
 
-              <FieldInput label="PAN Photo">
+              <FieldInput label="PAN Document / Card" required>
                 <div
-                  onClick={() => panFileRef.current?.click()}
+                  onClick={() => !uploadingPan && panFileRef.current?.click()}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed cursor-pointer transition ${
                     isDark ? 'border-slate-600 bg-slate-800/50 hover:border-blue-400' : 'border-slate-300 bg-slate-50 hover:border-blue-400'
-                  }`}
+                  } ${uploadingPan ? 'opacity-60 cursor-wait' : ''}`}
                 >
-                  <Upload className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="text-xs text-slate-500 truncate">
-                    {form.panPhoto ? form.panPhoto.name : 'Upload PAN Photo'}
+                  {uploadingPan ? (
+                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+                  ) : form.panUrl || form.panFileName ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  ) : (
+                    <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                  )}
+                  <span className={`text-xs truncate ${form.panUrl || form.panFileName ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-500'}`}>
+                    {uploadingPan ? 'Uploading document...' : (form.panFileName || (form.panPhoto ? form.panPhoto.name : 'Upload PAN Card (PDF/Image)'))}
                   </span>
                   <input
                     ref={panFileRef}
@@ -715,9 +835,7 @@ export function StateDistricts() {
                     className="hidden"
                     onChange={e => {
                       const file = e.target.files?.[0];
-                      if (file) {
-                        setF({ panPhoto: file, panPhotoPreview: URL.createObjectURL(file) });
-                      }
+                      if (file) handlePanUpload(file);
                     }}
                   />
                 </div>
@@ -899,6 +1017,7 @@ export function StateDistricts() {
         columns={columns}
         data={districts}
         loading={loading}
+        error={loadError}
         onRefresh={loadData}
         searchPlaceholder="Search district name or ID..."
         exportFileName="state_districts.csv"

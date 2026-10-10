@@ -39,6 +39,16 @@ export function PincodeBookings() {
 
   const columns = [
     {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
+    {
       header: 'Booking Number',
       accessor: (row) => `${row.customerName} ${row.bookingNumber}`,
       render: (row) => (

@@ -17,7 +17,20 @@ export function StateOrders() {
     setLoading(true);
     try {
       const res = await dataService.getOrders();
-      if (res.success) setOrders(res.orders || []);
+      if (res.success) {
+        const list = [...(res.orders || [])];
+        list.sort((a, b) => {
+          const getTimestamp = (item) => {
+            const raw = item.createdAtRaw || item.createdAt || item.created_at || item.orderDate || item.date || 0;
+            const t = new Date(raw).getTime();
+            return isNaN(t) ? 0 : t;
+          };
+          const diff = getTimestamp(b) - getTimestamp(a);
+          if (diff !== 0) return diff;
+          return String(b.orderNumber || b.id || '').localeCompare(String(a.orderNumber || a.id || ''));
+        });
+        setOrders(list);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -69,6 +82,16 @@ export function StateOrders() {
   }, [orders]);
 
   const columns = [
+    {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
     {
       header: 'Order Details',
       accessor: (row) => `${row.customerName} - ${row.orderNumber}`,

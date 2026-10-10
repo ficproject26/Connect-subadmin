@@ -20,7 +20,18 @@ export function StateBookings() {
     try {
       const res = await dataService.getBookings();
       if (res.success) {
-        setBookings(res.bookings || res.data || []);
+        const list = [...(res.bookings || res.data || [])];
+        list.sort((a, b) => {
+          const getTimestamp = (item) => {
+            const raw = item.createdAtRaw || item.createdAt || item.created_at || item.scheduledDate || item.bookingDate || item.date || 0;
+            const t = new Date(raw).getTime();
+            return isNaN(t) ? 0 : t;
+          };
+          const diff = getTimestamp(b) - getTimestamp(a);
+          if (diff !== 0) return diff;
+          return String(b.bookingNumber || b.id || '').localeCompare(String(a.bookingNumber || a.id || ''));
+        });
+        setBookings(list);
         if (res.message && res.message.includes('Territory assignment is incomplete')) {
           setErrorMessage(res.message);
         }
@@ -29,6 +40,7 @@ export function StateBookings() {
       }
     } catch (e) {
       console.error(e);
+      setErrorMessage(e.message || 'Failed to fetch bookings');
     } finally {
       setLoading(false);
     }
@@ -81,6 +93,16 @@ export function StateBookings() {
   }, [bookings]);
 
   const columns = [
+    {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
     {
       header: 'Booking Ref',
       accessor: (row) => `${row.customerName} ${row.bookingNumber}`,
@@ -242,8 +264,9 @@ export function StateBookings() {
         columns={columns}
         data={bookings}
         loading={loading}
+        error={errorMessage}
         onRefresh={loadData}
-        emptyMessage={errorMessage || "No bookings found under this territory."}
+        emptyMessage="No bookings found under this territory."
         onRowClick={(booking) => {
           setSelectedBooking(booking);
           setShowDetailsModal(true);

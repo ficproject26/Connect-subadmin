@@ -49,7 +49,8 @@ export function Login() {
         navigate(getRoleDashboardPath(res.user.role), { replace: true });
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      // In accordance with security & RBAC guidelines, show strictly generic "Invalid credentials"
+      setError('Invalid credentials');
     } finally {
       setFormLoading(false);
     }

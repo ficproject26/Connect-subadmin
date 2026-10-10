@@ -22,7 +22,18 @@ export function StateJobs() {
     try {
       const res = await dataService.getJobs();
       if (res.success) {
-        setJobs(res.jobs || res.data || []);
+        const list = [...(res.jobs || res.data || [])];
+        list.sort((a, b) => {
+          const getTimestamp = (item) => {
+            const raw = item.applicationDate || item.createdAt || item.date || 0;
+            const t = new Date(raw).getTime();
+            return isNaN(t) ? 0 : t;
+          };
+          const diff = getTimestamp(b) - getTimestamp(a);
+          if (diff !== 0) return diff;
+          return String(b.id || '').localeCompare(String(a.id || ''));
+        });
+        setJobs(list);
         if (res.message && res.message.includes('Territory assignment is incomplete')) {
           setErrorMessage(res.message);
         }
@@ -31,6 +42,7 @@ export function StateJobs() {
       }
     } catch (e) {
       console.error(e);
+      setErrorMessage(e.message || 'Failed to fetch job applications');
     } finally {
       setLoading(false);
     }
@@ -74,6 +86,16 @@ export function StateJobs() {
   }, [jobs]);
 
   const columns = [
+    {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
     {
       header: 'Customer',
       accessor: (row) => `${row.customerName} ${row.id}`,
@@ -266,8 +288,9 @@ export function StateJobs() {
         columns={columns}
         data={jobs}
         loading={loading}
+        error={errorMessage}
         onRefresh={loadData}
-        emptyMessage={errorMessage || "No job applications found under this territory."}
+        emptyMessage="No job applications found under this territory."
         onRowClick={(row) => {
           setSelectedApplication(row);
           setShowDetailsModal(true);

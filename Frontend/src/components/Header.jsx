@@ -28,45 +28,43 @@ export function Header({ setIsSidebarOpen }) {
 
   if (!user) return null;
 
-  const role = normalizeRole(user?.role);
+  const role = normalizeRole(user?.role, user);
 
   const getDashboardTitle = () => {
+    const norm = normalizeRole(user?.role, user);
+    if (norm === 'State Admin') return 'STATE ADMIN DASHBOARD';
+    if (norm === 'District Admin') return 'DISTRICT ADMIN DASHBOARD';
+    if (norm === 'Divisional Admin') return 'DIVISION ADMIN DASHBOARD';
+    if (norm === 'Pincode Admin') return 'PINCODE ADMIN DASHBOARD';
+    if (norm === 'Super Admin') return 'SUPER ADMIN DASHBOARD';
     const raw = (user?.role || '').toLowerCase().replace(/[_-]/g, ' ').trim();
-    if (raw === 'super admin' || raw === 'superadmin' || raw === 'main admin') return 'SUPER ADMIN DASHBOARD';
-    if (raw.includes('state') && !raw.includes('manager')) return 'STATE ADMIN DASHBOARD';
-    if (raw.includes('district') && !raw.includes('manager')) return 'DISTRICT ADMIN DASHBOARD';
-    if ((raw.includes('division') || raw.includes('divisional')) && !raw.includes('manager')) return 'DIVISION ADMIN DASHBOARD';
-    if (raw.includes('pincode') && !raw.includes('manager')) return 'PINCODE ADMIN DASHBOARD';
     if (raw.includes('manager')) return 'MANAGER DASHBOARD';
-    return (user.role || 'ADMIN').toUpperCase() + ' DASHBOARD';
+    return (norm || user?.role || 'ADMIN').toUpperCase() + ' DASHBOARD';
   };
 
   const getLocationSubtitle = () => {
-    const raw = (user?.role || '').toLowerCase().replace(/[_-]/g, ' ').trim();
-    if (raw === 'super admin' || raw === 'superadmin' || raw === 'main admin' || user.state === 'All India') {
+    const norm = normalizeRole(user?.role, user);
+    if (norm === 'Super Admin' && (!user.state || user.state === 'All India')) {
       return 'All India (Central HQ)';
     }
-    if (raw.includes('pincode') && !raw.includes('manager')) {
+    if (norm === 'State Admin' || user.adminLevel === 'state') {
+      return user.state || user.assignedState || 'Tamil Nadu';
+    }
+    if (user.pincode) {
       const pin = user.pincode || (user.scope && user.scope.pincode) || '';
       const area = user.areaName || user.division || user.district || '';
       return pin ? `PIN: ${pin}${area ? ` (${area})` : ''}` : (area || 'Assigned Pincode');
     }
-    if ((raw.includes('division') || raw.includes('divisional')) && !raw.includes('manager')) {
+    if (user.division) {
       const div = user.division || (user.scope && user.scope.divisionName) || '';
       const divLabel = div ? (div.toLowerCase().endsWith('division') ? div : `${div} Division`) : 'Assigned Division';
       return user.district ? `${divLabel}, ${user.district}` : divLabel;
     }
-    if (raw.includes('district') && !raw.includes('manager')) {
+    if (user.district) {
       const dist = user.district || (user.scope && user.scope.districtName) || '';
       return dist ? (dist.toLowerCase().endsWith('district') ? dist : `${dist} District`) : 'Assigned District';
     }
-    if (raw.includes('state') && !raw.includes('manager')) {
-      return user.state || (user.scope && user.scope.stateName) || 'Assigned State';
-    }
-    if (user.pincode) return `PIN: ${user.pincode} (${user.district || 'Territory'})`;
-    if (user.division) return `${user.division} Division`;
-    if (user.district) return `${user.district} District`;
-    return user.state || 'Assigned Territory';
+    return user.state || user.assignedState || 'Assigned Territory';
   };
 
   return (
@@ -188,7 +186,7 @@ export function Header({ setIsSidebarOpen }) {
               {user.name || 'Admin'}
             </div>
             <div className={`text-[10px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              {normalizeRole(user.role) || user.role}
+              {normalizeRole(user?.role, user) || user?.role}
             </div>
           </div>
         </div>

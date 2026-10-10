@@ -183,6 +183,16 @@ export function StatePincodes() {
 
   const columns = [
     {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
+    {
       header: 'Pincode Zone',
       accessor: 'pincode',
       render: (row) => (
@@ -368,6 +378,7 @@ export function StatePincodes() {
         columns={columns}
         data={pincodes}
         loading={loading}
+        error={error}
         onRefresh={loadData}
         searchPlaceholder="Search pincode or area name..."
         exportFileName="state_pincodes.csv"

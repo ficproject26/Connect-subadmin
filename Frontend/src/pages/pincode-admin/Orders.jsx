@@ -59,6 +59,16 @@ export function PincodeOrders() {
 
   const columns = [
     {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
+    {
       header: 'Order Details',
       accessor: (row) => `${row.customerName} - ${row.orderNumber}`,
       className: 'whitespace-nowrap min-w-[150px]',

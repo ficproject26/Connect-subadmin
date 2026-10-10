@@ -194,31 +194,16 @@ function getDashboardSummary(req, res) {
 async function getBusinessReports(req, res) {
   try {
     const user = req.user;
-    const allScopedOrders = filterByLocation(db.orders, user);
-
-    // Business Reports Orders = commerce/product only (product, daily_need, food)
-    // Bookings (service, stay, travel) and jobs must NOT appear in this section
-    const BOOKING_CATS = new Set(['service', 'services', 'stay', 'travel']);
-    const JOB_CATS = new Set(['job', 'jobs']);
-    const scopedOrders = allScopedOrders.filter(o => {
-      const cat = (o.category || o.type || '').toLowerCase().trim();
-      const id = String(o.id || o._id || o.order_number || '').toUpperCase();
-      if (cat) {
-        if (BOOKING_CATS.has(cat) || JOB_CATS.has(cat)) return false;
-        return true;
-      }
-      // No category: exclude obvious booking/job IDs
-      if (id.startsWith('BKG') || id.startsWith('JOB')) return false;
-      return true;
-    });
-
-    const scopedBookings = filterByLocation(db.bookings, user);
-    const scopedCustomers = filterByLocation(db.customers, user);
-    const scopedVendors = filterByLocation(db.vendors, user);
+    const allScopedOrders = filterByLocation(db.orders || [], user);
+    const scopedBookings = filterByLocation(db.bookings || [], user);
+    const scopedSubscriptions = filterByLocation(db.subscriptions || [], user);
+    const scopedSettlements = filterByLocation(db.settlements || [], user);
+    const scopedCustomers = filterByLocation(db.customers || [], user);
+    const scopedVendors = filterByLocation(db.vendors || [], user);
     const allCustomers = Array.from(db.customers || []);
     const vendorDir = typeof getComprehensiveVendorDirectory === 'function' ? getComprehensiveVendorDirectory() : null;
 
-    // Build fast customer index maps
+    // Fast customer index maps
     const custIdMap = new Map();
     const custPhoneMap = new Map();
     const custNameMap = new Map();
@@ -233,7 +218,7 @@ async function getBusinessReports(req, res) {
       if (c.fullName && c.fullName !== 'Customer Member' && c.fullName !== '-') custNameMap.set(String(c.fullName).toLowerCase(), c);
     }
 
-    // Build fast vendor index map
+    // Fast vendor index map
     const vendorMap = new Map();
     for (const v of (db.vendors || [])) {
       if (v._id) vendorMap.set(String(v._id), v);
@@ -241,143 +226,340 @@ async function getBusinessReports(req, res) {
       if (v.vendorId) vendorMap.set(String(v.vendorId), v);
     }
 
+    // Standardize all commerce orders & bookings into unified transaction rows
+    const normalizedOrders = allScopedOrders.map(o => {
+      const orderNumber = o.order_number || o.orderNumber || o.orderId || o.order_id || o.transactionId || (o._id ? String(o._id).slice(-8) : '-');
+
+      // Resolve Customer
+      const custId = o.customer_id || o.customerId || o.customerDisplayId || (o.customer && (o.customer.id || o.customer._id));
+      const custPhone = o.customer_phone || o.customerPhone || o.customerMobile || o.phone || o.mobile;
+      const custName = o.customer_name || o.customerName || o.customer;
+      let customer = null;
+      if (custId) customer = custIdMap.get(String(custId));
+      if (!customer && custPhone) customer = custPhoneMap.get(String(custPhone));
+      if (!customer && custName && custName !== '-' && custName !== 'Customer Member') {
+        customer = custNameMap.get(String(custName).toLowerCase());
+      }
+
+      const customerName = customer ? (customer.name || customer.fullName || customer.customerName || '-') : (custName || '-');
+      const customerMobile = customer ? (customer.mobile || customer.phone || '-') : (custPhone || '-');
+      const customerId = customer ? (customer.customerId || customer.registrationId || customer.id || customer._id || '-') : (custId || '-');
+
+      // Resolve Vendor
+      const vendorId = o.vendorId || o.vendor_id || (o.vendor && (o.vendor.id || o.vendor._id));
+      let vendor = null;
+      if (vendorId && vendorDir) vendor = vendorDir.findVendor(vendorId);
+      if (!vendor && vendorId) vendor = vendorMap.get(String(vendorId));
+
+      const vendorName = vendor ? (vendor.businessName || vendor.name || vendor.shopName || '-') : (o.vendorName || o.vendor_name || o.vendor || '-');
+
+      // Financials
+      const grossTotal = Number(o.totalAmount || o.grossTotal || o.amount || o.finalAmount || 0);
+      const discount = Number(o.discountAmount || o.discount || 0);
+      const fees = Number(o.fees || o.platformFee || o.serviceFee || 0);
+      const commission = Number(o.commission || o.commissionAmount || Math.round(grossTotal * 0.05));
+      const netPayable = Number(o.netPayable || o.netAmount || o.finalAmount || (grossTotal - discount) || grossTotal || 0);
+
+      // Location
+      const rawAddress = String(o.customer_address || o.address || o.delivery_address || (customer && (customer.fullAddress || customer.address)) || '');
+      let pincode = o.pincode || o.deliveryPincode || o.customerPincode || (customer ? (customer.pincode || customer.assignedPincode) : null);
+      if (!pincode && rawAddress) {
+        const m = rawAddress.match(/\b\d{6}\b/);
+        if (m) pincode = m[0];
+      }
+
+      let district = o.district || o.deliveryDistrict || (customer ? (customer.district || customer.city) : null);
+      let division = o.division || o.deliveryDivision || (customer ? customer.division : null);
+      let state = o.state || o.deliveryState || (customer ? customer.state : null) || user.state || 'Tamil Nadu';
+
+      if (pincode && db.pincodes) {
+        const pObj = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === String(pincode));
+        if (pObj) {
+          if (!district) district = pObj.district;
+          if (!division) division = pObj.division;
+          if (!state) state = pObj.state;
+        }
+      }
+      if (!district && /salem/i.test(rawAddress)) district = 'Salem';
+      if (!division && /thalaivasal/i.test(rawAddress)) division = 'Thalaivasal';
+      if (!state && /tamil\s*nadu/i.test(rawAddress)) state = 'Tamil Nadu';
+      if (!division && district && district.toLowerCase() === 'salem') division = 'Thalaivasal';
+      if (!state) state = 'Tamil Nadu';
+
+      // Timestamps
+      const rawDate = o.createdAt || o.orderDate || o.created_at || o.date;
+      const parsedDate = rawDate ? new Date(rawDate) : new Date();
+      const validDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+      const datePart = validDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const timePart = validDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+      const productName = o.product_details || o.productName || o.product_name || o.serviceName || o.itemName ||
+        (Array.isArray(o.items) && o.items[0]?.name) || '-';
+
+      const typeCategory = o.type || o.category || 'Products';
+      const paymentStatus = o.paymentStatus || o.payment_status || 'Paid';
+      const orderStatus = o.status || 'Order Received';
+
+      return {
+        id: String(o._id || o.id || orderNumber),
+        orderNumber,
+        reference: orderNumber,
+        orderDate: datePart,
+        orderTime: timePart,
+        dateTime: `${datePart}, ${timePart}`,
+        rawTimestamp: validDate.getTime(),
+        createdAt: validDate.toISOString(),
+        // Customer
+        customerName,
+        customerMobile,
+        customerId,
+        // Vendor
+        vendorName,
+        vendorId: vendor ? (vendor.vendorId || vendor.id || vendor._id) : (vendorId || '-'),
+        // Product / Service
+        productName,
+        category: typeCategory,
+        type: typeCategory,
+        quantity: o.quantity || o.qty || 1,
+        // Financial
+        totalAmount: grossTotal,
+        grossTotal,
+        discountAmount: discount,
+        fees,
+        commission,
+        netPayable,
+        paymentMethod: o.paymentMethod || o.payment_method || 'Connect Wallet',
+        paymentStatus,
+        // Location
+        pincode: pincode || '-',
+        district: district || '-',
+        division: division || '-',
+        state: state || '-',
+        // Status
+        status: orderStatus,
+        orderStatus
+      };
+    });
+
+    // Map vendor subscriptions into transactions
+    const subscriptionTransactions = scopedSubscriptions.map(s => {
+      const subId = s.subscriptionId || s._id || (s.id ? `SUB-${s.id}` : 'SUB-001');
+      const rawDate = s.createdAt || s.startDate || s.paymentDate;
+      const parsedDate = rawDate ? new Date(rawDate) : new Date();
+      const validDate = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+      const datePart = validDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const timePart = validDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+      const amount = Number(s.amount || 999);
+
+      return {
+        id: String(s._id || s.id || subId),
+        orderNumber: subId,
+        reference: subId,
+        orderDate: datePart,
+        orderTime: timePart,
+        dateTime: `${datePart}, ${timePart}`,
+        rawTimestamp: validDate.getTime(),
+        createdAt: validDate.toISOString(),
+        customerName: s.vendorName || s.businessName || 'Registered Merchant',
+        customerMobile: '-',
+        customerId: s.vendorId || '-',
+        vendorName: s.vendorName || s.businessName || 'Registered Merchant',
+        vendorId: s.vendorId || '-',
+        productName: `Merchant Subscription (${s.billingCycle || 'Annual'})`,
+        category: 'Vendor Subscription',
+        type: 'Subscription',
+        quantity: 1,
+        totalAmount: amount,
+        grossTotal: amount,
+        discountAmount: 0,
+        fees: 0,
+        commission: amount,
+        netPayable: amount,
+        paymentMethod: s.paymentMethod || 'Razorpay / Bank',
+        paymentStatus: s.paymentStatus || (s.status === 'Active' ? 'Paid' : 'Pending'),
+        pincode: s.pincode || '-',
+        district: s.district || '-',
+        division: s.division || '-',
+        state: s.state || user.state || 'Tamil Nadu',
+        status: s.status || 'Active',
+        orderStatus: s.status || 'Active'
+      };
+    });
+
+    // Combine all business transactions into comprehensive chronological ledger
+    const allTransactions = [...normalizedOrders, ...subscriptionTransactions]
+      .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
+
+    // Financial Metrics Calculation
+    const grossTransactionValue = allTransactions.reduce((acc, t) => acc + t.grossTotal, 0);
+    const discountsGiven = allTransactions.reduce((acc, t) => acc + t.discountAmount, 0);
+
+    // Successful incoming payments (Paid transactions)
+    const paidTransactions = allTransactions.filter(t => (t.paymentStatus || '').toLowerCase() === 'paid');
+    const successfulIncomingPayments = paidTransactions.reduce((acc, t) => acc + t.netPayable, 0);
+
+    // Pending payments
+    const pendingTransactions = allTransactions.filter(t => (t.paymentStatus || '').toLowerCase() === 'pending');
+    const pendingPayments = pendingTransactions.reduce((acc, t) => acc + t.netPayable, 0);
+
+    // Refunds, cancellations, and rejected transactions
+    const refundStatuses = new Set(['cancelled', 'rejected', 'refunded', 'returned', 'application received']);
+    const refundTransactions = allTransactions.filter(t => refundStatuses.has((t.status || '').toLowerCase()));
+    const refundsAndReversals = refundTransactions.reduce((acc, t) => acc + (t.netPayable || t.grossTotal), 0);
+
+    // Outgoing merchant payouts & settlements
+    const outgoingPayments = scopedSettlements.reduce((acc, s) => acc + Number(s.netAmount || s.grossAmount || 0), 0);
+
+    // Platform commissions & fees earned
+    const commissionsAndFees = allTransactions.reduce((acc, t) => acc + (t.commission || 0) + (t.fees || 0), 0);
+
+    // Net business inflow = incoming successful payments - refunds - outgoing payouts
+    const netBusinessInflow = Math.max(0, successfulIncomingPayments - refundsAndReversals - outgoingPayments);
+
+    // Category breakdown
+    const categoryMap = new Map();
+    for (const t of allTransactions) {
+      const cat = t.category || 'Other';
+      if (!categoryMap.has(cat)) {
+        categoryMap.set(cat, { category: cat, count: 0, grossValue: 0, paidValue: 0, commissions: 0 });
+      }
+      const entry = categoryMap.get(cat);
+      entry.count += 1;
+      entry.grossValue += t.grossTotal;
+      if ((t.paymentStatus || '').toLowerCase() === 'paid') {
+        entry.paidValue += t.netPayable;
+      }
+      entry.commissions += (t.commission || 0);
+    }
+    const categoriesBreakdown = Array.from(categoryMap.values()).map(c => ({
+      ...c,
+      percentageContribution: grossTransactionValue > 0 ? Number(((c.grossValue / grossTransactionValue) * 100).toFixed(1)) : 0
+    })).sort((a, b) => b.grossValue - a.grossValue);
+
+    // Top Performing Vendors
+    const vendorRankingMap = new Map();
+    for (const t of allTransactions) {
+      const vKey = t.vendorId !== '-' ? t.vendorId : t.vendorName;
+      if (!vKey || vKey === '-') continue;
+      if (!vendorRankingMap.has(vKey)) {
+        vendorRankingMap.set(vKey, {
+          vendorId: t.vendorId,
+          vendorName: t.vendorName,
+          category: t.category,
+          district: t.district,
+          pincode: t.pincode,
+          count: 0,
+          grossTotal: 0,
+          successfulPaymentAmount: 0,
+          commissions: 0
+        });
+      }
+      const vEntry = vendorRankingMap.get(vKey);
+      vEntry.count += 1;
+      vEntry.grossTotal += t.grossTotal;
+      if ((t.paymentStatus || '').toLowerCase() === 'paid') {
+        vEntry.successfulPaymentAmount += t.netPayable;
+      }
+      vEntry.commissions += (t.commission || 0);
+    }
+    const topVendors = Array.from(vendorRankingMap.values())
+      .sort((a, b) => b.grossTotal - a.grossTotal)
+      .slice(0, 10);
+
+    // Monthly & Yearly Comparisons
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
+
+    // 1. Month-to-Date Comparison
+    const startOfCurrentMonth = new Date(currentYear, currentMonth, 1).getTime();
+    const endOfCurrentMonthToDate = now.getTime();
+
+    const startOfLastMonth = new Date(currentYear, currentMonth - 1, 1).getTime();
+    const endOfLastMonthToDate = new Date(currentYear, currentMonth - 1, currentDay, 23, 59, 59).getTime();
+
+    const currentMonthAmount = allTransactions
+      .filter(t => t.rawTimestamp >= startOfCurrentMonth && t.rawTimestamp <= endOfCurrentMonthToDate)
+      .reduce((acc, t) => acc + t.grossTotal, 0);
+
+    const lastMonthAmount = allTransactions
+      .filter(t => t.rawTimestamp >= startOfLastMonth && t.rawTimestamp <= endOfLastMonthToDate)
+      .reduce((acc, t) => acc + t.grossTotal, 0);
+
+    const monthDiff = currentMonthAmount - lastMonthAmount;
+    const monthPercentageChange = lastMonthAmount > 0
+      ? Number(((monthDiff / lastMonthAmount) * 100).toFixed(1))
+      : (currentMonthAmount > 0 ? 100 : 0);
+
+    // 2. Year-to-Date Comparison
+    const startOfCurrentYear = new Date(currentYear, 0, 1).getTime();
+    const startOfLastYear = new Date(currentYear - 1, 0, 1).getTime();
+    const endOfLastYearToDate = new Date(currentYear - 1, currentMonth, currentDay, 23, 59, 59).getTime();
+
+    const currentYearAmount = allTransactions
+      .filter(t => t.rawTimestamp >= startOfCurrentYear && t.rawTimestamp <= endOfCurrentMonthToDate)
+      .reduce((acc, t) => acc + t.grossTotal, 0);
+
+    const lastYearAmount = allTransactions
+      .filter(t => t.rawTimestamp >= startOfLastYear && t.rawTimestamp <= endOfLastYearToDate)
+      .reduce((acc, t) => acc + t.grossTotal, 0);
+
+    const yearDiff = currentYearAmount - lastYearAmount;
+    const yearPercentageChange = lastYearAmount > 0
+      ? Number(((yearDiff / lastYearAmount) * 100).toFixed(1))
+      : (currentYearAmount > 0 ? 100 : 0);
+
+    const comparisons = {
+      monthly: {
+        currentPeriodLabel: 'This Month',
+        previousPeriodLabel: 'Last Month (Same Period)',
+        currentAmount: currentMonthAmount,
+        previousAmount: lastMonthAmount,
+        difference: monthDiff,
+        percentageChange: monthPercentageChange,
+        trend: monthDiff >= 0 ? 'up' : 'down'
+      },
+      yearly: {
+        currentPeriodLabel: 'This Year',
+        previousPeriodLabel: 'Last Year (Same Period)',
+        currentAmount: currentYearAmount,
+        previousAmount: lastYearAmount,
+        difference: yearDiff,
+        percentageChange: yearPercentageChange,
+        trend: yearDiff >= 0 ? 'up' : 'down'
+      }
+    };
+
     const report = {
       generatedAt: new Date().toISOString(),
-      adminScope: `${user.role} - ${user.pincode || user.division || user.district || user.state}`,
+      adminScope: `${user.role || 'Admin'} - ${user.district || user.state || 'Tamil Nadu'}`,
       summary: {
-        totalSalesVolume: scopedOrders.length,
-        grossSalesValue: scopedOrders.reduce((s, o) => s + (Number(o.totalAmount || o.grossTotal || 0)), 0),
-        discountsGiven: scopedOrders.reduce((s, o) => s + (Number(o.discountAmount || o.discount || 0)), 0),
-        netRevenue: scopedOrders.reduce((s, o) => s + (Number(o.netPayable || o.netAmount || o.totalAmount || 0)), 0),
-        totalServiceBookings: scopedBookings.length,
+        totalSalesVolume: allTransactions.length,
+        grossSalesValue: grossTransactionValue,
+        grossTransactionValue,
+        discountsGiven,
+        netRevenue: successfulIncomingPayments,
+        successfulIncomingPayments,
+        pendingPayments,
+        refundsAndReversals,
+        outgoingPayments,
+        commissionsAndFees,
+        netBusinessInflow,
+        totalServiceBookings: allTransactions.filter(t => t.type === 'Services').length,
         activeCustomerBase: scopedCustomers.length,
         activeMerchants: scopedVendors.length
       },
-      ordersList: (() => {
-        const recentOrders = [...scopedOrders]
-          .sort((a, b) => new Date(b.createdAt || b.orderDate || 0) - new Date(a.createdAt || a.orderDate || 0))
-          .slice(0, 50);
-
-        return recentOrders.map(o => {
-          // Resolve order number / transaction ID
-          const orderNumber = o.order_number || o.orderNumber || o.orderId || o.order_id || o.transactionId || (o._id ? String(o._id).slice(-8) : '-');
-
-          // Resolve customer record from indexed maps
-          const custId = o.customer_id || o.customerId || o.customerDisplayId || (o.customer && (o.customer.id || o.customer._id));
-          const custPhone = o.customer_phone || o.customerPhone || o.customerMobile || o.phone || o.mobile;
-          const custName = o.customer_name || o.customerName || o.customer;
-          let customer = null;
-          if (custId) customer = custIdMap.get(String(custId));
-          if (!customer && custPhone) customer = custPhoneMap.get(String(custPhone));
-          if (!customer && custName && custName !== '-' && custName !== 'Customer Member') {
-            customer = custNameMap.get(String(custName).toLowerCase());
-          }
-
-          const customerName = customer
-            ? (customer.name || customer.fullName || customer.customerName || '-')
-            : (custName || '-');
-          const customerMobile = customer
-            ? (customer.mobile || customer.phone || '-')
-            : (custPhone || '-');
-          const customerId = customer
-            ? (customer.customerId || customer.registrationId || customer.id || customer._id || '-')
-            : (custId || '-');
-
-          // Resolve vendor record
-          const vendorId = o.vendorId || o.vendor_id || (o.vendor && (o.vendor.id || o.vendor._id));
-          let vendor = null;
-          if (vendorId && vendorDir) {
-            vendor = vendorDir.findVendor(vendorId);
-          }
-          if (!vendor && vendorId) {
-            vendor = vendorMap.get(String(vendorId));
-          }
-          const vendorName = vendor
-            ? (vendor.businessName || vendor.name || vendor.shopName || '-')
-            : (o.vendorName || o.vendor_name || o.vendor || '-');
-
-          // Financial fields
-          const grossTotal = Number(o.totalAmount || o.grossTotal || o.amount || o.finalAmount || 0);
-          const discount = Number(o.discountAmount || o.discount || 0);
-          const fees = Number(o.fees || o.platformFee || o.serviceFee || 0);
-          const commission = Number(o.commission || o.commissionAmount || 0);
-          const netPayable = Number(o.netPayable || o.netAmount || o.finalAmount || (grossTotal - discount) || grossTotal || 0);
-
-          // Location
-          const rawAddress = String(o.customer_address || o.address || o.delivery_address || (customer && (customer.fullAddress || customer.address)) || '');
-          let pincode = o.pincode || o.deliveryPincode || o.customerPincode ||
-            (customer ? (customer.pincode || customer.assignedPincode) : null);
-          if (!pincode && rawAddress) {
-            const m = rawAddress.match(/\b\d{6}\b/);
-            if (m) pincode = m[0];
-          }
-
-          let district = o.district || o.deliveryDistrict || (customer ? (customer.district || customer.city) : null);
-          let division = o.division || o.deliveryDivision || (customer ? customer.division : null);
-          let state = o.state || o.deliveryState || (customer ? customer.state : null) || user.state || 'Tamil Nadu';
-
-          if (pincode && db.pincodes) {
-            const pObj = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === String(pincode));
-            if (pObj) {
-              if (!district) district = pObj.district;
-              if (!division) division = pObj.division;
-              if (!state) state = pObj.state;
-            }
-          }
-          if (!district && /salem/i.test(rawAddress)) district = 'Salem';
-          if (!division && /thalaivasal/i.test(rawAddress)) division = 'Thalaivasal';
-          if (!state && /tamil\s*nadu/i.test(rawAddress)) state = 'Tamil Nadu';
-          if (!division && district && district.toLowerCase() === 'salem') division = 'Thalaivasal';
-          if (!state) state = 'Tamil Nadu';
-
-          // Format date
-          const rawDate = o.createdAt || o.orderDate || o.date;
-          const orderDate = rawDate
-            ? new Date(rawDate).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-            : '-';
-
-          const productName = o.product_details || o.productName || o.product_name || o.serviceName || o.itemName ||
-            (Array.isArray(o.items) && o.items[0]?.name) || '-';
-
-          return {
-            id: o._id || o.id || o.orderId,
-            orderNumber,
-            orderDate,
-            // Customer
-            customerName,
-            customerMobile,
-            customerId,
-            // Vendor
-            vendorName,
-            vendorId: vendor ? (vendor.vendorId || vendor.id || vendor._id) : (vendorId || '-'),
-            // Product
-            productName,
-            category: o.category || o.productCategory || '-',
-            quantity: o.quantity || o.qty || 1,
-            // Financial
-            totalAmount: grossTotal,
-            grossTotal,
-            discountAmount: discount,
-            fees,
-            commission,
-            netPayable,
-            paymentMethod: o.paymentMethod || o.payment_method || '-',
-            paymentStatus: o.paymentStatus || o.payment_status || 'Paid',
-            // Location
-            pincode: pincode || '-',
-            district: district || '-',
-            division: division || '-',
-            state: state || '-',
-            // Status
-            status: o.status || 'Order Received'
-          };
-        });
-      })(),
+      comparisons,
+      categoriesBreakdown,
+      topVendors,
+      ordersList: allTransactions,
       bookingsList: scopedBookings
     };
 
     return res.json({ success: true, report });
   } catch (error) {
+    console.error('getBusinessReports error:', error);
     return res.status(500).json({ success: false, message: 'Failed to generate business reports', error: error.message });
   }
 }

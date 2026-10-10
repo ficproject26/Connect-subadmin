@@ -47,7 +47,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
 
   if (!user) return null;
 
-  const role = normalizeRole(user?.role);
+  const role = normalizeRole(user?.role, user);
   let navSections = [];
 
   if (role === 'State Admin' || role === 'Super Admin' || role === 'Main Admin') {
@@ -382,15 +382,15 @@ export function Sidebar({ isOpen, setIsOpen }) {
   // Build a display label that respects the raw role stored in the DB,
   // so a State Admin whose raw role = "State Admin" shows STATE ADMIN (not SUPER ADMIN).
   const getRoleDisplayLabel = () => {
+    const norm = normalizeRole(user?.role, user);
+    if (norm === 'State Admin') return 'STATE ADMIN';
+    if (norm === 'District Admin') return 'DISTRICT ADMIN';
+    if (norm === 'Divisional Admin') return 'DIVISION ADMIN';
+    if (norm === 'Pincode Admin') return 'PINCODE ADMIN';
+    if (norm === 'Super Admin') return 'SUPER ADMIN';
     const raw = (user?.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-    if (raw === 'super admin' || raw === 'main admin' || raw === 'superadmin') return 'SUPER ADMIN';
-    if (raw === 'state admin' || raw === 'stateadmin') return 'STATE ADMIN';
-    if (raw === 'district admin' || raw === 'districtadmin') return 'DISTRICT ADMIN';
-    if (raw === 'division admin' || raw === 'divisional admin') return 'DIVISION ADMIN';
-    if (raw === 'pincode admin' || raw === 'pincodeadmin') return 'PINCODE ADMIN';
     if (raw.includes('manager')) return 'MANAGER';
-    // Fallback to the normalised role
-    return (role || 'ADMIN').toUpperCase();
+    return (norm || user?.role || 'ADMIN').toUpperCase();
   };
 
   return (
@@ -412,7 +412,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
         <div className="p-4 border-b border-[#0d2f70]/70 bg-[#00153a]/40 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#FED766] flex items-center justify-center text-[#001D51] font-black text-lg shadow-sm shadow-[#FED766]/30 shrink-0">
-              A
+              {user?.name ? user.name[0].toUpperCase() : (role ? role[0].toUpperCase() : 'S')}
             </div>
             <div>
               <h1 className="font-extrabold text-sm text-white tracking-wider leading-none">

@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   User,
   Truck,
-  Store
+  Store,
+  Phone
 } from 'lucide-react';
 
 const STANDARD_STEPS = [
@@ -216,8 +217,9 @@ export function OrderDetailsModal({ order, isOpen, onClose }) {
                 <div className="font-bold text-sm text-navy dark:text-white">
                   {order.customerName || 'Customer'}
                 </div>
-                <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300">
-                  Phone: {order.customerPhone && order.customerPhone !== '-' ? order.customerPhone : 'Not provided'}
+                <div className="text-[11px] font-mono text-slate-600 dark:text-slate-300 flex items-center gap-1 mt-0.5">
+                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span>Phone: {order.customerPhone && order.customerPhone !== '-' ? order.customerPhone : 'Not provided'}</span>
                 </div>
                 {order.customerEmail && order.customerEmail !== 'Not provided' && order.customerEmail !== '-' && (
                   <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">

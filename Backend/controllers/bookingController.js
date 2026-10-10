@@ -207,6 +207,7 @@ function normalizeBooking(item, pinMap, vendorMap, historyMap, matchedVendorArg)
     checkOutTime,
     bookingDate: formatBookingDate(createdDateStr),
     scheduledDate: item.appointmentDate ? `${item.appointmentDate} ${item.appointmentTimeSlot || ''}`.trim() : formatBookingDate(createdDateStr),
+    createdAtRaw: createdDateStr || item.appointmentDate || item.created_at || item.createdAt || item.date || item.orderDate || '',
     charge,
     totalAmount,
     finalAmount: totalAmount,
@@ -309,6 +310,18 @@ function getBookings(req, res) {
     if (type && type !== 'all') {
       filtered = filtered.filter(b => (b.bookingType || b.type || '').toLowerCase() === type.toLowerCase());
     }
+
+    // 5. Stable newest-first sorting by creation/booking date with secondary sort on identifier
+    filtered.sort((a, b) => {
+      const getTimestamp = (item) => {
+        const raw = item.createdAtRaw || item.createdAt || item.created_at || item.appointmentDate || item.date || item.bookingDate || 0;
+        const t = new Date(raw).getTime();
+        return isNaN(t) ? 0 : t;
+      };
+      const diff = getTimestamp(b) - getTimestamp(a);
+      if (diff !== 0) return diff;
+      return String(b.bookingNumber || b.id || '').localeCompare(String(a.bookingNumber || a.id || ''));
+    });
 
     const pageNum = parseInt(req.query.page, 10);
     const limitNum = parseInt(req.query.limit, 10);

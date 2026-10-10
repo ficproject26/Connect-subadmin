@@ -44,18 +44,16 @@ export function DivisionalKYC() {
   // Compute 4 KPI Cards
   const kpiStats = useMemo(() => {
     const totalKYC = kycList.length;
-    const approvedKYC = kycList.filter(k => {
-      const s = (k.status || '').toLowerCase();
-      return s === 'approved' || s === 'verified';
-    }).length;
-    const pendingKYC = kycList.filter(k => {
-      const s = (k.status || '').toLowerCase();
-      return s === 'pending';
-    }).length;
-    const rejectedKYC = kycList.filter(k => {
-      const s = (k.status || '').toLowerCase();
-      return s === 'rejected';
-    }).length;
+    const isApproved = (s) => ['approved', 'verified', 'kyc approved'].includes(String(s || '').toLowerCase());
+    const isRejected = (s) => ['rejected', 'kyc rejected', 'pincode admin rejected'].includes(String(s || '').toLowerCase());
+    const isPending = (s) => {
+      const st = String(s || '').toLowerCase();
+      return st.includes('pending') || st.includes('review') || (!isApproved(s) && !isRejected(s));
+    };
+
+    const approvedKYC = kycList.filter(k => isApproved(k.status)).length;
+    const pendingKYC = kycList.filter(k => isPending(k.status)).length;
+    const rejectedKYC = kycList.filter(k => isRejected(k.status)).length;
 
     return {
       totalKYC,
@@ -116,15 +114,82 @@ export function DivisionalKYC() {
     },
     {
       header: 'VERIFIED BY',
-      accessor: 'verifiedBy',
+      accessor: (row) => row.verifiedBy || row.verifierName || 'Pending',
       render: (row) => {
-        const isPending = (row.status || '').toLowerCase() === 'pending';
+        const status = (row.status || '').toLowerCase();
+        const isApproved = ['approved', 'verified', 'kyc approved'].includes(status);
+        const isRejected = ['rejected', 'kyc rejected', 'pincode admin rejected'].includes(status);
+        const isPending = !isApproved && !isRejected;
+
+        if (isPending) {
+          const tooltip = status.includes('pincode')
+            ? 'Awaiting Pincode Admin Review & Approval'
+            : 'Awaiting verification clearance - Pending review';
+          const label = status.includes('pincode') ? 'Pending Pincode Review' : 'Pending Verification';
+          return (
+            <div
+              className="text-xs flex items-center gap-1.5"
+              title={tooltip}
+              aria-label={tooltip}
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="font-medium text-amber-600 dark:text-amber-400 italic">
+                {label}
+              </span>
+            </div>
+          );
+        }
+
+        if (isRejected) {
+          const tooltip = `Verification Rejected${row.verifiedBy ? ` by ${row.verifiedBy}` : ''}`;
+          return (
+            <div
+              className="text-xs flex items-center gap-1.5"
+              title={tooltip}
+              aria-label={tooltip}
+            >
+              <XCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              <div className="min-w-0">
+                <span className="font-semibold text-rose-600 dark:text-rose-400">
+                  {row.verifiedBy || 'Rejected'}
+                </span>
+                {row.verifierAdminId && (
+                  <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                    ID: {row.verifierAdminId}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        const tooltip = `Verified${row.verifiedBy ? ` by ${row.verifiedBy}` : ''}`;
         return (
-          <div className="text-xs flex items-center gap-1.5">
-            <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${isPending ? 'text-amber-500' : 'text-emerald-500'}`} />
-            <span className={`font-semibold ${isPending ? 'text-amber-600 dark:text-amber-400 italic' : 'text-slate-900 dark:text-white'}`}>
-              {row.verifiedBy || (isPending ? 'Pending Verification' : 'Verified')}
-            </span>
+          <div
+            className="text-xs flex items-center gap-1.5"
+            title={tooltip}
+            aria-label={tooltip}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            {row.verifiedBy ? (
+              <div className="min-w-0">
+                <div className="font-semibold text-slate-900 dark:text-white truncate">
+                  {row.verifiedBy}
+                </div>
+                {row.verifierAdminId && (
+                  <div className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                    ID: {row.verifierAdminId}
+                  </div>
+                )}
+                {row.verifierPhone && (
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Mob: {row.verifierPhone}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Verified</span>
+            )}
           </div>
         );
       }

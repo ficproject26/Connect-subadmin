@@ -1,3 +1,5 @@
+import { normalizeRole, ROLES } from './permissions';
+
 /**
  * Universal Territory Hierarchy & Data Normalization Helper
  * Enforces role-based locking, safe string handling, and territory cascading logic.
@@ -81,18 +83,14 @@ export function getTerritoryLocking(user) {
     };
   }
 
-  const rawRole = safeLowerCase(user.role || user.adminRole || user.title || '');
+  const normalizedRole = normalizeRole(user.role, user);
   const userState = safeString(user.state || user.assignedState || 'Tamil Nadu');
   const userDistrict = safeString(user.district || user.assignedDistrict || '');
   const userDivision = safeString(user.division || user.assignedDivision || '');
   const userPincode = safeString(user.pincode || user.assignedPincode || '');
 
   // 1. Super Admin: full access, nothing locked
-  const isSuperAdmin = 
-    rawRole.includes('super admin') || 
-    rawRole.includes('superadmin') || 
-    rawRole === 'admin' ||
-    rawRole === 'super';
+  const isSuperAdmin = normalizedRole === ROLES.SUPER_ADMIN || normalizedRole === 'super-admin';
 
   if (isSuperAdmin) {
     return {

@@ -320,6 +320,18 @@ async function getOrders(req, res) {
       filtered = filtered.filter(o => (o.division || '').toLowerCase() === division.toLowerCase());
     }
 
+    // Stable newest-first sorting by date with secondary sort on orderNumber
+    filtered.sort((a, b) => {
+      const getTimestamp = (item) => {
+        const raw = item.createdAtRaw || item.createdAt || item.created_at || item.orderDate || item.date || 0;
+        const t = new Date(raw).getTime();
+        return isNaN(t) ? 0 : t;
+      };
+      const diff = getTimestamp(b) - getTimestamp(a);
+      if (diff !== 0) return diff;
+      return String(b.orderNumber || b.id || '').localeCompare(String(a.orderNumber || a.id || ''));
+    });
+
     const pageNum = parseInt(req.query.page, 10);
     const limitNum = parseInt(req.query.limit, 10);
     let pagedOrders = filtered;

@@ -173,6 +173,16 @@ export function StateDivisions() {
 
   const columns = [
     {
+      header: 'S.No',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-12 text-center whitespace-nowrap',
+      render: (row, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
+    {
       header: 'DIVISION NAME / ID',
       accessor: (row) => extractTerritoryName(row.name || row.divisionName || row.division),
       render: (row) => {
@@ -391,6 +401,7 @@ export function StateDivisions() {
         columns={columns}
         data={divisions}
         loading={loading}
+        error={error}
         onRefresh={loadData}
         searchPlaceholder="Search division name or district..."
         exportFileName="state_divisions.csv"

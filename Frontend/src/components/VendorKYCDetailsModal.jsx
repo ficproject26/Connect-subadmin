@@ -48,8 +48,8 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
     'Authorized merchant operations managing certified trade services and retail provisions.';
 
   const vendorName = vendor.vendorName || vendor.contactPerson || 'Vendor Owner';
-  const phone = vendor.phone || '+91 94431 00000';
-  const email = vendor.email || 'vendor@company.com';
+  const phone = vendor.phone || vendor.mobile || '-';
+  const email = vendor.email || '-';
 
   const fullAddress = vendor.fullAddress || vendor.address || '-';
   const pincode = vendor.pincode || '';
