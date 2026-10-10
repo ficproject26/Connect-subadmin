@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { db } = require('../config/db');
 const { generateToken, JWT_SECRET } = require('../utils/jwt');
 const { getMongoDb } = require('../config/mongo');
+const { getAssignedPermissions } = require('../utils/permissions');
 
 const ROLE_LIMITS = {
   state_manager: 8,      // 8 managers per State
@@ -171,6 +172,9 @@ const buildUserProfile = async (user) => {
     phone,
     role: user.role,
     level: user.level || ROLE_LEVELS[user.role] || 1,
+    permissions: user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0
+      ? user.permissions
+      : getAssignedPermissions(user.role),
     status,
     adminApprovalStatus: user.adminApprovalStatus || (status === 'kyc_pending' ? 'approved' : 'pending'),
     kycStatus: user.kycStatus || (status === 'active' ? 'Verified' : 'pending_verification'),
@@ -241,9 +245,12 @@ const login = async (req, res) => {
           queryConditions.push({ mobile: rawId });
           queryConditions.push({ mobile: phoneDigits.slice(-10) });
         }
-        const mongoUser = await mdb.collection("users").findOne({ $or: queryConditions });
-        if (mongoUser) {
-          user = { ...mongoUser };
+        const matchedUsers = await mdb.collection("users").find({ $or: queryConditions }).toArray();
+        if (matchedUsers.length > 0) {
+          // If multiple accounts share an identifier (e.g. agent and admin, or customer and admin),
+          // prioritize authorized Admin accounts over non-admin accounts
+          const adminUser = matchedUsers.find(u => resolveAdminRole(u).isAdmin);
+          user = adminUser ? { ...adminUser } : { ...matchedUsers[0] };
         }
       }
     } catch (mErr) {
@@ -253,7 +260,7 @@ const login = async (req, res) => {
     // 2. Fallback lookup: Check local db.users (data/users.json)
     if (!user) {
       const allUsers = Array.from(db.users);
-      user = allUsers.find(u => 
+      const matches = allUsers.filter(u => 
         (u.email && u.email.toLowerCase() === loginId) ||
         (u.loginId && (u.loginId.toLowerCase() === loginId || u.loginId === rawId)) ||
         (u.registrationId && (u.registrationId.toLowerCase() === loginId || u.registrationId === rawId)) ||
@@ -262,6 +269,10 @@ const login = async (req, res) => {
         (u.id && String(u.id).toLowerCase() === loginId) ||
         (u._id && String(u._id).toLowerCase() === loginId)
       );
+      if (matches.length > 0) {
+        const adminUser = matches.find(u => resolveAdminRole(u).isAdmin);
+        user = adminUser ? { ...adminUser } : { ...matches[0] };
+      }
     }
 
     if (!user) {
@@ -284,28 +295,23 @@ const login = async (req, res) => {
 
     // 2. Authoritative Password Verification
     let isMatch = false;
-    const userHash = user.passwordHash || user.hash || user.hashedPassword;
+    const userHash = String(user.passwordHash || user.hash || user.hashedPassword || '').trim();
     if (userHash) {
       try {
-        isMatch = bcrypt.compareSync(password, userHash);
-        if (!isMatch && typeof password === 'string') {
-          isMatch = bcrypt.compareSync(password.trim(), userHash);
-        }
+        isMatch = bcrypt.compareSync(password, userHash) || (typeof password === 'string' && bcrypt.compareSync(password.trim(), userHash));
       } catch (e) {}
     }
 
     const rawPassword = user.password || user.tempPassword || user.plainPassword || user.pass;
     if (!isMatch && rawPassword) {
-      try {
-        if (typeof rawPassword === 'string' && (rawPassword.startsWith('$2a$') || rawPassword.startsWith('$2b$') || rawPassword.startsWith('$2y$'))) {
-          isMatch = bcrypt.compareSync(password, rawPassword);
-          if (!isMatch && typeof password === 'string') {
-            isMatch = bcrypt.compareSync(password.trim(), rawPassword);
-          }
-        } else if (rawPassword === password || (typeof password === 'string' && rawPassword === password.trim())) {
-          isMatch = true;
-        }
-      } catch (e) {}
+      const cleanRaw = typeof rawPassword === 'string' ? rawPassword.trim() : rawPassword;
+      if (typeof cleanRaw === 'string' && (cleanRaw.startsWith('$2a$') || cleanRaw.startsWith('$2b$') || cleanRaw.startsWith('$2y$'))) {
+        try {
+          isMatch = bcrypt.compareSync(password, cleanRaw) || (typeof password === 'string' && bcrypt.compareSync(password.trim(), cleanRaw));
+        } catch (e) {}
+      } else if (rawPassword === password || rawPassword === password.trim() || cleanRaw === password || cleanRaw === password.trim()) {
+        isMatch = true;
+      }
     }
 
     if (!isMatch) {
@@ -1003,18 +1009,72 @@ const changePassword = async (req, res) => {
     }
 
     const userId = req.user.id || req.user._id;
-    const user = await db.users.findById(userId);
+    let user = null;
+
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        const { ObjectId } = require('mongodb');
+        let queryId = userId;
+        try {
+          if (typeof userId === 'string' && ObjectId.isValid(userId)) {
+            queryId = new ObjectId(userId);
+          }
+        } catch (e) {}
+        user = await mdb.collection('users').findOne({
+          $or: [{ _id: queryId }, { _id: String(userId) }, { id: String(userId) }]
+        });
+      }
+    } catch (mErr) {
+      console.warn('MongoDB changePassword lookup warning:', mErr.message);
+    }
+
+    if (!user) {
+      user = await db.users.findById(userId);
+    }
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const isMatch = bcrypt.compareSync(currentPassword, user.passwordHash);
+    const userHash = user.passwordHash || user.password;
+    const isMatch = userHash ? (bcrypt.compareSync(currentPassword, userHash) || bcrypt.compareSync(currentPassword.trim(), userHash)) : false;
     if (!isMatch) {
       return res.status(400).json({ success: false, message: 'Current password is incorrect' });
     }
 
     const passwordHash = bcrypt.hashSync(newPassword, 10);
-    await db.users.findByIdAndUpdate(user._id, { passwordHash });
+
+    // Update in MongoDB Atlas
+    try {
+      const mdb = await getMongoDb();
+      if (mdb && user._id) {
+        const { ObjectId } = require('mongodb');
+        let queryId = user._id;
+        try {
+          if (typeof user._id === 'string' && ObjectId.isValid(user._id)) {
+            queryId = new ObjectId(user._id);
+          }
+        } catch (e) {}
+        await mdb.collection('users').updateOne(
+          { $or: [{ _id: queryId }, { _id: String(user._id) }] },
+          {
+            $set: {
+              passwordHash,
+              password: passwordHash,
+              passwordChangedAt: new Date().toISOString()
+            }
+          }
+        );
+      }
+    } catch (updateErr) {
+      console.warn('MongoDB change password update warning:', updateErr.message);
+    }
+
+    // Also update in local db.users
+    try {
+      await db.users.findByIdAndUpdate(user._id || user.id, { passwordHash, password: passwordHash });
+    } catch (e) {}
 
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
@@ -1030,8 +1090,30 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    const user = await db.users.findOne({ email: email.trim().toLowerCase() });
+    const cleanEmail = email.trim().toLowerCase();
+    let user = null;
+
+    // Check MongoDB Atlas
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        user = await mdb.collection('users').findOne({
+          $or: [
+            { email: cleanEmail },
+            { email: new RegExp('^' + cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }
+          ]
+        });
+      }
+    } catch (mErr) {
+      console.warn('MongoDB forgotPassword lookup warning:', mErr.message);
+    }
+
     if (!user) {
+      user = await db.users.findOne({ email: cleanEmail });
+    }
+
+    if (!user) {
+      // Generic success to prevent user enumeration
       return res.json({
         success: true,
         message: 'If the email exists in our system, a password reset link has been dispatched.'
@@ -1041,10 +1123,33 @@ const forgotPassword = async (req, res) => {
     const resetToken = crypto.randomBytes(24).toString('hex');
     const resetExpires = new Date(Date.now() + 3600000).toISOString();
 
-    await db.users.findByIdAndUpdate(user._id, {
-      resetPasswordToken: resetToken,
-      resetPasswordExpires: resetExpires
-    });
+    // Update in MongoDB Atlas
+    try {
+      const mdb = await getMongoDb();
+      if (mdb && user._id) {
+        const { ObjectId } = require('mongodb');
+        let queryId = user._id;
+        try {
+          if (typeof user._id === 'string' && ObjectId.isValid(user._id)) {
+            queryId = new ObjectId(user._id);
+          }
+        } catch (e) {}
+        await mdb.collection('users').updateOne(
+          { $or: [{ _id: queryId }, { _id: String(user._id) }, { email: cleanEmail }] },
+          { $set: { resetPasswordToken: resetToken, resetPasswordExpires: resetExpires } }
+        );
+      }
+    } catch (updateErr) {
+      console.warn('MongoDB reset token update warning:', updateErr.message);
+    }
+
+    // Also update in local db.users
+    try {
+      await db.users.findByIdAndUpdate(user._id || user.id, {
+        resetPasswordToken: resetToken,
+        resetPasswordExpires: resetExpires
+      });
+    } catch (e) {}
 
     res.json({
       success: true,
@@ -1067,7 +1172,20 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
     }
 
-    const user = await db.users.findOne({ resetPasswordToken: token });
+    let user = null;
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        user = await mdb.collection('users').findOne({ resetPasswordToken: token });
+      }
+    } catch (mErr) {
+      console.warn('MongoDB resetPassword lookup warning:', mErr.message);
+    }
+
+    if (!user) {
+      user = await db.users.findOne({ resetPasswordToken: token });
+    }
+
     if (!user) {
       return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
     }
@@ -1077,11 +1195,44 @@ const resetPassword = async (req, res) => {
     }
 
     const passwordHash = bcrypt.hashSync(newPassword, 10);
-    await db.users.findByIdAndUpdate(user._id, {
-      passwordHash,
-      resetPasswordToken: null,
-      resetPasswordExpires: null
-    });
+
+    // Update in MongoDB Atlas
+    try {
+      const mdb = await getMongoDb();
+      if (mdb && user._id) {
+        const { ObjectId } = require('mongodb');
+        let queryId = user._id;
+        try {
+          if (typeof user._id === 'string' && ObjectId.isValid(user._id)) {
+            queryId = new ObjectId(user._id);
+          }
+        } catch (e) {}
+        await mdb.collection('users').updateOne(
+          { $or: [{ _id: queryId }, { _id: String(user._id) }] },
+          {
+            $set: {
+              passwordHash,
+              password: passwordHash,
+              resetPasswordToken: null,
+              resetPasswordExpires: null,
+              passwordChangedAt: new Date().toISOString()
+            }
+          }
+        );
+      }
+    } catch (updateErr) {
+      console.warn('MongoDB reset password update warning:', updateErr.message);
+    }
+
+    // Also update in local db.users
+    try {
+      await db.users.findByIdAndUpdate(user._id || user.id, {
+        passwordHash,
+        password: passwordHash,
+        resetPasswordToken: null,
+        resetPasswordExpires: null
+      });
+    } catch (e) {}
 
     res.json({ success: true, message: 'Password reset successful. You may now log in with your new password.' });
   } catch (err) {

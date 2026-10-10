@@ -213,9 +213,74 @@ function isEntityInAdminTerritory(entity, territory) {
   return Boolean(pincodeMatch);
 }
 
+const ROLE_PERMISSIONS_MAP = {
+  'Super Admin': ['*'],
+  'State Admin': [
+    'dashboard', 'districts', 'divisions', 'pincodes',
+    'district_admins', 'division_admins', 'pincode_admins',
+    'state_managers', 'district_managers', 'division_managers', 'pincode_managers',
+    'state_agents', 'district_agents', 'division_agents', 'pincode_agents', 'agent_payments',
+    'customers', 'membership_cards',
+    'vendors', 'vendor_subscriptions', 'vendor_payments',
+    'orders', 'bookings', 'jobs', 'delivery_partners', 'technicians', 'executives', 'support_team',
+    'kyc', 'quality_check', 'payments', 'reports', 'tasks', 'queries', 'notifications',
+    'profile', 'settings'
+  ],
+  'District Admin': [
+    'dashboard', 'divisions', 'pincodes',
+    'division_admins', 'pincode_admins',
+    'district_managers', 'division_managers', 'pincode_managers',
+    'district_agents', 'division_agents', 'pincode_agents', 'agent_payments',
+    'customers', 'membership_cards',
+    'vendors', 'vendor_subscriptions', 'vendor_payments',
+    'orders', 'bookings', 'jobs', 'delivery_partners', 'technicians', 'executives', 'support_team',
+    'kyc', 'quality_check', 'payments', 'reports', 'tasks', 'queries', 'notifications',
+    'profile', 'settings'
+  ],
+  'Divisional Admin': [
+    'dashboard', 'pincodes',
+    'pincode_admins',
+    'division_managers', 'pincode_managers',
+    'division_agents', 'pincode_agents', 'agent_payments',
+    'customers', 'membership_cards',
+    'vendors', 'vendor_subscriptions', 'vendor_payments',
+    'orders', 'bookings', 'jobs', 'delivery_partners', 'technicians', 'executives', 'support_team',
+    'kyc', 'quality_check', 'payments', 'reports', 'tasks', 'queries', 'notifications',
+    'profile', 'settings'
+  ],
+  'Division Admin': [
+    'dashboard', 'pincodes',
+    'pincode_admins',
+    'division_managers', 'pincode_managers',
+    'division_agents', 'pincode_agents', 'agent_payments',
+    'customers', 'membership_cards',
+    'vendors', 'vendor_subscriptions', 'vendor_payments',
+    'orders', 'bookings', 'jobs', 'delivery_partners', 'technicians', 'executives', 'support_team',
+    'kyc', 'quality_check', 'payments', 'reports', 'tasks', 'queries', 'notifications',
+    'profile', 'settings'
+  ],
+  'Pincode Admin': [
+    'dashboard',
+    'pincode_managers',
+    'pincode_agents', 'agent_payments',
+    'customers', 'membership_cards',
+    'vendors', 'vendor_subscriptions', 'vendor_payments',
+    'orders', 'bookings', 'jobs', 'delivery_partners', 'technicians', 'executives', 'support_team',
+    'kyc', 'quality_check', 'payments', 'reports', 'tasks', 'queries', 'notifications',
+    'profile', 'settings'
+  ]
+};
+
+function getAssignedPermissions(role) {
+  const norm = normalizeAdminRole(role);
+  return ROLE_PERMISSIONS_MAP[norm] || ROLE_PERMISSIONS_MAP[role] || [];
+}
+
 module.exports = {
   ROLE_HIERARCHY,
   MODULE_PERMISSIONS,
+  ROLE_PERMISSIONS_MAP,
+  getAssignedPermissions,
   hasPermission,
   normalizeAdminRole,
   cleanDivName,

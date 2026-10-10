@@ -5,10 +5,14 @@ import { getRoleDashboardPath } from '../../utils/permissions';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export function Login() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    return localStorage.getItem('ams_remembered_email') || '';
+  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(() => {
+    return localStorage.getItem('ams_remember_me') !== 'false';
+  });
   const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -46,11 +50,22 @@ export function Login() {
     try {
       const res = await login(email, password);
       if (res.success && res.user) {
+        if (rememberMe) {
+          localStorage.setItem('ams_remembered_email', email);
+          localStorage.setItem('ams_remember_me', 'true');
+        } else {
+          localStorage.removeItem('ams_remembered_email');
+          localStorage.setItem('ams_remember_me', 'false');
+        }
         navigate(getRoleDashboardPath(res.user.role), { replace: true });
       }
     } catch (err) {
-      // In accordance with security & RBAC guidelines, show strictly generic "Invalid credentials"
-      setError('Invalid credentials');
+      if (err?.status && err.status >= 500) {
+        setError('Unable to connect to the server. Please try again.');
+      } else {
+        // In accordance with security & RBAC guidelines, show strictly generic "Invalid credentials"
+        setError('Invalid credentials');
+      }
     } finally {
       setFormLoading(false);
     }
