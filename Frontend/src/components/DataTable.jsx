@@ -124,9 +124,9 @@ export function DataTable({
       ) : (
         <div className={`p-3.5 sm:p-4 lg:px-5 lg:py-4 border-b ${
           isDark ? 'border-slate-800 bg-slate-900/30' : 'border-slate-200/80 bg-slate-50/50'
-        } flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 transition-colors`}>
+        } flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3.5 transition-colors`}>
           {/* Title & Subtitle */}
-          <div className="min-w-0 max-w-full">
+          <div className="min-w-0 max-w-full flex-1">
             {title && (
               <h3 className={`text-sm sm:text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'} truncate`}>
                 {title}
@@ -139,8 +139,8 @@ export function DataTable({
             )}
           </div>
 
-          {/* Controls Bar: Search, Filters, View Toggle, Export, Refresh */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto">
+          {/* Controls Toolbar: Search, Filters, View Toggle, Export, Refresh, and Actions */}
+          <div className="flex flex-wrap items-center gap-2 w-full 2xl:w-auto 2xl:justify-end">
             {/* Search Input */}
             <SearchBar
               value={search}
@@ -149,102 +149,105 @@ export function DataTable({
                 setCurrentPage(1);
               }}
               placeholder={searchPlaceholder}
-              className="w-full sm:w-60 md:w-64 lg:w-56 xl:w-64"
+              className="w-full sm:w-52 md:w-60 lg:w-64 shrink-0"
             />
 
-            {/* Actions group */}
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              {typeof customFilters === 'function'
-                ? customFilters({ isDark })
-                : customFilters}
+            {/* Custom filters if provided */}
+            {typeof customFilters === 'function'
+              ? customFilters({ isDark })
+              : customFilters}
 
-              {/* Status Filter */}
-              {filterOptions && onFilterChange && (
-                <div className={`h-9 flex-1 sm:flex-initial inline-flex items-center gap-1.5 ${
-                  isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
-                } border rounded-xl px-2.5 text-xs transition-colors shrink-0`}>
-                  <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <select
-                    value={activeFilter}
-                    onChange={(e) => onFilterChange(e.target.value)}
-                    className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 w-full sm:max-w-[180px] truncate font-medium`}
-                  >
-                    {filterOptions.map(opt => (
-                      <option key={opt.value} value={opt.value} className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+            {/* Status Filter */}
+            {filterOptions && onFilterChange && (
+              <div className={`h-9 inline-flex items-center gap-1.5 ${
+                isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+              } border rounded-xl px-2.5 text-xs transition-colors shrink-0`}>
+                <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <select
+                  value={activeFilter}
+                  onChange={(e) => onFilterChange(e.target.value)}
+                  className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 w-full max-w-[170px] truncate font-medium`}
+                >
+                  {filterOptions.map(opt => (
+                    <option key={opt.value} value={opt.value} className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-              {/* View Mode Switcher (if renderCard is available) */}
-              {renderCard && (
-                <div className={`h-9 inline-flex items-center p-0.5 rounded-xl border ${
-                  isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
-                } shrink-0`}>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('table')}
-                    title="Table View"
-                    className={`h-7.5 px-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                      viewMode === 'table'
-                        ? isDark ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-blue-700 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <TableIcon className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Table</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('cards')}
-                    title="Card View"
-                    className={`h-7.5 px-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                      viewMode === 'cards'
-                        ? isDark ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-blue-700 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Cards</span>
-                  </button>
-                </div>
-              )}
+            {/* View Mode Switcher (if renderCard is available) */}
+            {renderCard && (
+              <div className={`h-9 inline-flex items-center p-0.5 rounded-xl border ${
+                isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
+              } shrink-0`}>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  title="Table View"
+                  className={`h-7.5 px-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                    viewMode === 'table'
+                      ? isDark ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-blue-700 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <TableIcon className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Table</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('cards')}
+                  title="Card View"
+                  className={`h-7.5 px-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                    viewMode === 'cards'
+                      ? isDark ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-blue-700 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Cards</span>
+                </button>
+              </div>
+            )}
 
-              {/* Export CSV Button */}
+            {/* Export CSV Button */}
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              title="Export to CSV"
+              className={`h-9 inline-flex items-center justify-center gap-1.5 px-3 shrink-0 ${
+                isDark
+                  ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
+                  : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+              } border rounded-xl text-xs font-semibold transition cursor-pointer`}
+            >
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span className="whitespace-nowrap">Export CSV</span>
+            </button>
+
+            {/* Refresh Button */}
+            {onRefresh && (
               <button
                 type="button"
-                onClick={handleExportCSV}
-                title="Export to CSV"
-                className={`h-9 flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 shrink-0 ${
+                onClick={onRefresh}
+                title="Refresh Data"
+                className={`h-9 w-9 inline-flex items-center justify-center shrink-0 ${
                   isDark
                     ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
                     : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
-                } border rounded-xl text-xs font-semibold transition cursor-pointer`}
+                } border rounded-xl transition cursor-pointer`}
               >
-                <Download className="w-3.5 h-3.5 shrink-0" />
-                <span className="whitespace-nowrap">Export CSV</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               </button>
+            )}
 
-              {/* Refresh Button */}
-              {onRefresh && (
-                <button
-                  type="button"
-                  onClick={onRefresh}
-                  title="Refresh Data"
-                  className={`h-9 w-9 inline-flex items-center justify-center shrink-0 ${
-                    isDark
-                      ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
-                      : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
-                  } border rounded-xl transition cursor-pointer`}
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-              )}
-
-              {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
-            </div>
+            {/* Actions (Add Manager, etc.) */}
+            {actions && (
+              <div className="shrink-0 inline-flex items-center">
+                {actions}
+              </div>
+            )}
           </div>
         </div>
       )}

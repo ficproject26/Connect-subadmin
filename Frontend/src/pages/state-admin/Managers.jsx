@@ -434,45 +434,97 @@ export function StateManagers({ level }) {
     rawRole.includes('super') ||
     rawRole.includes('main admin');
 
-  const isStateAdmin = 
+  const isStateAdmin = !isSuperAdmin && (
     normalizedUserRole === 'State Admin' ||
-    location.pathname.includes('/state-admin/') ||
-    (rawRole.includes('state') && !rawRole.includes('manager'));
+    (rawRole.includes('state') && !rawRole.includes('manager')) ||
+    (!normalizedUserRole && location.pathname.includes('/state-admin/'))
+  );
 
-  const isDistrictAdmin = 
+  const isDistrictAdmin = !isSuperAdmin && !isStateAdmin && (
     normalizedUserRole === 'District Admin' ||
-    location.pathname.includes('/district-admin/') ||
-    (rawRole.includes('district') && !rawRole.includes('manager'));
+    (rawRole.includes('district') && !rawRole.includes('manager')) ||
+    (!normalizedUserRole && location.pathname.includes('/district-admin/'))
+  );
 
-  const isDivisionalAdmin = 
+  const isDivisionalAdmin = !isSuperAdmin && !isStateAdmin && !isDistrictAdmin && (
     normalizedUserRole === 'Divisional Admin' ||
-    location.pathname.includes('/divisional-admin/') ||
-    location.pathname.includes('/division-admin/') ||
-    ((rawRole.includes('division') || rawRole.includes('divisional')) && !rawRole.includes('manager'));
+    ((rawRole.includes('division') || rawRole.includes('divisional')) && !rawRole.includes('manager')) ||
+    (!normalizedUserRole && (location.pathname.includes('/divisional-admin/') || location.pathname.includes('/division-admin/')))
+  );
 
-  const isPincodeAdmin = 
+  const isPincodeAdmin = !isSuperAdmin && !isStateAdmin && !isDistrictAdmin && !isDivisionalAdmin && (
     normalizedUserRole === 'Pincode Admin' ||
-    location.pathname.includes('/pincode-admin/') ||
-    (rawRole.includes('pincode') && !rawRole.includes('manager'));
+    (rawRole.includes('pincode') && !rawRole.includes('manager')) ||
+    (!normalizedUserRole && location.pathname.includes('/pincode-admin/'))
+  );
 
-  // Authorization for adding managers:
-  // - Super Admin can add at any level
-  // - State Admin can add State, District, Divisional, and Pincode Managers (all management under State)
-  // - District Admin can add District, Divisional, and Pincode Managers
-  // - Divisional Admin can add Divisional and Pincode Managers
-  // - Pincode Admin can add Pincode Managers
-  const canAddManager = 
-    isSuperAdmin ||
-    isStateAdmin ||
-    (isDistrictAdmin && activeLevel !== 'state') ||
-    (isDivisionalAdmin && (activeLevel === 'divisional' || activeLevel === 'pincode')) ||
-    (isPincodeAdmin && activeLevel === 'pincode');
+  // Hierarchy-based manager creation authorization rules:
+  // - State Admin can create State Managers ONLY.
+  // - District Admin can create District Managers ONLY.
+  // - Division Admin can create Divisional Managers ONLY.
+  // - Pincode Admin can create Pincode Managers ONLY.
+  // - Super Admin can create any manager level.
+  const adminAllowedCreationRole = useMemo(() => {
+    if (isSuperAdmin) return 'all';
+    if (isStateAdmin) return 'state_manager';
+    if (isDistrictAdmin) return 'district_manager';
+    if (isDivisionalAdmin) return 'division_manager';
+    if (isPincodeAdmin) return 'pincode_manager';
+    return null;
+  }, [isSuperAdmin, isStateAdmin, isDistrictAdmin, isDivisionalAdmin, isPincodeAdmin]);
 
-  const designatedRole = 
+  // Role creation validation helper
+  const canCreateRole = (targetRole, targetTerritory = {}) => {
+    if (!targetRole) return false;
+    if (isSuperAdmin) return true;
+    if (adminAllowedCreationRole !== targetRole) return false;
+
+    // Territory boundaries validation
+    if (isStateAdmin) {
+      if (locking.stateLocked && targetTerritory.state && locking.defaultState &&
+          targetTerritory.state.toLowerCase() !== locking.defaultState.toLowerCase()) {
+        return false;
+      }
+      return true;
+    }
+    if (isDistrictAdmin) {
+      if (locking.districtLocked && targetTerritory.district && locking.defaultDistrict &&
+          targetTerritory.district.toLowerCase() !== locking.defaultDistrict.toLowerCase()) {
+        return false;
+      }
+      return true;
+    }
+    if (isDivisionalAdmin) {
+      if (locking.divisionLocked && targetTerritory.division && locking.defaultDivision &&
+          targetTerritory.division.toLowerCase() !== locking.defaultDivision.toLowerCase()) {
+        return false;
+      }
+      return true;
+    }
+    if (isPincodeAdmin) {
+      if (locking.pincodeLocked && targetTerritory.pincode && locking.defaultPincode &&
+          String(targetTerritory.pincode).trim() !== String(locking.defaultPincode).trim()) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  };
+
+  // Map the current roster level to its corresponding manager role
+  const currentRosterRole = 
     activeLevel === 'district' ? 'district_manager' :
     activeLevel === 'divisional' ? 'division_manager' :
     activeLevel === 'pincode' ? 'pincode_manager' :
     'state_manager';
+
+  // Can the admin add a manager on this active roster view?
+  // Only true if the admin is permitted to create the manager role for this activeLevel
+  const canAddManager = canCreateRole(currentRosterRole);
+
+  const designatedRole = (adminAllowedCreationRole && adminAllowedCreationRole !== 'all')
+    ? adminAllowedCreationRole
+    : currentRosterRole;
 
   const designatedRoleLabel = 
     designatedRole === 'state_manager' ? 'State Manager' :
@@ -481,7 +533,9 @@ export function StateManagers({ level }) {
     'Pincode Manager';
 
   const openAddManager = (prefill = {}) => {
-    const roleToUse = prefill.role || designatedRole;
+    const roleToUse = (adminAllowedCreationRole && adminAllowedCreationRole !== 'all')
+      ? adminAllowedCreationRole
+      : (prefill.role || designatedRole);
     const stateToUse = locking.stateLocked
       ? (locking.defaultState || 'Tamil Nadu')
       : (prefill.assignedState || effectiveUser?.state || user?.state || (territoryTree[0]?.name || 'Tamil Nadu'));
@@ -2141,7 +2195,7 @@ export function StateManagers({ level }) {
                       <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                         Managers: {stateMgrs.length} / 8
                       </span>
-                      {canAddManager && (
+                      {canCreateRole('state_manager', { state: state.name }) && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2222,7 +2276,7 @@ export function StateManagers({ level }) {
                         ) : (
                           <div className="p-3 rounded-xl bg-white dark:bg-slate-800/50 border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-400 flex items-center justify-between">
                             <span>No State Manager assigned yet.</span>
-                            {canAddManager && (
+                            {canCreateRole('state_manager', { state: state.name }) && (
                               <button
                                 type="button"
                                 onClick={() => openAddManager({
@@ -2297,7 +2351,7 @@ export function StateManagers({ level }) {
                                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                                     Managers: {distMgrs.length} / 2
                                   </span>
-                                  {canAddManager && (
+                                  {canCreateRole('district_manager', { state: state.name, district: district.name }) && (
                                     <button
                                       type="button"
                                       onClick={(e) => {
@@ -2377,7 +2431,7 @@ export function StateManagers({ level }) {
                                     ) : (
                                       <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-400 flex items-center justify-between">
                                         <span>No District Manager assigned yet.</span>
-                                        {canAddManager && (
+                                        {canCreateRole('district_manager', { state: state.name, district: district.name }) && (
                                           <button
                                             type="button"
                                             onClick={() => openAddManager({
@@ -2450,7 +2504,7 @@ export function StateManagers({ level }) {
                                               <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                                                 Managers: {divMgrs.length} / 2
                                               </span>
-                                              {canAddManager && (
+                                              {canCreateRole('division_manager', { state: state.name, district: district.name, division: division.name }) && (
                                                 <button
                                                   type="button"
                                                   onClick={(e) => {
@@ -2532,7 +2586,7 @@ export function StateManagers({ level }) {
                                                 ) : (
                                                   <div className="p-2 rounded bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-400 flex items-center justify-between">
                                                     <span>No Divisional Manager assigned yet.</span>
-                                                    {canAddManager && (
+                                                    {canCreateRole('division_manager', { state: state.name, district: district.name, division: division.name }) && (
                                                       <button
                                                         type="button"
                                                         onClick={() => openAddManager({
@@ -2606,7 +2660,7 @@ export function StateManagers({ level }) {
                                                           <span className="text-[11px] font-semibold text-slate-500">
                                                             Managers: {pinMgrs.length} / 2
                                                           </span>
-                                                          {canAddManager && (
+                                                          {canCreateRole('pincode_manager', { state: state.name, district: district.name, division: division.name, pincode: pinCode }) && (
                                                             <button
                                                               type="button"
                                                               onClick={(e) => {
@@ -2688,7 +2742,7 @@ export function StateManagers({ level }) {
                                                           ) : (
                                                             <div className="p-2 rounded bg-white dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-400 flex items-center justify-between">
                                                               <span>No Pincode Manager assigned yet.</span>
-                                                              {canAddManager && (
+                                                              {canCreateRole('pincode_manager', { state: state.name, district: district.name, division: division.name, pincode: pinCode }) && (
                                                                 <button
                                                                   type="button"
                                                                   onClick={() => openAddManager({
@@ -2810,10 +2864,10 @@ export function StateManagers({ level }) {
           searchPlaceholder="Search pending manager registrations by name or territory..."
           exportFileName="pending_manager_requests.csv"
           actions={
-            canAddManager ? (
+            adminAllowedCreationRole ? (
               <button
                 type="button"
-                onClick={() => openAddManager()}
+                onClick={() => openAddManager({ role: adminAllowedCreationRole === 'all' ? 'state_manager' : adminAllowedCreationRole })}
                 className="h-9 inline-flex items-center gap-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer shrink-0"
               >
                 <Plus className="w-3.5 h-3.5 shrink-0" />
@@ -2836,7 +2890,7 @@ export function StateManagers({ level }) {
       <Modal
         isOpen={showAddModal}
         onClose={closeAddManager}
-        title={`Add ${config.title.slice(0, -1)} / Operations Lead`}
+        title={`Add ${designatedRoleLabel} / Operations Lead`}
         maxWidth="max-w-2xl"
       >
         <div className="space-y-5">

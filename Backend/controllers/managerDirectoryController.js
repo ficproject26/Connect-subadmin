@@ -754,41 +754,139 @@ const addManager = async (req, res) => {
     const mgrName = (name || fullName || '').trim();
     const mgrEmail = (email || '').trim().toLowerCase();
     const mgrMobile = (mobile || phone || '').trim();
-    const adminRoleLower = (req.user.role || '').toLowerCase().replace(/_/g, ' ');
+    const adminRoleLower = (req.user.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
     const isSuperAdmin = adminRoleLower === 'super admin' || adminRoleLower.includes('super') || adminRoleLower === 'main admin' || adminRoleLower === 'admin';
-    const isStateAdmin = adminRoleLower.includes('state') && !adminRoleLower.includes('manager');
-    const isDistrictAdmin = adminRoleLower.includes('district') && !adminRoleLower.includes('manager');
-    const isDivisionalAdmin = (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && !adminRoleLower.includes('manager');
-    const isPincodeAdmin = adminRoleLower.includes('pincode') && !adminRoleLower.includes('manager');
+    const isStateAdmin = !isSuperAdmin && adminRoleLower.includes('state') && !adminRoleLower.includes('manager');
+    const isDistrictAdmin = !isSuperAdmin && adminRoleLower.includes('district') && !adminRoleLower.includes('manager');
+    const isDivisionalAdmin = !isSuperAdmin && (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && !adminRoleLower.includes('manager');
+    const isPincodeAdmin = !isSuperAdmin && adminRoleLower.includes('pincode') && !adminRoleLower.includes('manager');
 
-    // Role Authorization:
-    // - Super Admin: can add any manager role
-    // - State Admin: can add state_manager, district_manager, division_manager, pincode_manager within their assigned state
-    // - District Admin: can add district_manager, division_manager, pincode_manager within their assigned district
-    // - Divisional Admin: can add division_manager, pincode_manager within their assigned division
-    // - Pincode Admin: can add pincode_manager within their assigned pincode
+    // Strict Hierarchy-Based Manager Creation Permissions:
+    // - State Admin can create State Managers ONLY.
+    // - District Admin can create District Managers ONLY.
+    // - Division Admin can create Divisional Managers ONLY.
+    // - Pincode Admin can create Pincode Managers ONLY.
+    // - Super Admin can create any manager role.
     const validRoles = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'];
-    let mgrRole = role || 'state_manager';
+    let mgrRole = (role || '').trim().toLowerCase().replace(/-/g, '_');
+    if (mgrRole === 'divisional_manager') mgrRole = 'division_manager';
     if (!validRoles.includes(mgrRole)) {
       mgrRole = 'state_manager';
     }
 
     if (isStateAdmin) {
-      // State Admin can add any manager tier within their state
+      if (mgrRole !== 'state_manager') {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: State Admin can create State Managers only. District, Divisional, and Pincode Managers cannot be created by State Admin.'
+        });
+      }
     } else if (isDistrictAdmin) {
-      if (mgrRole === 'state_manager') {
-        return res.status(403).json({ success: false, message: 'District Admin cannot add State Managers.' });
+      if (mgrRole !== 'district_manager') {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: District Admin can create District Managers only. State, Divisional, and Pincode Managers cannot be created by District Admin.'
+        });
       }
     } else if (isDivisionalAdmin) {
-      if (mgrRole === 'state_manager' || mgrRole === 'district_manager') {
-        return res.status(403).json({ success: false, message: 'Division Admin can only add Division or Pincode Managers.' });
+      if (mgrRole !== 'division_manager') {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: Division Admin can create Divisional Managers only. State, District, and Pincode Managers cannot be created by Division Admin.'
+        });
       }
     } else if (isPincodeAdmin) {
       if (mgrRole !== 'pincode_manager') {
-        return res.status(403).json({ success: false, message: 'Pincode Admin can only add Pincode Managers.' });
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: Pincode Admin can create Pincode Managers only. State, District, and Divisional Managers cannot be created by Pincode Admin.'
+        });
       }
     } else if (!isSuperAdmin) {
-      return res.status(403).json({ success: false, message: 'Unauthorized: Only administrators can add managers.' });
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized: Only authorized administrators can add managers.'
+      });
+    }
+
+    // Derive caller's authoritative territory from trusted database/token session data
+    const trustedAdmin = (req.user.id || req.user._id)
+      ? (Array.from(db.users || []).find(u => String(u._id || u.id) === String(req.user.id || req.user._id)) ||
+         Array.from(db.admins || []).find(u => String(u._id || u.id) === String(req.user.id || req.user._id)) || req.user)
+      : req.user;
+
+    const adminState = trustedAdmin.state || req.user.state;
+    const adminDistrict = trustedAdmin.district || req.user.district;
+    const adminDivision = trustedAdmin.division || req.user.division;
+    const adminPincode = trustedAdmin.pincode || req.user.pincode;
+
+    // Validate territory hierarchy against administrator's authority
+    if (isStateAdmin) {
+      if (adminState && adminState.toLowerCase() !== 'all india') {
+        if (assignedState && assignedState.trim().toLowerCase() !== adminState.trim().toLowerCase()) {
+          return res.status(403).json({
+            success: false,
+            message: `Forbidden: State Admin cannot create managers outside their authorized state (${adminState}).`
+          });
+        }
+      }
+    } else if (isDistrictAdmin) {
+      if (adminState && assignedState && assignedState.trim().toLowerCase() !== adminState.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: District Admin cannot create managers outside their authorized state (${adminState}).`
+        });
+      }
+      if (adminDistrict && assignedDistrict && assignedDistrict.trim().toLowerCase() !== adminDistrict.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: District Admin cannot create managers outside their authorized district (${adminDistrict}).`
+        });
+      }
+    } else if (isDivisionalAdmin) {
+      if (adminState && assignedState && assignedState.trim().toLowerCase() !== adminState.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Division Admin cannot create managers outside their authorized state (${adminState}).`
+        });
+      }
+      if (adminDistrict && assignedDistrict && assignedDistrict.trim().toLowerCase() !== adminDistrict.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Division Admin cannot create managers outside their authorized district (${adminDistrict}).`
+        });
+      }
+      if (adminDivision && assignedDivision && assignedDivision.trim().toLowerCase() !== adminDivision.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Division Admin cannot create managers outside their authorized division (${adminDivision}).`
+        });
+      }
+    } else if (isPincodeAdmin) {
+      if (adminState && assignedState && assignedState.trim().toLowerCase() !== adminState.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Pincode Admin cannot create managers outside their authorized state (${adminState}).`
+        });
+      }
+      if (adminDistrict && assignedDistrict && assignedDistrict.trim().toLowerCase() !== adminDistrict.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Pincode Admin cannot create managers outside their authorized district (${adminDistrict}).`
+        });
+      }
+      if (adminDivision && assignedDivision && assignedDivision.trim().toLowerCase() !== adminDivision.trim().toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Pincode Admin cannot create managers outside their authorized division (${adminDivision}).`
+        });
+      }
+      if (adminPincode && assignedPincode && String(assignedPincode).trim() !== String(adminPincode).trim()) {
+        return res.status(403).json({
+          success: false,
+          message: `Forbidden: Pincode Admin cannot create managers outside their authorized pincode (${adminPincode}).`
+        });
+      }
     }
 
     if (!mgrName) return res.status(400).json({ success: false, message: 'Manager name is required.' });
@@ -821,7 +919,7 @@ const addManager = async (req, res) => {
     }
 
     // Auto-align location to administrator jurisdiction and role requirements
-    let state = (assignedState || homeState || req.user.state || 'Tamil Nadu').trim();
+    let state = (assignedState || homeState || adminState || 'Tamil Nadu').trim();
     let stateId = req.body.assignedStateId || req.body.stateId || null;
     let district = (assignedDistrict || homeDistrict || '').trim() || null;
     let districtId = req.body.assignedDistrictId || req.body.districtId || null;
@@ -830,30 +928,30 @@ const addManager = async (req, res) => {
     let pincode = (assignedPincode || homePincode || '').trim() || null;
     let pincodeId = req.body.assignedPincodeId || req.body.pincodeId || null;
 
-    if (isStateAdmin && req.user.state && req.user.state.toLowerCase() !== 'all india') {
-      state = req.user.state;
-      stateId = req.user.stateId || stateId;
+    if (isStateAdmin && adminState && adminState.toLowerCase() !== 'all india') {
+      state = adminState;
+      stateId = trustedAdmin.stateId || req.user.stateId || stateId;
     } else if (isDistrictAdmin) {
-      state = req.user.state || state;
-      stateId = req.user.stateId || stateId;
-      district = req.user.district || district;
-      districtId = req.user.districtId || districtId;
+      state = adminState || state;
+      stateId = trustedAdmin.stateId || req.user.stateId || stateId;
+      district = adminDistrict || district;
+      districtId = trustedAdmin.districtId || req.user.districtId || districtId;
     } else if (isDivisionalAdmin) {
-      state = req.user.state || state;
-      stateId = req.user.stateId || stateId;
-      district = req.user.district || district;
-      districtId = req.user.districtId || districtId;
-      division = req.user.division || division;
-      divisionId = req.user.divisionId || divisionId;
+      state = adminState || state;
+      stateId = trustedAdmin.stateId || req.user.stateId || stateId;
+      district = adminDistrict || district;
+      districtId = trustedAdmin.districtId || req.user.districtId || districtId;
+      division = adminDivision || division;
+      divisionId = trustedAdmin.divisionId || req.user.divisionId || divisionId;
     } else if (isPincodeAdmin) {
-      state = req.user.state || state;
-      stateId = req.user.stateId || stateId;
-      district = req.user.district || district;
-      districtId = req.user.districtId || districtId;
-      division = req.user.division || division;
-      divisionId = req.user.divisionId || divisionId;
-      pincode = req.user.pincode || pincode;
-      pincodeId = req.user.pincodeId || pincodeId;
+      state = adminState || state;
+      stateId = trustedAdmin.stateId || req.user.stateId || stateId;
+      district = adminDistrict || district;
+      districtId = trustedAdmin.districtId || req.user.districtId || districtId;
+      division = adminDivision || division;
+      divisionId = trustedAdmin.divisionId || req.user.divisionId || divisionId;
+      pincode = adminPincode || pincode;
+      pincodeId = trustedAdmin.pincodeId || req.user.pincodeId || pincodeId;
     }
 
     // Role-specific territory validation (compatible parent-child relationships)
