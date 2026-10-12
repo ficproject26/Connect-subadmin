@@ -132,7 +132,6 @@ export function TerritoryHierarchyFilter({
   }
 
   const visibleCount = [isStateVisible, isDistrictVisible, isDivisionVisible, isPincodeVisible].filter(Boolean).length;
-  if (visibleCount === 0) return null;
 
   const gridColsClass = 
     visibleCount === 1 ? 'grid-cols-1 max-w-sm' :
@@ -246,6 +245,8 @@ export function TerritoryHierarchyFilter({
     if (!locking.pincodeLocked && onPincodeChange) onPincodeChange('');
     if (onClear) onClear();
   };
+
+  if (visibleCount === 0) return null;
 
   return (
     <div className={`p-4 rounded-2xl border ${
