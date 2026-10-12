@@ -92,77 +92,67 @@ const isRelatedAdminForManager = (admin, manager) => {
   const adminRole = (admin.role || '').trim();
   const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
 
-  if (adminRoleLower === 'super admin' || adminRoleLower === 'admin') return true;
-
+  // Exact Level Matching by Territory:
   if (manager.role === 'state_manager') {
-    return adminRoleLower.includes('state') && matchesState(admin, manager);
+    if (adminRoleLower.includes('state') && !adminRoleLower.includes('manager') && matchesState(admin, manager)) return true;
   }
   if (manager.role === 'district_manager') {
-    return adminRoleLower.includes('district') && matchesDistrict(admin, manager);
+    if (adminRoleLower.includes('district') && !adminRoleLower.includes('manager') && matchesDistrict(admin, manager)) return true;
   }
   if (manager.role === 'division_manager') {
-    return (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && matchesDivision(admin, manager);
+    if ((adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && !adminRoleLower.includes('manager') && matchesDivision(admin, manager)) return true;
   }
   if (manager.role === 'pincode_manager') {
-    return adminRoleLower.includes('pincode') && matchesPincode(admin, manager);
+    if (adminRoleLower.includes('pincode') && !adminRoleLower.includes('manager') && matchesPincode(admin, manager)) return true;
   }
+
+  // Fallback: If no exact territory administrator exists in system, flag for authorized administrative review (Super / Main Admin)
+  const hasExactAdmin = Array.from(db.users).some(u => {
+    const uRole = (u.role || '').toLowerCase().replace(/_/g, ' ');
+    if (manager.role === 'state_manager') return uRole.includes('state') && !uRole.includes('manager') && matchesState(u, manager);
+    if (manager.role === 'district_manager') return uRole.includes('district') && !uRole.includes('manager') && matchesDistrict(u, manager);
+    if (manager.role === 'division_manager') return (uRole.includes('division') || uRole.includes('divisional')) && !uRole.includes('manager') && matchesDivision(u, manager);
+    if (manager.role === 'pincode_manager') return uRole.includes('pincode') && !uRole.includes('manager') && matchesPincode(u, manager);
+    return false;
+  });
+
+  if (!hasExactAdmin && (adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || adminRoleLower === 'admin')) {
+    return true;
+  }
+
   return false;
 };
 
-// Check if an Administrator has jurisdiction to view / manage a Field Manager
+// Check if an Administrator has jurisdiction to view / oversee a Field Manager
 const canAdminManage = (admin, manager) => {
+  if (!admin || !manager) return false;
   const adminRole = (admin.role || '').trim();
   const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
 
-  // Super Admin can manage anyone
-  if (adminRoleLower === 'super admin' || adminRoleLower === 'admin') return true;
+  // Super Admin / Main Admin can view all
+  if (adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || adminRoleLower === 'admin') return true;
 
   const managerRoles = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'];
   if (!managerRoles.includes(manager.role)) return false;
 
-  const isPending = manager.status === 'under_review' || manager.status === 'pending' || manager.adminApprovalStatus === 'pending';
-
-  // For pending registration requests:
-  // Must go directly to the related administrator for this jurisdiction level
-  if (isPending) {
-    if (isRelatedAdminForManager(admin, manager)) return true;
-
-    // Check if an exact admin exists in the system for this manager's jurisdiction
-    const hasAssignedExactAdmin = Array.from(db.users).some(u => 
-      (u.role || '').toLowerCase().includes('admin') && isRelatedAdminForManager(u, manager)
-    );
-
-    // If an exact admin exists, only that admin receives the request
-    if (hasAssignedExactAdmin) return false;
-
-    // Fallback: If no admin has been created yet at this exact tier, allow parent admin within the same state/district
-    if (adminRoleLower.includes('state')) {
-      return matchesState(admin, manager);
-    }
-    if (adminRoleLower.includes('district')) {
-      return (manager.role === 'division_manager' || manager.role === 'pincode_manager') && matchesDistrict(admin, manager);
-    }
-    if (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) {
-      return manager.role === 'pincode_manager' && matchesDivision(admin, manager);
-    }
-    return false;
-  }
-
-  // For active / approved managers: hierarchical territorial oversight
+  // State Admin: can view all managers within their state
   if (adminRoleLower.includes('state')) {
     return matchesState(admin, manager);
   }
 
+  // District Admin: can view district, division, and pincode managers within their district
   if (adminRoleLower.includes('district')) {
     if (manager.role === 'state_manager') return false;
     return matchesDistrict(admin, manager);
   }
 
+  // Division Admin: can view division and pincode managers within their division
   if (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) {
     if (manager.role === 'state_manager' || manager.role === 'district_manager') return false;
     return matchesDivision(admin, manager);
   }
 
+  // Pincode Admin: can view pincode managers within their pincode
   if (adminRoleLower.includes('pincode')) {
     if (manager.role !== 'pincode_manager') return false;
     return matchesPincode(admin, manager);
@@ -197,6 +187,22 @@ const populateManager = async (m, relation, user) => {
 
   const canApprove = isRelatedAdminForManager(user, m);
 
+  const s = (status || '').toLowerCase();
+  const admApp = (adminApprovalStatus || '').toLowerCase();
+  const kycStat = (m.kycStatus || '').toLowerCase();
+  let workflowStage = 'Awaiting Territory Approval';
+  if (s === 'rejected' || admApp === 'rejected') {
+    workflowStage = 'Territory Rejected';
+  } else if (kycStat === 'rejected') {
+    workflowStage = 'KYC Rejected';
+  } else if (kycStat === 'verified' || kycStat === 'approved') {
+    workflowStage = 'KYC Approved';
+  } else if (s === 'pending_kyc' || admApp === 'approved') {
+    workflowStage = 'Awaiting KYC Review';
+  } else if (s === 'active' || s === 'approved') {
+    workflowStage = 'Activated';
+  }
+
   return {
     id: m._id || m.id,
     _id: m._id || m.id,
@@ -209,6 +215,7 @@ const populateManager = async (m, relation, user) => {
     level: m.level,
     status,
     adminApprovalStatus,
+    workflowStage,
     targetAdminRole,
     targetAdminName: resolvedTargetAdminName || 'Pending Admin Assignment',
     targetJurisdiction: m.targetJurisdiction || (resolvedPincode ? `PIN: ${resolvedPincode}` : resolvedDivision ? `${resolvedDivision} Division` : resolvedDistrict ? `${resolvedDistrict} District` : `${resolvedState || 'State'} Jurisdiction`),
@@ -593,26 +600,28 @@ const approveManager = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Manager not found' });
     }
 
-    // Verify admin jurisdiction
-    if (!canAdminManage(req.user, manager)) {
+    // Verify admin jurisdiction - approval rights reserved exclusively for the authorized territory authority
+    if (!isRelatedAdminForManager(req.user, manager)) {
       const targetRole = getRelatedAdminRole(manager.role);
       const targetPlace = manager.pincode ? `Pincode ${manager.pincode}` : manager.division ? `${manager.division} Division` : manager.district ? `${manager.district} District` : `${manager.state || 'State'} Jurisdiction`;
       return res.status(403).json({
         success: false,
-        message: `You do not have administrative authority to approve ${manager.name} (${formatRoleTitle(manager.role)}). Registration requests for this jurisdiction must be approved by the designated ${targetRole} for ${targetPlace}.`
+        message: `You do not have administrative authority to approve ${manager.name} (${formatRoleTitle(manager.role)}). Initial approval for this jurisdiction must be performed by the designated ${targetRole} for ${targetPlace}.`
       });
     }
 
+    const now = new Date().toISOString();
+    // Persist territory approval, move to KYC team review queue (account remains restricted pending KYC)
     const approveUpdates = {
-      status: 'active',
+      status: 'pending_kyc',
       adminApprovalStatus: 'approved',
-      kycStatus: 'Verified',
+      kycStatus: 'pending_verification',
       adminApprovedBy: req.user.name || req.user.email,
       adminApprovedById: req.user.id || req.user._id,
       adminApprovedByRole: req.user.role,
-      adminApprovedAt: new Date().toISOString(),
+      adminApprovedAt: now,
       rejectionReason: null,
-      updatedAt: new Date().toISOString()
+      updatedAt: now
     };
     Object.assign(manager, approveUpdates);
 
@@ -621,25 +630,60 @@ const approveManager = async (req, res) => {
       await db.managers.findByIdAndUpdate(manager._id || manager.id, approveUpdates).catch(() => {});
     }
 
+    // Automatically ensure record is in db.kycRecords for the KYC verification queue
+    if (db.kycRecords) {
+      const mgrIdStr = String(manager._id || manager.id);
+      const kycId = `KYC-MGR-${mgrIdStr}`;
+      const existingKyc = await db.kycRecords.findOne({ $or: [{ _id: kycId }, { id: kycId }, { managerId: mgrIdStr }] });
+      if (!existingKyc) {
+        await db.kycRecords.insertOne({
+          _id: kycId,
+          id: kycId,
+          type: 'Manager',
+          managerId: mgrIdStr,
+          name: manager.name,
+          category: 'Operations Management',
+          role: manager.role,
+          phone: manager.mobile || manager.phone,
+          email: manager.email,
+          state: manager.state,
+          district: manager.district,
+          division: manager.division,
+          pincode: manager.pincode,
+          stateId: manager.stateId,
+          districtId: manager.districtId,
+          divisionId: manager.divisionId,
+          pincodeId: manager.pincodeId,
+          status: 'Pending',
+          kycStatus: 'Pending Verification',
+          submittedDate: (manager.createdAt || now).split('T')[0],
+          documents: manager.documents || {},
+          notes: `Territory approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team for verification.`,
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+    }
+
     // Audit log entry
     await db.auditLogs.insertOne({
-      action: 'MANAGER_REGISTRATION_APPROVED_BY_ADMIN',
+      action: 'MANAGER_TERRITORY_APPROVED_FORWARDED_TO_KYC',
       adminId: req.user.id || req.user._id,
       adminName: req.user.name,
       adminRole: req.user.role,
       targetUserId: manager._id || manager.id,
       targetUserName: manager.name,
       targetUserRole: manager.role,
-      details: `${manager.role.replace('_', ' ')} "${manager.name}" was approved by ${req.user.role} "${req.user.name}". Account is now active.`,
+      details: `${manager.role.replace('_', ' ')} "${manager.name}" territory registration approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team queue. Account restricted pending KYC verification.`,
       ip: req.ip || '127.0.0.1',
-      timestamp: new Date().toISOString()
+      timestamp: now
     });
 
     const populated = await populateManager(manager, 'subordinate', req.user);
 
     return res.json({
       success: true,
-      message: `Registration for ${manager.name} (${formatRoleTitle(manager.role)}) has been accepted and approved by ${req.user.role}. Account is now Active and login is enabled.`,
+      message: `Registration for ${manager.name} (${formatRoleTitle(manager.role)}) approved by ${req.user.role}. Forwarded to KYC Review queue.`,
       manager: populated
     });
   } catch (err) {
@@ -660,28 +704,30 @@ const rejectManager = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Manager not found' });
     }
 
-    // Verify admin jurisdiction
-    if (!canAdminManage(req.user, manager)) {
+    // Verify admin jurisdiction - only authorized territory authority can reject
+    if (!isRelatedAdminForManager(req.user, manager)) {
       const targetRole = getRelatedAdminRole(manager.role);
       const targetPlace = manager.pincode ? `Pincode ${manager.pincode}` : manager.division ? `${manager.division} Division` : manager.district ? `${manager.district} District` : `${manager.state || 'State'} Jurisdiction`;
       return res.status(403).json({
         success: false,
-        message: `You do not have administrative authority to reject ${manager.name} (${formatRoleTitle(manager.role)}). Registration requests for this jurisdiction must be handled by the designated ${targetRole} for ${targetPlace}.`
+        message: `You do not have administrative authority to reject ${manager.name} (${formatRoleTitle(manager.role)}). Rejection for this jurisdiction must be handled by the designated ${targetRole} for ${targetPlace}.`
       });
     }
 
     const rejectionReason = (reason || '').trim() || 'Registration credentials or KYC documents did not meet the required criteria.';
+    const now = new Date().toISOString();
 
     // Update status to rejected
     const rejectUpdates = {
       status: 'rejected',
       adminApprovalStatus: 'rejected',
+      kycStatus: 'Rejected',
       rejectionReason,
       adminRejectedBy: req.user.name || req.user.email,
       adminRejectedById: req.user.id || req.user._id,
       adminRejectedByRole: req.user.role,
-      adminRejectedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      adminRejectedAt: now,
+      updatedAt: now
     };
     Object.assign(manager, rejectUpdates);
 
@@ -1394,5 +1440,7 @@ module.exports = {
   approveManager,
   rejectManager,
   addManager,
-  updateManagerDocuments
+  updateManagerDocuments,
+  isRelatedAdminForManager,
+  canAdminManage
 };

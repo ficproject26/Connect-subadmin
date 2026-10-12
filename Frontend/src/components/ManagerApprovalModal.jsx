@@ -72,9 +72,10 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
     try {
       const res = await dataService.approveManager(activeMgr.id || activeMgr._id);
       if (res.success) {
-        setSuccessMsg(res.message || 'Registration accepted & approved! Manager account is now Active and login is enabled.');
-        setCurrentMgr(res.manager || { ...activeMgr, status: 'active', adminApprovalStatus: 'approved' });
-        if (onManagerUpdated) onManagerUpdated(res.manager || { ...activeMgr, status: 'active' });
+        setSuccessMsg(res.message || 'Registration accepted & approved! Manager queued for KYC review.');
+        const updated = res.manager || { ...activeMgr, status: 'pending_kyc', adminApprovalStatus: 'approved', canApprove: false, workflowStage: 'Awaiting KYC Review' };
+        setCurrentMgr(updated);
+        if (onManagerUpdated) onManagerUpdated(updated);
         setTimeout(() => {
           onClose();
         }, 1500);
@@ -689,7 +690,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
                   className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-500/20 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
-                  {loading ? 'Approving & Activating...' : (isRejected ? 'Reconsider & Approve Manager' : 'Accept & Approve Manager')}
+                  {loading ? 'Approving & Forwarding to KYC...' : (isRejected ? 'Reconsider & Approve Manager' : 'Accept & Approve Manager')}
                 </button>
               </>
             )}

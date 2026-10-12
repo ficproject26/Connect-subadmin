@@ -156,6 +156,47 @@ async function processKYC(req, res) {
       }
     }
 
+    // If this KYC record belongs to an agent, synchronize agent document in db.agents
+    if (record.type === 'Agent' || record.agentId) {
+      const agId = record.agentId || (record.id && record.id.replace('KYC-AGT-', ''));
+      const agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(agId));
+      if (agent) {
+        const isApproved = status === 'Verified' || status === 'Approved' || status === 'KYC Approved';
+        const now = new Date().toISOString();
+        const updates = isApproved ? {
+          kycStatus: 'approved',
+          status: 'approved',
+          isActive: true,
+          isApproved: true,
+          kycVerifiedAt: now,
+          kycVerifiedBy: `${req.user.name} (${req.user.role})`
+        } : {
+          kycStatus: 'rejected',
+          status: 'rejected',
+          isActive: false,
+          isApproved: false,
+          rejectionReason: reason || 'KYC verification rejected by KYC Team.',
+          kycRejectedAt: now,
+          kycRejectedBy: `${req.user.name} (${req.user.role})`
+        };
+        await db.agents.findByIdAndUpdate(agId, updates);
+
+        if (db.auditLogs) {
+          await db.auditLogs.insertOne({
+            action: isApproved ? 'AGENT_KYC_VERIFIED' : 'AGENT_KYC_REJECTED',
+            adminId: req.user.id || req.user._id,
+            adminName: req.user.name,
+            adminRole: req.user.role,
+            targetUserId: agId,
+            targetUserName: agent.name,
+            details: `Agent "${agent.name}" (${agent.role || agent.level}) KYC verification marked as ${status}.`,
+            ip: req.ip || '127.0.0.1',
+            timestamp: now
+          });
+        }
+      }
+    }
+
     // If this KYC record belongs to a vendor, synchronize vendor document in db.vendors
     if (record.type === 'Vendor' || record.vendorId) {
       const vId = record.vendorId || (record.id && record.id.replace('KYC-', ''));

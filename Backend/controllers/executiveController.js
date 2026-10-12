@@ -81,10 +81,10 @@ function getAgentLevel(agent) {
 function normalizeLevel(level) {
   if (!level) return '';
   const l = String(level).toLowerCase().trim();
-  if (l === 'divisional' || l === 'division') return 'division';
-  if (l === 'district') return 'district';
-  if (l === 'state') return 'state';
-  if (l === 'pincode') return 'pincode';
+  if (l.includes('pincode') || l.includes('pin')) return 'pincode';
+  if (l.includes('divis')) return 'division';
+  if (l.includes('district')) return 'district';
+  if (l.includes('state')) return 'state';
   return l;
 }
 
@@ -744,6 +744,352 @@ function getDeliveryPartners(req, res) {
   }
 }
 
+function isRelatedAdminForAgent(admin, agent) {
+  if (!admin || !agent) return false;
+  const adminRole = String(admin.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const aLevel = normalizeLevel(getAgentLevel(agent));
+  const t = getAgentTerritory(agent);
+
+  const uState = (admin.state || '').toLowerCase().trim();
+  const uDist = (admin.district || '').toLowerCase().trim();
+  const uDiv = (admin.division || '').toLowerCase().trim();
+  const uPin = String(admin.pincode || '').trim();
+
+  const matchState = !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
+  const matchDist = matchState && (!uDist || uDist === 'all districts' || (t.district && t.district.toLowerCase() === uDist));
+  const matchDiv = matchDist && (!uDiv || uDiv === 'all divisions' || (t.division && divisionMatches(t.division, uDiv)));
+  const matchPin = matchDiv && (!uPin || uPin === 'all' || (t.pincode && t.pincode === uPin));
+
+  if (aLevel === 'state') {
+    if (adminRole.includes('state') && !adminRole.includes('manager') && matchState) return true;
+  }
+  if (aLevel === 'district') {
+    if (adminRole.includes('district') && !adminRole.includes('manager') && matchDist) return true;
+  }
+  if (aLevel === 'division') {
+    if ((adminRole.includes('division') || adminRole.includes('divisional')) && !adminRole.includes('manager') && matchDiv) return true;
+  }
+  if (aLevel === 'pincode') {
+    if (adminRole.includes('pincode') && !adminRole.includes('manager') && matchPin) return true;
+  }
+
+  // Fallback: If no exact territory administrator exists in system, flag for authorized administrative review
+  const allUsers = Array.from(db.users || []);
+  const hasExactAdmin = allUsers.some(u => {
+    const uR = (u.role || '').toLowerCase().replace(/_/g, ' ');
+    const s = (u.state || '').toLowerCase().trim();
+    const d = (u.district || '').toLowerCase().trim();
+    const v = (u.division || '').toLowerCase().trim();
+    const p = String(u.pincode || '').trim();
+    if (aLevel === 'state') return uR.includes('state') && !uR.includes('manager') && (!s || s === 'all india' || s === (t.state || '').toLowerCase());
+    if (aLevel === 'district') return uR.includes('district') && !uR.includes('manager') && (!d || d === (t.district || '').toLowerCase());
+    if (aLevel === 'division') return (uR.includes('division') || uR.includes('divisional')) && !uR.includes('manager') && divisionMatches(v, t.division);
+    if (aLevel === 'pincode') return uR.includes('pincode') && !uR.includes('manager') && (p === t.pincode);
+    return false;
+  });
+
+  if (!hasExactAdmin && (adminRole === 'super admin' || adminRole === 'main admin' || adminRole === 'admin')) {
+    return true;
+  }
+
+  return false;
+}
+
+function canAdminViewAgent(admin, agent) {
+  if (!admin || !agent) return false;
+  const adminRole = String(admin.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  if (adminRole === 'super admin' || adminRole === 'main admin' || adminRole === 'admin') return true;
+
+  const aLevel = normalizeLevel(getAgentLevel(agent));
+  const t = getAgentTerritory(agent);
+
+  const uState = (admin.state || '').toLowerCase().trim();
+  const uDist = (admin.district || '').toLowerCase().trim();
+  const uDiv = (admin.division || '').toLowerCase().trim();
+  const uPin = String(admin.pincode || '').trim();
+
+  // State Admin: can view all agents within their state
+  if (adminRole.includes('state')) {
+    return !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
+  }
+
+  // District Admin: can view district, division, and pincode agents in their district
+  if (adminRole.includes('district')) {
+    if (aLevel === 'state') return false;
+    const matchState = !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
+    return matchState && (!uDist || uDist === 'all districts' || (t.district && t.district.toLowerCase() === uDist));
+  }
+
+  // Division Admin: can view division and pincode agents in their division
+  if (adminRole.includes('division') || adminRole.includes('divisional')) {
+    if (aLevel === 'state' || aLevel === 'district') return false;
+    const matchState = !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
+    const matchDist = matchState && (!uDist || uDist === 'all districts' || (t.district && t.district.toLowerCase() === uDist));
+    return matchDist && (!uDiv || uDiv === 'all divisions' || divisionMatches(t.division, uDiv));
+  }
+
+  // Pincode Admin: can view pincode agents in their pincode
+  if (adminRole.includes('pincode')) {
+    if (aLevel !== 'pincode') return false;
+    return !uPin || uPin === 'all' || (t.pincode && t.pincode === uPin);
+  }
+
+  return false;
+}
+
+async function getAgentRequests(req, res) {
+  try {
+    const rawAgents = Array.from(db.agents || []);
+    // Scoped to pending/under-review agent requests
+    const pendingAgents = rawAgents.filter(a => {
+      const s = (a.status || '').toLowerCase().trim();
+      const adminApproval = (a.adminApprovalStatus || '').toLowerCase().trim();
+      const isApproved = a.isApproved === true || s === 'approved' || s === 'active';
+      return (
+        s === 'pending' ||
+        s === 'under_review' ||
+        s === 'pending_approval' ||
+        s === 'pending_admin_approval' ||
+        s === 'pending_kyc' ||
+        s === 'rejected' ||
+        adminApproval === 'pending' ||
+        adminApproval === 'under_review' ||
+        adminApproval === 'rejected' ||
+        !isApproved
+      );
+    });
+
+    const visibleAgents = pendingAgents.filter(a => canAdminViewAgent(req.user, a));
+
+    const formatted = visibleAgents.map(a => {
+      const normLevel = normalizeLevel(getAgentLevel(a));
+      const terr = getAgentTerritory(a);
+      const rawId = a.id || a._id;
+      const idStr = rawId ? String(rawId) : `agent-${Math.random().toString(36).slice(2, 8)}`;
+      const canApprove = isRelatedAdminForAgent(req.user, a);
+
+      let jurisdiction = 'Assigned Territory';
+      let assignedArea = '';
+      if (normLevel === 'pincode' && terr.pincode) {
+        jurisdiction = `PIN ${terr.pincode}`;
+        assignedArea = [terr.division, terr.district, terr.state].filter(Boolean).join(', ');
+      } else if (normLevel === 'division' && terr.division) {
+        jurisdiction = terr.division ? `${terr.division} Division` : 'Assigned Division';
+        assignedArea = [terr.district, terr.state].filter(Boolean).join(', ');
+      } else if (normLevel === 'district' && terr.district) {
+        jurisdiction = `${terr.district} District`;
+        assignedArea = terr.state || '';
+      } else if (normLevel === 'state' && terr.state) {
+        jurisdiction = `${terr.state} State`;
+        assignedArea = 'Apex State Level';
+      } else {
+        jurisdiction = terr.state || 'Assigned Zone';
+        assignedArea = terr.district || '';
+      }
+
+      let workflowStage = 'Awaiting Territory Approval';
+      const s = (a.status || '').toLowerCase().trim();
+      const adminApproval = (a.adminApprovalStatus || '').toLowerCase().trim();
+      const kycStatus = (a.kycStatus || '').toLowerCase().trim();
+
+      if (s === 'rejected' || adminApproval === 'rejected') {
+        workflowStage = 'Territory Rejected';
+      } else if (kycStatus === 'rejected') {
+        workflowStage = 'KYC Rejected';
+      } else if (s === 'pending_kyc' || adminApproval === 'approved') {
+        workflowStage = 'Awaiting KYC Review';
+      } else if (s === 'active' || s === 'approved') {
+        workflowStage = 'Activated';
+      }
+
+      return {
+        ...a,
+        id: idStr,
+        _id: idStr,
+        name: a.name || 'Unnamed Agent',
+        applicantName: a.name || 'Unnamed Agent',
+        level: normLevel,
+        role: a.role || normLevel,
+        roleTitle: `${normLevel.charAt(0).toUpperCase() + normLevel.slice(1)} Agent`,
+        territory: terr,
+        state: terr.state,
+        district: terr.district,
+        division: terr.division,
+        pincode: terr.pincode,
+        jurisdiction,
+        assignedArea,
+        address: a.address || [terr.pincode, terr.division, terr.district, terr.state].filter(Boolean).join(', ') || 'N/A',
+        createdAt: a.createdAt || new Date().toISOString(),
+        registrationDate: a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent',
+        status: a.status || 'pending',
+        adminApprovalStatus: adminApproval || 'pending',
+        kycStatus: a.kycStatus || 'pending_verification',
+        rejectionReason: a.rejectionReason || null,
+        workflowStage,
+        canApprove,
+        documents: a.documents || a.kycDocs || {}
+      };
+    });
+
+    return res.json({ success: true, count: formatted.length, requests: formatted, agents: formatted });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch agent requests', error: error.message });
+  }
+}
+
+async function approveAgent(req, res) {
+  try {
+    const { id } = req.params;
+    const rawAgents = Array.from(db.agents || []);
+    const agent = rawAgents.find(a => String(a._id || a.id) === String(id));
+
+    if (!agent) {
+      return res.status(404).json({ success: false, message: 'Agent request not found' });
+    }
+
+    if (!isRelatedAdminForAgent(req.user, agent)) {
+      const aLevel = normalizeLevel(getAgentLevel(agent));
+      return res.status(403).json({
+        success: false,
+        message: `You do not have administrative authority to approve this ${aLevel} agent. Approval must be performed by the designated authority for this jurisdiction.`
+      });
+    }
+
+    const now = new Date().toISOString();
+    const terr = getAgentTerritory(agent);
+    const approveUpdates = {
+      status: 'pending_kyc',
+      adminApprovalStatus: 'approved',
+      kycStatus: 'pending_verification',
+      adminApprovedBy: req.user.name || req.user.email,
+      adminApprovedById: req.user.id || req.user._id,
+      adminApprovedByRole: req.user.role,
+      adminApprovedAt: now,
+      rejectionReason: null,
+      updatedAt: now
+    };
+    Object.assign(agent, approveUpdates);
+
+    await db.agents.findByIdAndUpdate(agent._id || agent.id, approveUpdates);
+
+    // Queue in db.kycRecords for KYC team
+    if (db.kycRecords) {
+      const agIdStr = String(agent._id || agent.id);
+      const kycId = `KYC-AGT-${agIdStr}`;
+      const existingKyc = await db.kycRecords.findOne({ $or: [{ _id: kycId }, { id: kycId }, { agentId: agIdStr }] });
+      if (!existingKyc) {
+        await db.kycRecords.insertOne({
+          _id: kycId,
+          id: kycId,
+          type: 'Agent',
+          agentId: agIdStr,
+          name: agent.name,
+          category: 'Field Agency Network',
+          role: agent.role || `${getAgentLevel(agent)} Agent`,
+          phone: agent.phone || agent.mobile,
+          email: agent.email,
+          state: terr.state,
+          district: terr.district,
+          division: terr.division,
+          pincode: terr.pincode,
+          status: 'Pending',
+          kycStatus: 'Pending Verification',
+          submittedDate: (agent.createdAt || now).split('T')[0],
+          documents: agent.documents || agent.kycDocs || {},
+          notes: `Agent registration territory-approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team.`,
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+    }
+
+    // Audit log entry
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        action: 'AGENT_TERRITORY_APPROVED_FORWARDED_TO_KYC',
+        adminId: req.user.id || req.user._id,
+        adminName: req.user.name,
+        adminRole: req.user.role,
+        targetUserId: agent._id || agent.id,
+        targetUserName: agent.name,
+        targetUserRole: agent.role,
+        details: `Agent "${agent.name}" (${getAgentLevel(agent)}) territory registration approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team review.`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Registration for ${agent.name} approved by ${req.user.role}. Forwarded to KYC Review queue.`,
+      agent: { ...agent, ...approveUpdates, canApprove: false, workflowStage: 'Awaiting KYC Review' }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to approve agent', error: error.message });
+  }
+}
+
+async function rejectAgent(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const rawAgents = Array.from(db.agents || []);
+    const agent = rawAgents.find(a => String(a._id || a.id) === String(id));
+
+    if (!agent) {
+      return res.status(404).json({ success: false, message: 'Agent request not found' });
+    }
+
+    if (!isRelatedAdminForAgent(req.user, agent)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have administrative authority to reject this agent registration.'
+      });
+    }
+
+    const rejectionReason = (reason || '').trim() || 'Registration credentials or documents did not meet the required criteria.';
+    const now = new Date().toISOString();
+    const rejectUpdates = {
+      status: 'rejected',
+      adminApprovalStatus: 'rejected',
+      kycStatus: 'Rejected',
+      isActive: false,
+      isApproved: false,
+      rejectionReason,
+      adminRejectedBy: req.user.name || req.user.email,
+      adminRejectedById: req.user.id || req.user._id,
+      adminRejectedByRole: req.user.role,
+      adminRejectedAt: now,
+      updatedAt: now
+    };
+    Object.assign(agent, rejectUpdates);
+
+    await db.agents.findByIdAndUpdate(agent._id || agent.id, rejectUpdates);
+
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        action: 'AGENT_REGISTRATION_REJECTED',
+        adminId: req.user.id || req.user._id,
+        adminName: req.user.name,
+        adminRole: req.user.role,
+        targetUserId: agent._id || agent.id,
+        targetUserName: agent.name,
+        details: `Agent "${agent.name}" registration rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Agent registration for ${agent.name} has been rejected.`,
+      agent: { ...agent, ...rejectUpdates, canApprove: false, workflowStage: 'Territory Rejected' }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to reject agent', error: error.message });
+  }
+}
+
 module.exports = {
   getExecutives,
   getSupportTeam,
@@ -753,6 +1099,11 @@ module.exports = {
   getAgentActivities,
   createAgentActivity,
   advanceAgentActivity,
-  getDeliveryPartners
+  getDeliveryPartners,
+  getAgentRequests,
+  approveAgent,
+  rejectAgent,
+  isRelatedAdminForAgent,
+  canAdminViewAgent
 };
 

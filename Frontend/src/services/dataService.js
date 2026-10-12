@@ -237,6 +237,18 @@ export const dataService = {
     const qs = new URLSearchParams(params).toString();
     return apiRequest(`/operations/agents${qs ? `?${qs}` : ''}`);
   },
+  getAgentRequests: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/operations/agents/requests${qs ? `?${qs}` : ''}`);
+  },
+  approveAgent: (id, data = {}) => apiRequest(`/operations/agents/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  rejectAgent: (id, data = {}) => apiRequest(`/operations/agents/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
   getAgentHierarchy: () => apiRequest('/operations/agents/hierarchy'),
   getAgentActivities: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -254,6 +266,12 @@ export const dataService = {
   // Managers & Approvals
   getManagers: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/managers${qs ? `?${qs}` : ''}`);
+  },
+  getManagerRequests: (params = {}) => {
+    const clean = { ...params };
+    if (!clean.status) clean.status = 'pending';
+    const qs = new URLSearchParams(clean).toString();
     return apiRequest(`/managers${qs ? `?${qs}` : ''}`);
   },
   getManagerById: (id) => apiRequest(`/managers/${id}`),

@@ -124,6 +124,10 @@ import { PincodeSettings } from '../pages/pincode-admin/Settings';
 // Manager Pages
 import { ManagerDashboard } from '../pages/manager/Dashboard';
 
+// Onboarding Request Pages
+import { ManagerRequestsPage } from '../pages/requests/ManagerRequestsPage';
+import { AgentRequestsPage } from '../pages/requests/AgentRequestsPage';
+
 // Common Notifications Page
 import NotificationsPage from '../pages/common/Notifications';
 
@@ -197,11 +201,13 @@ export function AppRoutes() {
             <Route path="/state-admin/managers/district" element={<StateManagers level="district" />} />
             <Route path="/state-admin/managers/divisional" element={<StateManagers level="divisional" />} />
             <Route path="/state-admin/managers/pincode" element={<StateManagers level="pincode" />} />
+            <Route path="/state-admin/managers/requests" element={<ManagerRequestsPage />} />
             <Route path="/state-admin/agents" element={<StateAgents level="state" />} />
             <Route path="/state-admin/agents/state" element={<StateAgents level="state" />} />
             <Route path="/state-admin/agents/district" element={<StateAgents level="district" />} />
             <Route path="/state-admin/agents/divisional" element={<StateAgents level="divisional" />} />
             <Route path="/state-admin/agents/pincode" element={<StateAgents level="pincode" />} />
+            <Route path="/state-admin/agents/requests" element={<AgentRequestsPage />} />
             <Route path="/state-admin/agent-payments" element={<StateAgentPayments />} />
             <Route path="/state-admin/kyc" element={<StateKYC />} />
             <Route path="/state-admin/quality-check" element={<StateQualityCheck />} />
@@ -240,10 +246,12 @@ export function AppRoutes() {
             <Route path="/district-admin/managers/district" element={<StateManagers level="district" />} />
             <Route path="/district-admin/managers/divisional" element={<StateManagers level="divisional" />} />
             <Route path="/district-admin/managers/pincode" element={<StateManagers level="pincode" />} />
+            <Route path="/district-admin/managers/requests" element={<ManagerRequestsPage />} />
             <Route path="/district-admin/agents" element={<DistrictAgents level="district" />} />
             <Route path="/district-admin/agents/district" element={<DistrictAgents level="district" />} />
             <Route path="/district-admin/agents/divisional" element={<DistrictAgents level="divisional" />} />
             <Route path="/district-admin/agents/pincode" element={<DistrictAgents level="pincode" />} />
+            <Route path="/district-admin/agents/requests" element={<AgentRequestsPage />} />
             <Route path="/district-admin/agent-payments" element={<DistrictAgentPayments />} />
             <Route path="/district-admin/kyc" element={<DistrictKYC />} />
             <Route path="/district-admin/quality-check" element={<DistrictQualityCheck />} />
@@ -266,9 +274,11 @@ export function AppRoutes() {
             <Route path="/divisional-admin/managers" element={<StateManagers level="divisional" />} />
             <Route path="/divisional-admin/managers/divisional" element={<StateManagers level="divisional" />} />
             <Route path="/divisional-admin/managers/pincode" element={<StateManagers level="pincode" />} />
+            <Route path="/divisional-admin/managers/requests" element={<ManagerRequestsPage />} />
             <Route path="/divisional-admin/agents" element={<DistrictAgents level="divisional" />} />
             <Route path="/divisional-admin/agents/divisional" element={<DistrictAgents level="divisional" />} />
             <Route path="/divisional-admin/agents/pincode" element={<DistrictAgents level="pincode" />} />
+            <Route path="/divisional-admin/agents/requests" element={<AgentRequestsPage />} />
             <Route path="/divisional-admin/agent-payments" element={<DivisionalAgentPayments />} />
             <Route path="/divisional-admin/customers" element={<DivisionalCustomers />} />
             <Route path="/divisional-admin/membership-cards" element={<DivisionalMembershipCards />} />
@@ -315,12 +325,14 @@ export function AppRoutes() {
             <Route path="/pincode-admin/executives" element={<PincodeExecutives />} />
             <Route path="/pincode-admin/support-team" element={<PincodeSupportTeam />} />
             <Route path="/pincode-admin/agents" element={<PincodeAgents />} />
+            <Route path="/pincode-admin/agents/requests" element={<AgentRequestsPage />} />
             <Route path="/pincode-admin/agent-payments" element={<PincodeAgentPayments />} />
             <Route path="/pincode-admin/kyc" element={<PincodeKYC />} />
             <Route path="/pincode-admin/quality-check" element={<PincodeQualityCheck />} />
             <Route path="/pincode-admin/business-reports" element={<PincodeBusinessReports />} />
             <Route path="/pincode-admin/managers" element={<StateManagers level="pincode" />} />
             <Route path="/pincode-admin/managers/pincode" element={<StateManagers level="pincode" />} />
+            <Route path="/pincode-admin/managers/requests" element={<ManagerRequestsPage />} />
             <Route path="/pincode-admin/pincode-manager" element={<Navigate to="/pincode-admin/managers" replace />} />
             <Route path="/pincode-admin/payments" element={<PincodePayments />} />
             <Route path="/pincode-admin/tasks" element={<PincodeTasks />} />
