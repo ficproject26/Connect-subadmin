@@ -8,6 +8,9 @@ router.use(authMiddleware);
 // GET /api/managers - List lower level managers or all scoped managers
 router.get('/', managerDirectoryController.getLowerLevelManagers);
 
+// GET /api/managers/requests - Centralized manager registration requests across all levels
+router.get('/requests', managerDirectoryController.getManagerRequests);
+
 // POST /api/managers - Add new manager
 router.post('/', managerDirectoryController.addManager);
 

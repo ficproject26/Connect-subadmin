@@ -307,7 +307,7 @@ export function StateManagers({ level }) {
       const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || queryDivision);
       const reqPincode = locking.pincodeLocked ? locking.defaultPincode : (selectedFilterPincode || queryPincode);
 
-      const qParams = { level: activeLevel };
+      const qParams = { level: activeLevel, status: 'active' };
       if (reqState) qParams.state = reqState;
       if (reqDistrict) qParams.district = reqDistrict;
       if (reqDivision) qParams.division = reqDivision;
@@ -315,7 +315,7 @@ export function StateManagers({ level }) {
 
       const [res, allRes] = await Promise.all([
         dataService.getManagers(qParams),
-        dataService.getManagers()
+        dataService.getManagers({ status: 'active' })
       ]);
 
       if (res?.success && Array.isArray(res.subordinates || res.data || res.managers)) {
@@ -344,8 +344,9 @@ export function StateManagers({ level }) {
   }, [activeLevel, location.search, locking]);
 
   // Filtered managers based on status tab and hierarchy query
+  // Manager Directory strictly shows ONLY approved and activated managers.
   const filteredManagers = useMemo(() => {
-    let list = managers;
+    let list = (managers || []).filter(m => (m.status || '').toLowerCase() === 'active');
     const effectiveState = locking.stateLocked ? locking.defaultState : (selectedFilterState || queryState);
     const effectiveDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || queryDistrict);
     const effectiveDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || queryDivision);
@@ -363,18 +364,12 @@ export function StateManagers({ level }) {
     if (effectivePincode) {
       list = list.filter(m => safeString(m.pincode || m.assignedPincode || m.pincodeCode) === safeString(effectivePincode));
     }
-    if (statusFilter === 'pending') {
-      return list.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval');
-    }
-    if (statusFilter === 'active') {
-      return list.filter(m => m.status === 'active');
-    }
     return list;
-  }, [managers, statusFilter, queryState, queryDistrict, queryDivision, queryPincode, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, locking]);
+  }, [managers, queryState, queryDistrict, queryDivision, queryPincode, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, locking]);
 
-  const totalCount = managers.length;
-  const pendingCount = managers.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval').length;
-  const activeCount = managers.filter(m => m.status === 'active').length;
+  const activeCount = managers.filter(m => (m.status || '').toLowerCase() === 'active').length;
+  const totalCount = activeCount;
+  const pendingCount = 0;
 
   const handleOpenModal = (manager) => {
     setSelectedManager(manager);
@@ -1980,6 +1975,7 @@ export function StateManagers({ level }) {
     const sId = String(state.id || state._id || '').toLowerCase().trim();
     const sName = (state.name || '').toLowerCase().trim();
     return allManagers.filter(m => 
+      (m.status || '').toLowerCase() === 'active' &&
       m.role === 'state_manager' && (
         (sId && String(m.stateId || m.assignedStateId || '').toLowerCase().trim() === sId) ||
         (sName && (
@@ -1996,6 +1992,7 @@ export function StateManagers({ level }) {
     const dName = (district.name || '').toLowerCase().trim();
     const sName = (state?.name || '').toLowerCase().trim();
     return allManagers.filter(m => 
+      (m.status || '').toLowerCase() === 'active' &&
       m.role === 'district_manager' && (
         (dId && String(m.districtId || m.assignedDistrictId || '').toLowerCase().trim() === dId) ||
         (dName && (
@@ -2016,6 +2013,7 @@ export function StateManagers({ level }) {
     const vId = String(division.id || division._id || division.divisionId || '').toLowerCase().trim();
     const vName = (division.name || '').toLowerCase().trim();
     return allManagers.filter(m => 
+      (m.status || '').toLowerCase() === 'active' &&
       m.role === 'division_manager' && (
         (vId && String(m.divisionId || m.assignedDivisionId || '').toLowerCase().trim() === vId) ||
         (vName && (
@@ -2031,6 +2029,7 @@ export function StateManagers({ level }) {
     const pCode = String(pin.code || pin.pincode || pin || '').trim();
     const pId = String(pin.id || pin._id || '').trim();
     return allManagers.filter(m => 
+      (m.status || '').toLowerCase() === 'active' &&
       m.role === 'pincode_manager' && (
         (pId && String(m.pincodeId || m.assignedPincodeId || '').trim() === pId) ||
         (pCode && (
@@ -2055,34 +2054,15 @@ export function StateManagers({ level }) {
         <span>Click any state to expand. Navigate: State (Max 8) → District (Max 2) → Division (Max 2) → Pincode (Max 2)</span>
       </div>
 
-      {/* Metric Cards */}
+      {/* Metric Cards - Strictly excludes pending & unapproved requests */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total {config.title}</span>
             <UserCog className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">{allManagers.length || totalCount}</div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">{activeCount}</div>
           <div className="text-[10px] text-slate-500 font-medium mt-0.5">Across territory network</div>
-        </div>
-
-        <div className={`p-3.5 rounded-2xl border shadow-sm transition ${
-          pendingCount > 0
-            ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60'
-            : 'bg-white dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800/80'
-        }`}>
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-semibold ${pendingCount > 0 ? 'text-amber-700 dark:text-amber-300 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
-              Pending Approvals
-            </span>
-            <AlertCircle className={`w-4 h-4 ${pendingCount > 0 ? 'text-amber-600 animate-pulse' : 'text-slate-400'}`} />
-          </div>
-          <div className={`text-lg font-bold mt-1.5 ${pendingCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-white'}`}>
-            {pendingCount}
-          </div>
-          <div className={`text-[10px] font-medium mt-0.5 ${pendingCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
-            {pendingCount > 0 ? 'Awaiting your admin review' : 'All registrations verified'}
-          </div>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
@@ -2096,6 +2076,15 @@ export function StateManagers({ level }) {
 
         <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
           <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Verified Deployments</span>
+            <Award className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">{activeCount}</div>
+          <div className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-0.5">Field operations verified</div>
+        </div>
+
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
+          <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Territory Coverage</span>
             <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
@@ -2103,32 +2092,6 @@ export function StateManagers({ level }) {
           <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">Dynamic DB synchronization</div>
         </div>
       </div>
-
-      {/* Pending Approvals Alert Banner */}
-      {pendingCount > 0 && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 border border-amber-200/80 dark:border-amber-800/60 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 shrink-0">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                {pendingCount} New Manager Registration{pendingCount > 1 ? 's' : ''} Awaiting Admin Approval
-              </h4>
-              <p className="text-[11px] text-amber-700/90 dark:text-amber-400 mt-0.5">
-                Review candidate credentials and accept registration to activate their manager account.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setViewTab('requests')}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-900 bg-amber-200 hover:bg-amber-300 dark:bg-amber-800 dark:text-amber-100 dark:hover:bg-amber-700 transition self-start sm:self-auto cursor-pointer"
-          >
-            Review Pending Requests
-          </button>
-        </div>
-      )}
 
       {/* VIEW MODE 1: HIERARCHY ACCORDION VIEW */}
       {viewTab === 'hierarchy' && (
@@ -2161,8 +2124,7 @@ export function StateManagers({ level }) {
                   ))
                 );
               });
-              const stateActiveCount = allStateBranchManagers.filter(m => m.status === 'active').length;
-              const statePendingCount = allStateBranchManagers.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval').length;
+              const stateActiveCount = allStateBranchManagers.filter(m => (m.status || '').toLowerCase() === 'active').length;
 
               return (
                 <div
@@ -2186,7 +2148,7 @@ export function StateManagers({ level }) {
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                          {stateActiveCount} active · {statePendingCount} pending
+                          {stateActiveCount} active manager{stateActiveCount === 1 ? '' : 's'}
                         </div>
                       </div>
                     </div>
@@ -2825,8 +2787,7 @@ export function StateManagers({ level }) {
             loading={loading}
             onRefresh={loadData}
             filterOptions={[
-              { label: `All Managers (${totalCount})`, value: 'all' },
-              { label: `Pending Approvals (${pendingCount})`, value: 'pending' },
+              { label: `All Managers (${activeCount})`, value: 'all' },
               { label: `Active Managers (${activeCount})`, value: 'active' }
             ]}
             activeFilter={statusFilter}

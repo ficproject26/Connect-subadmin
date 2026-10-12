@@ -269,10 +269,8 @@ export const dataService = {
     return apiRequest(`/managers${qs ? `?${qs}` : ''}`);
   },
   getManagerRequests: (params = {}) => {
-    const clean = { ...params };
-    if (!clean.status) clean.status = 'pending';
-    const qs = new URLSearchParams(clean).toString();
-    return apiRequest(`/managers${qs ? `?${qs}` : ''}`);
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/managers/requests${qs ? `?${qs}` : ''}`);
   },
   getManagerById: (id) => apiRequest(`/managers/${id}`),
   approveManager: (id, data = {}) => apiRequest(`/managers/${id}/approve`, {

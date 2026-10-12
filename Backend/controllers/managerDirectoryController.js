@@ -532,18 +532,22 @@ const getLowerLevelManagers = async (req, res) => {
     rawSubordinates = rawSubordinates.filter(isAssignedManager);
     rawPeers = rawPeers.filter(isAssignedManager);
 
-    // Optional query parameter filtering: status (active, under_review, pending, rejected)
-    if (status) {
-      const statusLower = status.toLowerCase();
-      rawSubordinates = rawSubordinates.filter(m => {
-        const s = (m.status || 'active').toLowerCase();
-        if (statusLower === 'pending' || statusLower === 'under_review') {
-          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval';
-        }
-        return s === statusLower;
-      });
-      rawPeers = rawPeers.filter(m => (m.status || 'active').toLowerCase() === statusLower);
-    }
+    // Manager Directory: Strictly displays ONLY approved and activated managers.
+    // Applications that are pending, under-review, awaiting KYC, or rejected belong exclusively in Manager Requests.
+    const requestedStatus = (status || 'active').toLowerCase().trim();
+    const isApprovedAndActive = (m) => {
+      const s = (m.status || '').toLowerCase();
+      // Unapproved, pending, under_review, pending_kyc, or rejected records belong exclusively in Manager Requests.
+      if (s === 'pending' || s === 'under_review' || s === 'pending_admin_approval' || s === 'pending_kyc' || s === 'rejected') {
+        return false;
+      }
+      if (requestedStatus === 'suspended') return s === 'suspended';
+      if (requestedStatus === 'inactive') return s === 'inactive';
+      return s === 'active';
+    };
+
+    rawSubordinates = rawSubordinates.filter(isApprovedAndActive);
+    rawPeers = rawPeers.filter(isApprovedAndActive);
 
     // Optional search filter
     if (search) {
@@ -566,8 +570,7 @@ const getLowerLevelManagers = async (req, res) => {
     const subordinates = await Promise.all(rawSubordinates.map(m => populateManager(m, 'subordinate', user)));
     const all = roleLower.includes('admin') ? subordinates : [...peers, ...subordinates];
 
-    const pendingCount = subordinates.filter(m => m.status === 'under_review' || m.status === 'pending' || m.status === 'pending_admin_approval').length;
-    const activeCount = subordinates.filter(m => m.status === 'active').length;
+    const activeCount = subordinates.filter(m => (m.status || '').toLowerCase() === 'active').length;
 
     res.json({
       success: true,
@@ -578,7 +581,7 @@ const getLowerLevelManagers = async (req, res) => {
       all,
       stats: {
         total: all.length,
-        pendingApprovals: pendingCount,
+        pendingApprovals: 0, // Directory excludes pending requests from counts
         activeManagers: activeCount,
         peersCount: peers.length,
         subordinatesCount: subordinates.length,
@@ -588,6 +591,149 @@ const getLowerLevelManagers = async (req, res) => {
   } catch (err) {
     console.error('Get manager directory error:', err);
     res.status(500).json({ success: false, message: 'Failed to retrieve manager directory', error: err.message });
+  }
+};
+
+// GET /api/managers/requests - Centralized manager onboarding requests across all levels
+const getManagerRequests = async (req, res) => {
+  try {
+    const user = req.user;
+    const allUsersList = Array.from(db.users || []);
+    const allManagersList = Array.from(db.managers || []);
+
+    const combinedManagersMap = new Map();
+    allUsersList.filter(u => (u.role || '').toLowerCase().includes('manager')).forEach(u => {
+      const idKey = String(u._id || u.id || u.email || '').trim().toLowerCase();
+      if (idKey) combinedManagersMap.set(idKey, u);
+    });
+    allManagersList.forEach(m => {
+      const idKey = String(m._id || m.id || m.email || '').trim().toLowerCase();
+      if (idKey && !combinedManagersMap.has(idKey)) {
+        combinedManagersMap.set(idKey, {
+          ...m,
+          role: m.role || 'pincode_manager',
+          status: m.status || 'pending'
+        });
+      }
+    });
+
+    const allCandidateManagers = Array.from(combinedManagersMap.values());
+    const rawRole = user.role || '';
+    const roleLower = rawRole.toLowerCase().replace(/_/g, ' ');
+
+    let scopedRequests = allCandidateManagers;
+    if (roleLower.includes('admin')) {
+      scopedRequests = scopedRequests.filter(u => canAdminManage(user, u));
+    } else {
+      scopedRequests = [];
+    }
+
+    const { level, status, search, state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = req.query;
+
+    if (level && level.toLowerCase() !== 'all') {
+      const levelMap = {
+        'state': 'state_manager',
+        'district': 'district_manager',
+        'division': 'division_manager',
+        'divisional': 'division_manager',
+        'pincode': 'pincode_manager',
+        '1': 'state_manager',
+        '2': 'district_manager',
+        '3': 'division_manager',
+        '4': 'pincode_manager'
+      };
+      const targetRole = levelMap[level.toLowerCase()] || level;
+      scopedRequests = scopedRequests.filter(m => m.role === targetRole || String(m.level) === String(level));
+    }
+
+    if (state || stateId) {
+      scopedRequests = scopedRequests.filter(m => {
+        if (stateId && String(m.stateId || m.assignedStateId || '').toLowerCase() === String(stateId).toLowerCase()) return true;
+        if (state && (
+          (m.state && m.state.trim().toLowerCase() === state.trim().toLowerCase()) ||
+          (m.assignedState && m.assignedState.trim().toLowerCase() === state.trim().toLowerCase())
+        )) return true;
+        return false;
+      });
+    }
+
+    if (district || districtId) {
+      scopedRequests = scopedRequests.filter(m => {
+        if (districtId && String(m.districtId || m.assignedDistrictId || '').toLowerCase() === String(districtId).toLowerCase()) return true;
+        if (district && (
+          (m.district && m.district.trim().toLowerCase() === district.trim().toLowerCase()) ||
+          (m.assignedDistrict && m.assignedDistrict.trim().toLowerCase() === district.trim().toLowerCase())
+        )) return true;
+        return false;
+      });
+    }
+
+    if (division || divisionId) {
+      scopedRequests = scopedRequests.filter(m => {
+        if (divisionId && String(m.divisionId || m.assignedDivisionId || '').toLowerCase() === String(divisionId).toLowerCase()) return true;
+        if (division && (
+          (m.division && m.division.trim().toLowerCase() === division.trim().toLowerCase()) ||
+          (m.assignedDivision && m.assignedDivision.trim().toLowerCase() === division.trim().toLowerCase())
+        )) return true;
+        return false;
+      });
+    }
+
+    if (pincode || pincodeId) {
+      scopedRequests = scopedRequests.filter(m => {
+        if (pincodeId && String(m.pincodeId || m.assignedPincodeId || '').toLowerCase() === String(pincodeId).toLowerCase()) return true;
+        if (pincode && (
+          String(m.pincode || '').trim() === String(pincode).trim() ||
+          String(m.assignedPincode || '').trim() === String(pincode).trim()
+        )) return true;
+        return false;
+      });
+    }
+
+    // Status filtering for requests: All, Pending, Approved, Rejected
+    if (status && status.toLowerCase() !== 'all') {
+      const statusLower = status.toLowerCase();
+      scopedRequests = scopedRequests.filter(m => {
+        const s = (m.status || 'pending').toLowerCase();
+        if (statusLower === 'pending' || statusLower === 'under_review') {
+          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval';
+        }
+        if (statusLower === 'approved') {
+          return s === 'pending_kyc' || s === 'approved' || s === 'active';
+        }
+        if (statusLower === 'rejected') {
+          return s === 'rejected';
+        }
+        return s === statusLower;
+      });
+    }
+
+    if (search) {
+      const term = search.toLowerCase();
+      scopedRequests = scopedRequests.filter(m => (
+        (m.name && m.name.toLowerCase().includes(term)) ||
+        (m.email && m.email.toLowerCase().includes(term)) ||
+        (m.phone && m.phone.includes(term)) ||
+        (m.mobile && m.mobile.includes(term)) ||
+        (m.state && m.state.toLowerCase().includes(term)) ||
+        (m.district && m.district.toLowerCase().includes(term)) ||
+        (m.division && m.division.toLowerCase().includes(term)) ||
+        (m.pincode && String(m.pincode).includes(term))
+      ));
+    }
+
+    const populated = await Promise.all(scopedRequests.map(m => populateManager(m, 'subordinate', user)));
+
+    return res.json({
+      success: true,
+      count: populated.length,
+      requests: populated,
+      managers: populated,
+      all: populated
+    });
+  } catch (err) {
+    console.error('Get manager requests error:', err);
+    res.status(500).json({ success: false, message: 'Failed to retrieve manager requests', error: err.message });
   }
 };
 
@@ -1463,6 +1609,7 @@ const updateManagerDocuments = async (req, res) => {
 
 module.exports = {
   getLowerLevelManagers,
+  getManagerRequests,
   getManagerById,
   approveManager,
   rejectManager,

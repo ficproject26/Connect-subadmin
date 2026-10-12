@@ -90,10 +90,17 @@ export function ManagerRequestsPage() {
       if (reqDivision) params.division = reqDivision;
       if (reqPincode) params.pincode = reqPincode;
 
-      const res = await dataService.getManagers(params);
+      if (statusFilter && statusFilter !== 'All') {
+        params.status = statusFilter.toLowerCase();
+      }
+      if (selectedRoleLevel && selectedRoleLevel !== 'All') {
+        params.level = selectedRoleLevel;
+      }
+
+      const res = await dataService.getManagerRequests(params);
       if (res && res.success) {
-        // Collect all manager records
-        const allList = res.all || res.data || res.subordinates || [];
+        // Collect all manager requests
+        const allList = res.requests || res.all || res.managers || res.data || [];
         setRequests(allList);
       } else {
         setRequests([]);
@@ -105,7 +112,7 @@ export function ManagerRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode]);
+  }, [locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, statusFilter, selectedRoleLevel]);
 
   useEffect(() => {
     loadRequests();
