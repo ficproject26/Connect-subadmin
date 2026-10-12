@@ -161,6 +161,32 @@ const canAdminManage = (admin, manager) => {
   return false;
 };
 
+const formatAddressString = (addr, fallback = 'Not provided') => {
+  if (!addr) return fallback;
+  if (typeof addr === 'string') return addr.trim() || fallback;
+  if (typeof addr === 'object') {
+    if (typeof addr.fullAddress === 'string' && addr.fullAddress.trim()) {
+      return addr.fullAddress.trim();
+    }
+    const parts = [
+      addr.buildingNo || addr.doorNo || addr.doorNumber || addr.houseNumber,
+      addr.street || addr.streetName || addr.streetAddress,
+      addr.locality || addr.area,
+      addr.village || addr.town || addr.city,
+      addr.postOffice,
+      addr.taluk || addr.division,
+      addr.district,
+      addr.state,
+      addr.pincode || addr.pinCode || addr.postalCode
+    ].filter(Boolean).map(v => typeof v === 'string' ? v.trim() : String(v)).filter(Boolean);
+
+    if (parts.length > 0) return parts.join(', ');
+    const vals = Object.values(addr).filter(v => (typeof v === 'string' || typeof v === 'number') && String(v).trim()).map(v => String(v).trim());
+    if (vals.length > 0) return vals.join(', ');
+  }
+  return String(addr || fallback);
+};
+
 const populateManager = async (m, relation, user) => {
   const [state, district, division, pincode] = await Promise.all([
     m.stateId ? db.states.findById(m.stateId) : null,
@@ -228,8 +254,9 @@ const populateManager = async (m, relation, user) => {
     adminRejectedAt: m.adminRejectedAt || null,
     dob: m.dob || null,
     gender: m.gender || null,
-    address: m.address || null,
-    doorNumber: m.doorNumber || m.doorNo || m.houseNumber || m.address || null,
+    rawAddress: m.address || null,
+    address: formatAddressString(m.address, null),
+    doorNumber: m.doorNumber || m.doorNo || m.houseNumber || null,
     street: m.street || m.streetName || m.doorStreet || null,
     area: m.area || m.locality || null,
     village: m.village || m.town || m.city || null,
@@ -237,7 +264,7 @@ const populateManager = async (m, relation, user) => {
     district: resolvedDistrict || m.district || m.assignedDistrict || null,
     state: resolvedState || m.state || m.assignedState || 'Tamil Nadu',
     pincode: resolvedPincode || m.pincode || m.assignedPincode || null,
-    fullAddress: m.fullAddress || [m.address, m.village, resolvedDivision || m.division, resolvedDistrict || m.district, resolvedState || m.state, resolvedPincode || m.pincode].filter(Boolean).join(', '),
+    fullAddress: formatAddressString(m.fullAddress || m.address, [m.village, resolvedDivision || m.division, resolvedDistrict || m.district, resolvedState || m.state, resolvedPincode || m.pincode].filter(Boolean).join(', ')),
     aadharNumber: m.aadharNumber || m.documents?.aadharNumber || m.kyc?.aadhaarNumber || null,
     panNumber: m.panNumber || m.documents?.panNumber || m.kyc?.panNumber || null,
     bankDetails: m.bankDetails || {

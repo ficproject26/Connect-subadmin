@@ -6,7 +6,7 @@ import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { AgentApprovalModal } from '../../components/AgentApprovalModal';
-import { getTerritoryLocking, safeString, safeLowerCase } from '../../utils/territoryHelper';
+import { getTerritoryLocking, safeString, safeLowerCase, formatAddress } from '../../utils/territoryHelper';
 import {
   UserPlus,
   UserCheck,
@@ -336,7 +336,7 @@ export function AgentRequestsPage() {
       header: 'Address',
       key: 'address',
       render: (row) => {
-        const fullAddr = row.address || row.assignedArea || 'Not provided';
+        const fullAddr = formatAddress(row.address || row.assignedArea);
         return (
           <div className="text-xs text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title={fullAddr}>
             {fullAddr}

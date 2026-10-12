@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import { StatusBadge } from './Badge';
 import { dataService } from '../services/dataService';
 import { useAuth } from '../context/AuthContext';
+import { formatAddress } from '../utils/territoryHelper';
 import {
   UserPlus,
   ShieldCheck,
@@ -367,7 +368,7 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
 
             <div className="mt-3 text-xs text-slate-600 dark:text-slate-400 flex items-start gap-2 bg-white/60 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-700/50">
               <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">Address:</span>
-              <span>{activeAgent.address || activeAgent.assignedArea || 'Not provided'}</span>
+              <span>{formatAddress(activeAgent.address || activeAgent.assignedArea)}</span>
             </div>
           </div>
 

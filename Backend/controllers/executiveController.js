@@ -107,6 +107,32 @@ function divisionMatches(div1, div2) {
   return normalizeDivision(div1) === normalizeDivision(div2);
 }
 
+function formatAddressString(addr, fallback = 'N/A') {
+  if (!addr) return fallback;
+  if (typeof addr === 'string') return addr.trim() || fallback;
+  if (typeof addr === 'object') {
+    if (typeof addr.fullAddress === 'string' && addr.fullAddress.trim()) {
+      return addr.fullAddress.trim();
+    }
+    const parts = [
+      addr.buildingNo || addr.doorNo || addr.doorNumber || addr.houseNumber,
+      addr.street || addr.streetName || addr.streetAddress,
+      addr.locality || addr.area,
+      addr.village || addr.town || addr.city,
+      addr.postOffice,
+      addr.taluk || addr.division,
+      addr.district,
+      addr.state,
+      addr.pincode || addr.pinCode || addr.postalCode
+    ].filter(Boolean).map(v => typeof v === 'string' ? v.trim() : String(v)).filter(Boolean);
+
+    if (parts.length > 0) return parts.join(', ');
+    const vals = Object.values(addr).filter(v => (typeof v === 'string' || typeof v === 'number') && String(v).trim()).map(v => String(v).trim());
+    if (vals.length > 0) return vals.join(', ');
+  }
+  return String(addr || fallback);
+}
+
 /**
  * Get the agent's territory as a flat object.
  * Resolves from top-level fields (state, district, division, pincode)
@@ -918,7 +944,8 @@ async function getAgentRequests(req, res) {
         pincode: terr.pincode,
         jurisdiction,
         assignedArea,
-        address: a.address || [terr.pincode, terr.division, terr.district, terr.state].filter(Boolean).join(', ') || 'N/A',
+        rawAddress: a.address || null,
+        address: formatAddressString(a.address, [terr.pincode, terr.division, terr.district, terr.state].filter(Boolean).join(', ') || 'N/A'),
         createdAt: a.createdAt || new Date().toISOString(),
         registrationDate: a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent',
         status: a.status || 'pending',

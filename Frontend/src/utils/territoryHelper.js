@@ -182,3 +182,38 @@ export function getTerritoryLocking(user) {
     defaultPincode: ''
   };
 }
+
+/**
+ * Safely format address into a clean display string whether it's a string, null, or structured object
+ * e.g. { buildingNo, street, locality, postOffice, taluk, district, state, pincode }
+ */
+export function formatAddress(addr, fallback = 'Not provided') {
+  if (!addr) return fallback;
+  if (typeof addr === 'string') {
+    const trimmed = addr.trim();
+    return trimmed || fallback;
+  }
+  if (typeof addr === 'object') {
+    if (typeof addr.fullAddress === 'string' && addr.fullAddress.trim()) {
+      return addr.fullAddress.trim();
+    }
+    const parts = [
+      addr.buildingNo || addr.doorNo || addr.doorNumber || addr.houseNumber,
+      addr.street || addr.streetName || addr.streetAddress,
+      addr.locality || addr.area,
+      addr.village || addr.town || addr.city,
+      addr.postOffice,
+      addr.taluk || addr.division,
+      addr.district,
+      addr.state,
+      addr.pincode || addr.pinCode || addr.postalCode
+    ].filter(Boolean).map(v => typeof v === 'string' ? v.trim() : String(v)).filter(Boolean);
+
+    if (parts.length > 0) return parts.join(', ');
+
+    // Fallback: collect all string/number properties
+    const vals = Object.values(addr).filter(v => (typeof v === 'string' || typeof v === 'number') && String(v).trim()).map(v => String(v).trim());
+    if (vals.length > 0) return vals.join(', ');
+  }
+  return String(addr || fallback);
+}
