@@ -41,7 +41,9 @@ class Collection extends Array {
       documents: 0,
       aadhaarImage: 0,
       panImage: 0,
-      selfie: 0
+      selfie: 0,
+      educationalCertificates: 0,
+      bankProof: 0
     } : {};
     const docs = await this._mongoCol.find({}, { projection }).toArray();
     this.length = 0;
@@ -57,8 +59,8 @@ class Collection extends Array {
   async reloadFromMongo(force = false) {
     if (this._mongoCol) {
       const now = Date.now();
-      // Throttle reloads to at most once every 60 seconds per collection to eliminate redundant network roundtrips
-      if (!force && this._lastReload && (now - this._lastReload < 60000)) {
+      // Throttle reloads to at most once every 5 seconds per collection to keep Atlas load low while staying fresh
+      if (!force && this._lastReload && (now - this._lastReload < 5000)) {
         return Array.from(this);
       }
       this._lastReload = now;
@@ -68,7 +70,9 @@ class Collection extends Array {
         documents: 0,
         aadhaarImage: 0,
         panImage: 0,
-        selfie: 0
+        selfie: 0,
+        educationalCertificates: 0,
+        bankProof: 0
       } : {};
       const docs = await this._mongoCol.find({}, { projection }).toArray();
       this.length = 0;
@@ -123,8 +127,26 @@ class Collection extends Array {
     }
 
     const cleanQuery = sanitizeQuery(queryOrFn || {});
+    if (this._isReady && this.length > 0) {
+      return Array.from(this).filter(item => {
+        for (const [key, val] of Object.entries(cleanQuery)) {
+          if (val === undefined || val === null) continue;
+          if (item[key] !== val) return false;
+        }
+        return true;
+      });
+    }
+
     if (this._mongoCol) {
-      return await this._mongoCol.find(cleanQuery).toArray();
+      const projection = (this.name === 'users' || this.name === 'agents') ? {
+        kyc: 0,
+        kycDocs: 0,
+        documents: 0,
+        aadhaarImage: 0,
+        panImage: 0,
+        selfie: 0
+      } : {};
+      return await this._mongoCol.find(cleanQuery, { projection }).toArray();
     }
 
     return Array.from(this).filter(item => {
@@ -141,8 +163,26 @@ class Collection extends Array {
       return Array.from(this).find(query) || null;
     }
     const cleanQuery = sanitizeQuery(query);
+    if (this._isReady && this.length > 0) {
+      return Array.from(this).find(item => {
+        for (const [key, val] of Object.entries(cleanQuery)) {
+          if (item[key] !== val) return false;
+        }
+        return true;
+      }) || null;
+    }
     if (this._mongoCol) {
-      return await this._mongoCol.findOne(cleanQuery);
+      const projection = (this.name === 'users' || this.name === 'agents') ? {
+        kyc: 0,
+        kycDocs: 0,
+        documents: 0,
+        aadhaarImage: 0,
+        panImage: 0,
+        selfie: 0,
+        educationalCertificates: 0,
+        bankProof: 0
+      } : {};
+      return await this._mongoCol.findOne(cleanQuery, { projection });
     }
     return Array.from(this).find(item => {
       for (const [key, val] of Object.entries(cleanQuery)) {
@@ -164,9 +204,6 @@ class Collection extends Array {
   }
 
   async insertOne(doc) {
-    if (!this._mongoCol) {
-      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
-    }
     const genId = doc._id ? String(doc._id) : (doc.id ? String(doc.id) : uuidv4());
     const newDoc = {
       _id: genId,
@@ -178,14 +215,16 @@ class Collection extends Array {
     newDoc._id = String(newDoc._id);
     newDoc.id = String(newDoc.id);
 
-    // Persist to MongoDB as single source of truth
-    await this._mongoCol.updateOne(
-      { $or: [{ _id: newDoc._id }, { id: newDoc.id }] },
-      { $set: newDoc },
-      { upsert: true }
-    );
+    // Persist to MongoDB as single source of truth if connected
+    if (this._mongoCol) {
+      await this._mongoCol.updateOne(
+        { $or: [{ _id: newDoc._id }, { id: newDoc.id }] },
+        { $set: newDoc },
+        { upsert: true }
+      );
+    }
 
-    // Update in-memory mirror only after MongoDB write succeeds
+    // Update in-memory mirror
     const existingIdx = this.findIndex(i => String(i._id) === newDoc._id || String(i.id) === newDoc.id);
     if (existingIdx >= 0) {
       this[existingIdx] = newDoc;
@@ -213,9 +252,6 @@ class Collection extends Array {
   }
 
   async insertMany(docs) {
-    if (!this._mongoCol) {
-      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
-    }
     if (!docs || docs.length === 0) return [];
     const newDocs = docs.map(doc => {
       const generated = doc._id ? String(doc._id) : (doc.id ? String(doc.id) : uuidv4());
@@ -228,13 +264,15 @@ class Collection extends Array {
       };
     });
 
-    await Promise.all(newDocs.map(d =>
-      this._mongoCol.updateOne(
-        { $or: [{ _id: d._id }, { id: d.id }] },
-        { $set: d },
-        { upsert: true }
-      )
-    ));
+    if (this._mongoCol) {
+      await Promise.all(newDocs.map(d =>
+        this._mongoCol.updateOne(
+          { $or: [{ _id: d._id }, { id: d.id }] },
+          { $set: d },
+          { upsert: true }
+        )
+      ));
+    }
 
     super.push(...newDocs);
 
@@ -250,35 +288,39 @@ class Collection extends Array {
   }
 
   async updateOne(query, update) {
-    if (!this._mongoCol) {
-      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
-    }
     const cleanQuery = sanitizeQuery(query);
     const patch = update.$set ? update.$set : update;
     const updatedAt = new Date().toISOString();
 
-    await this._mongoCol.updateOne(cleanQuery, { $set: { ...patch, updatedAt } });
-    const updated = await this._mongoCol.findOne(cleanQuery);
+    let updated = null;
+    if (this._mongoCol) {
+      await this._mongoCol.updateOne(cleanQuery, { $set: { ...patch, updatedAt } });
+      updated = await this._mongoCol.findOne(cleanQuery);
+    }
+
+    const index = Array.from(this).findIndex(item => {
+      for (const [key, val] of Object.entries(cleanQuery)) {
+        if (item[key] !== val) return false;
+      }
+      return true;
+    });
 
     if (updated) {
-      const index = Array.from(this).findIndex(item => {
-        for (const [key, val] of Object.entries(query)) {
-          if (item[key] !== val) return false;
-        }
-        return true;
-      });
       if (index !== -1) {
         this[index] = updated;
       } else {
         super.push(updated);
       }
+    } else if (index !== -1) {
+      updated = { ...this[index], ...patch, updatedAt };
+      this[index] = updated;
+    }
 
-      if (this._isReady) {
-        eventPublisher.publishEntityEvent(this.name, 'updated', updated, updated._id || updated.id).catch(() => {});
-        if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
-          if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
-          eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
-        }
+    if (updated && this._isReady) {
+      eventPublisher.publishEntityEvent(this.name, 'updated', updated, updated._id || updated.id).catch(() => {});
+      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
       }
     }
 
@@ -286,31 +328,34 @@ class Collection extends Array {
   }
 
   async findByIdAndUpdate(id, update) {
-    if (!this._mongoCol) {
-      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
-    }
     const strId = String(id);
-    const filter = { $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }] };
     const patch = update.$set ? update.$set : update;
     const updatedAt = new Date().toISOString();
 
-    await this._mongoCol.updateOne(filter, { $set: { ...patch, updatedAt } });
-    const updated = await this._mongoCol.findOne(filter);
+    let updated = null;
+    if (this._mongoCol) {
+      const filter = { $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }] };
+      await this._mongoCol.updateOne(filter, { $set: { ...patch, updatedAt } });
+      updated = await this._mongoCol.findOne(filter);
+    }
 
+    const index = Array.from(this).findIndex(item => String(item._id || item.id) === strId);
     if (updated) {
-      const index = Array.from(this).findIndex(item => String(item._id || item.id) === strId);
       if (index !== -1) {
         this[index] = updated;
       } else {
         super.push(updated);
       }
+    } else if (index !== -1) {
+      updated = { ...this[index], ...patch, updatedAt };
+      this[index] = updated;
+    }
 
-      if (this._isReady) {
-        eventPublisher.publishEntityEvent(this.name, 'updated', updated, strId).catch(() => {});
-        if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
-          if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
-          eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
-        }
+    if (updated && this._isReady) {
+      eventPublisher.publishEntityEvent(this.name, 'updated', updated, strId).catch(() => {});
+      if (['states', 'districts', 'divisions', 'pincodes'].includes(this.name)) {
+        if (typeof syncHierarchyFromDatabase === 'function') syncHierarchyFromDatabase();
+        eventPublisher.publishEntityEvent('territory', 'updated', { timestamp: new Date().toISOString() }).catch(() => {});
       }
     }
 
@@ -325,14 +370,15 @@ class Collection extends Array {
   }
 
   async deleteOne(query) {
-    if (!this._mongoCol) {
-      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
-    }
     const cleanQuery = sanitizeQuery(query);
-    const res = await this._mongoCol.deleteOne(cleanQuery);
+    let deletedCount = 0;
+    if (this._mongoCol) {
+      const res = await this._mongoCol.deleteOne(cleanQuery);
+      deletedCount = res.deletedCount || 0;
+    }
 
     const index = Array.from(this).findIndex(item => {
-      for (const [key, val] of Object.entries(query)) {
+      for (const [key, val] of Object.entries(cleanQuery)) {
         if (item[key] !== val) return false;
       }
       return true;
@@ -340,6 +386,7 @@ class Collection extends Array {
 
     if (index !== -1) {
       this.splice(index, 1);
+      deletedCount = 1;
     }
 
     if (this._isReady) {
@@ -351,7 +398,7 @@ class Collection extends Array {
       }
     }
 
-    return { deletedCount: res.deletedCount || (index !== -1 ? 1 : 0) };
+    return { deletedCount };
   }
 
   async delete(query) {
@@ -359,13 +406,25 @@ class Collection extends Array {
   }
 
   async deleteMany(query) {
-    if (!this._mongoCol) {
-      throw new Error(`MongoDB collection '${this.mongoName}' is not connected.`);
-    }
     const cleanQuery = sanitizeQuery(query);
-    const res = await this._mongoCol.deleteMany(cleanQuery);
-    await this.reloadFromMongo();
-    return { deletedCount: res.deletedCount };
+    let deletedCount = 0;
+    if (this._mongoCol) {
+      const res = await this._mongoCol.deleteMany(cleanQuery);
+      deletedCount = res.deletedCount || 0;
+      await this.reloadFromMongo();
+    } else {
+      for (let i = this.length - 1; i >= 0; i--) {
+        let match = true;
+        for (const [key, val] of Object.entries(cleanQuery)) {
+          if (this[i][key] !== val) { match = false; break; }
+        }
+        if (match) {
+          this.splice(i, 1);
+          deletedCount++;
+        }
+      }
+    }
+    return { deletedCount };
   }
 
   async count(query = {}) {
@@ -852,7 +911,7 @@ function filterByLocation(items, user) {
 
   const rawRole = user.role || '';
   const role = rawRole.toLowerCase().replace(/[_-]/g, ' ');
-  const isSuper = role.includes('super admin') || role === 'admin' || role === 'superadmin' || rawRole === 'super-admin' || user.state === 'All India';
+  const isSuper = role.includes('super admin') || role === 'admin' || role === 'superadmin' || rawRole === 'super-admin' || role.includes('kyc') || (user.adminLevel && user.adminLevel.toLowerCase() === 'kyc') || user.state === 'All India';
   if (isSuper) return items;
 
   const { state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = user;

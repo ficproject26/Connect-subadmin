@@ -35,6 +35,8 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectStage, setRejectStage] = useState(''); // 'pincode' | 'kyc'
   const [rejectionReason, setRejectionReason] = useState('');
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
+  const [pendingReason, setPendingReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
 
@@ -95,9 +97,11 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
   const isPincodeAdmin = user?.role === 'Pincode Admin';
   const isKYCTeam = user?.role === 'KYC Team' || user?.role === 'Super Admin' || user?.role === 'State Admin';
   const isManager = vendor.type === 'Manager' || vendor.managerId || (vendor.id && String(vendor.id).startsWith('KYC-MGR-'));
+  const isAgent = vendor.type === 'Agent' || vendor.agentId || (vendor.id && String(vendor.id).startsWith('KYC-AGT-'));
+  const isPersonnel = isManager || isAgent;
 
-  const canPincodeVerify = !isManager && isPincodeAdmin && (kycStatus === 'Pending Pincode Admin Approval' || pincodeApproval.status === 'Pending');
-  const canKYCVerify = isManager
+  const canPincodeVerify = !isPersonnel && isPincodeAdmin && (kycStatus === 'Pending Pincode Admin Approval' || pincodeApproval.status === 'Pending');
+  const canKYCVerify = isPersonnel
     ? (kycStatus.toLowerCase() === 'pending' || kycStatus.toLowerCase() === 'pending verification')
     : (isKYCTeam && (kycStatus === 'KYC Pending' || kycStatus === 'Pincode Admin Approved' || (pincodeApproval.status === 'Approved' && kycApproval.status === 'Pending')));
 
@@ -124,7 +128,7 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
     setActionError('');
     try {
       let res;
-      if (isManager) {
+      if (isPersonnel) {
         res = await dataService.processKYC(vendor.id, { status: 'Verified' });
       } else {
         res = await dataService.kycVerifyVendor(vendor.id, { action: 'Approve' });
@@ -149,6 +153,12 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
     setRejectModalOpen(true);
   };
 
+  const openPendingDialog = () => {
+    setPendingReason('');
+    setActionError('');
+    setPendingModalOpen(true);
+  };
+
   const handleRejectConfirm = async (e) => {
     e.preventDefault();
     if (!rejectionReason.trim()) {
@@ -161,7 +171,7 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
 
     try {
       let res;
-      if (isManager) {
+      if (isPersonnel) {
         res = await dataService.processKYC(vendor.id, {
           status: 'Rejected',
           reason: rejectionReason.trim()
@@ -184,6 +194,36 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
         onClose();
       } else {
         setActionError(res.message || 'Failed to reject verification');
+      }
+    } catch (err) {
+      setActionError(err.message || 'Server error occurred');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePendingConfirm = async (e) => {
+    e.preventDefault();
+    if (!pendingReason.trim()) {
+      setActionError('A pending reason or explanation is strictly required.');
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError('');
+
+    try {
+      const res = await dataService.processKYC(vendor.id, {
+        status: 'Pending',
+        reason: pendingReason.trim()
+      });
+
+      if (res.success) {
+        if (onVendorUpdated) onVendorUpdated(res.vendor || res.record);
+        setPendingModalOpen(false);
+        onClose();
+      } else {
+        setActionError(res.message || 'Failed to set pending status');
       }
     } catch (err) {
       setActionError(err.message || 'Server error occurred');
@@ -336,9 +376,17 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
                       type="button"
                       disabled={actionLoading}
                       onClick={handleKYCApprove}
-                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
                     >
                       {actionLoading ? 'Processing...' : 'Approve KYC'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={openPendingDialog}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
+                    >
+                      Mark Pending
                     </button>
                     <button
                       type="button"
@@ -563,6 +611,61 @@ export function VendorKYCDetailsModal({ isOpen, onClose, vendor, onVendorUpdated
               className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
             >
               {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MANDATORY PENDING DIALOG */}
+      <Modal
+        isOpen={pendingModalOpen}
+        onClose={() => setPendingModalOpen(false)}
+        title="Mark KYC Record as Pending Additional Verification"
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handlePendingConfirm} className="space-y-4">
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300 text-xs">
+            <p className="font-bold flex items-center gap-1 mb-1">
+              <Clock className="w-4 h-4 shrink-0 text-amber-600" />
+              Pending Reason / Note is Strictly Mandatory
+            </p>
+            <p className="text-[11px] leading-relaxed">
+              Please enter the specific reason or missing document detail. This note will be recorded in the audit trail and visible to the applicant.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              Reason / Explanation *
+            </label>
+            <textarea
+              required
+              rows={3}
+              value={pendingReason}
+              onChange={(e) => setPendingReason(e.target.value)}
+              placeholder="e.g. Bank passbook photo is blurry / Aadhaar card address mismatch / Additional compliance document required..."
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            />
+          </div>
+
+          {actionError && (
+            <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold">{actionError}</p>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setPendingModalOpen(false)}
+              className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={actionLoading || !pendingReason.trim()}
+              className="px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
+            >
+              {actionLoading ? 'Saving...' : 'Confirm Pending'}
             </button>
           </div>
         </form>

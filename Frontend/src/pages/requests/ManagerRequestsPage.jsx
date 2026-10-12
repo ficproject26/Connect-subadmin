@@ -51,10 +51,11 @@ export function ManagerRequestsPage() {
   const [selectedFilterDivision, setSelectedFilterDivision] = useState(locking.defaultDivision || '');
   const [selectedFilterPincode, setSelectedFilterPincode] = useState(locking.defaultPincode || '');
 
-  // Modal states
   const [selectedManager, setSelectedManager] = useState(null);
   const [quickRejectTarget, setQuickRejectTarget] = useState(null);
   const [quickRejectReason, setQuickRejectReason] = useState('');
+  const [quickPendingTarget, setQuickPendingTarget] = useState(null);
+  const [quickPendingReason, setQuickPendingReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   // Sync locked territory
@@ -159,6 +160,32 @@ export function ManagerRequestsPage() {
       }
     } catch (err) {
       alert(err.message || 'Error occurred while rejecting manager request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Quick Pending Submit
+  const handleQuickPendingSubmit = async () => {
+    if (!quickPendingTarget) return;
+    if (!quickPendingReason.trim()) {
+      alert('Please enter a pending reason or administrative note.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await dataService.keepPendingManager(quickPendingTarget.id || quickPendingTarget._id, {
+        reason: quickPendingReason.trim()
+      });
+      if (res.success) {
+        setQuickPendingTarget(null);
+        setQuickPendingReason('');
+        await loadRequests();
+      } else {
+        alert(res.message || 'Failed to update manager request');
+      }
+    } catch (err) {
+      alert(err.message || 'Error occurred while updating manager request');
     } finally {
       setActionLoading(false);
     }
@@ -387,15 +414,18 @@ export function ManagerRequestsPage() {
       }
     },
     {
-      header: 'Rejection Reason',
+      header: 'Reviewer Reason',
       key: 'rejectionReason',
       render: (row) => {
-        if (!row.rejectionReason) {
+        const reason = row.rejectionReason || row.pendingReason;
+        if (!reason) {
           return <span className="text-xs text-slate-400 italic">—</span>;
         }
+        const isRej = !!row.rejectionReason;
         return (
-          <div className="text-xs text-red-600 dark:text-red-400 max-w-[160px] truncate font-medium" title={row.rejectionReason}>
-            {row.rejectionReason}
+          <div className={`text-xs max-w-[170px] truncate font-medium ${isRej ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} title={reason}>
+            <span className="font-bold">{isRej ? 'Rejected: ' : 'Pending: '}</span>
+            {reason}
           </div>
         );
       }
@@ -409,7 +439,7 @@ export function ManagerRequestsPage() {
 
         return (
           <div className="flex items-center gap-1.5 justify-end">
-            {/* Quick Approve / Reject buttons if user is the authorized approver */}
+            {/* Quick Approve / Pending / Reject buttons if user is the authorized approver */}
             {isPending && canApprove && (
               <>
                 <button
@@ -420,6 +450,18 @@ export function ManagerRequestsPage() {
                   title="Approve Request"
                 >
                   <Check className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickPendingTarget(row);
+                    setQuickPendingReason('');
+                  }}
+                  disabled={actionLoading}
+                  className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition cursor-pointer"
+                  title="Keep Request Pending"
+                >
+                  <Clock className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
@@ -605,6 +647,45 @@ export function ManagerRequestsPage() {
                 className="px-4 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-xl shadow"
               >
                 {actionLoading ? 'Rejecting...' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Pending Prompt Modal */}
+      {quickPendingTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
+              <Clock className="w-5 h-5 shrink-0" />
+              <span>Keep Manager Registration Pending</span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Please enter the mandatory reason or note for keeping registration pending for <strong>{quickPendingTarget.name}</strong>:
+            </p>
+            <textarea
+              value={quickPendingReason}
+              onChange={(e) => setQuickPendingReason(e.target.value)}
+              rows={3}
+              placeholder="e.g. Additional territory proofs requested, clarification required from applicant, pending senior review..."
+              className="w-full text-xs p-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setQuickPendingTarget(null)}
+                className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleQuickPendingSubmit}
+                disabled={actionLoading || !quickPendingReason.trim()}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl shadow"
+              >
+                {actionLoading ? 'Saving...' : 'Confirm Pending'}
               </button>
             </div>
           </div>

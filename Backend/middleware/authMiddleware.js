@@ -40,9 +40,72 @@ function authMiddleware(req, res, next) {
       userPayload.role = 'Super Admin';
     }
 
-    // Strictly forbid non-admin roles from accessing the Sub-Admin portal
-    const rawRole = String(userPayload.role || '').toLowerCase();
-    if (rawRole.includes('manager') || rawRole.includes('agent') || rawRole.includes('vendor') || rawRole.includes('customer') || rawRole === 'member') {
+    // Resolve live database record to ensure approval changes take immediate effect
+    const userId = userPayload.id || userPayload._id;
+    let dbUser = null;
+    if (db.users) {
+      dbUser = Array.from(db.users).find(u => String(u._id || u.id) === String(userId));
+    }
+    if (!dbUser && db.agents) {
+      dbUser = Array.from(db.agents).find(a => String(a._id || a.id) === String(userId));
+    }
+
+    const effectiveUser = dbUser ? { ...userPayload, ...dbUser } : userPayload;
+    const rawRole = String(effectiveUser.role || '').toLowerCase();
+    const isManagerOrAgent = rawRole.includes('manager') || rawRole.includes('agent') ||
+      ['state_manager', 'district_manager', 'division_manager', 'pincode_manager', 'state_agent', 'district_agent', 'division_agent', 'pincode_agent'].includes(effectiveUser.role) ||
+      effectiveUser.registrationFeePaid !== undefined || Boolean(effectiveUser.territory);
+
+    if (isManagerOrAgent) {
+      const currentStatus = String(effectiveUser.status || 'pending').toLowerCase().trim();
+      const adminApprovalStatus = String(effectiveUser.adminApprovalStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'approved' : currentStatus === 'rejected' ? 'rejected' : 'pending')).toLowerCase().trim();
+      const kycStatus = String(effectiveUser.kycStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'verified' : currentStatus === 'rejected' ? 'rejected' : 'pending_verification')).toLowerCase().trim();
+
+      const isFullyApproved = (currentStatus === 'active' || currentStatus === 'approved') &&
+        adminApprovalStatus === 'approved' &&
+        (kycStatus === 'verified' || kycStatus === 'approved') &&
+        effectiveUser.isActive !== false;
+
+      // If user is unapproved
+      if (!isFullyApproved) {
+        // Allow querying profile / registration status on auth routes
+        const reqPath = (req.originalUrl || req.url || '').toLowerCase();
+        if (reqPath.includes('/auth/me') || reqPath.includes('/auth/registration-status')) {
+          req.user = { ...effectiveUser, requiresApproval: true };
+          req.userId = userId;
+          return next();
+        }
+
+        // Strictly block access to all protected dashboard, admin, and business endpoints
+        return res.status(403).json({
+          success: false,
+          requiresApproval: true,
+          status: effectiveUser.status || 'pending',
+          message: 'Account registration approval is incomplete. Access to protected dashboard resources is restricted.'
+        });
+      }
+
+      // If user is fully approved, they can access their role endpoints,
+      // but cannot access Sub-Admin specific administrative routes
+      const reqPath = (req.originalUrl || req.url || '').toLowerCase();
+      const isAdminOnlyPath = reqPath.startsWith('/api/admin') ||
+        reqPath.includes('/managers/requests') ||
+        reqPath.includes('/operations/agents/requests') ||
+        reqPath.includes('/kyc');
+      if (isAdminOnlyPath) {
+        return res.status(403).json({
+          success: false,
+          message: 'Forbidden: Tokens issued to this role cannot access Sub-Admin administrative operations.'
+        });
+      }
+
+      req.user = effectiveUser;
+      req.userId = userId;
+      return next();
+    }
+
+    // Strictly forbid non-admin roles (vendors, customers, etc.)
+    if (rawRole.includes('vendor') || rawRole.includes('customer') || rawRole === 'member') {
       return res.status(403).json({
         success: false,
         message: 'Forbidden: Tokens issued to this role cannot access the Sub-Admin Management system.'
@@ -50,7 +113,7 @@ function authMiddleware(req, res, next) {
     }
 
     // Check account status if present on token payload
-    const currentStatus = String(userPayload.status || '').toLowerCase().trim();
+    const currentStatus = String(effectiveUser.status || '').toLowerCase().trim();
     if (currentStatus === 'suspended' || currentStatus === 'blocked' || currentStatus === 'revoked' || currentStatus === 'inactive') {
       return res.status(403).json({
         success: false,
@@ -58,8 +121,8 @@ function authMiddleware(req, res, next) {
       });
     }
 
-    req.user = userPayload;
-    req.userId = userPayload.id || userPayload._id;
+    req.user = effectiveUser;
+    req.userId = userId;
 
     next();
   } catch (error) {

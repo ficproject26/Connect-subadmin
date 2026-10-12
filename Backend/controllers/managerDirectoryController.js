@@ -86,43 +86,6 @@ const getRelatedAdminRole = (managerRole) => {
   }
 };
 
-// Returns true if admin is the exact related administrator for this manager's role and jurisdiction
-const isRelatedAdminForManager = (admin, manager) => {
-  if (!admin || !manager) return false;
-  const adminRole = (admin.role || '').trim();
-  const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
-
-  // Exact Level Matching by Territory:
-  if (manager.role === 'state_manager') {
-    if (adminRoleLower.includes('state') && !adminRoleLower.includes('manager') && matchesState(admin, manager)) return true;
-  }
-  if (manager.role === 'district_manager') {
-    if (adminRoleLower.includes('district') && !adminRoleLower.includes('manager') && matchesDistrict(admin, manager)) return true;
-  }
-  if (manager.role === 'division_manager') {
-    if ((adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) && !adminRoleLower.includes('manager') && matchesDivision(admin, manager)) return true;
-  }
-  if (manager.role === 'pincode_manager') {
-    if (adminRoleLower.includes('pincode') && !adminRoleLower.includes('manager') && matchesPincode(admin, manager)) return true;
-  }
-
-  // Fallback: If no exact territory administrator exists in system, flag for authorized administrative review (Super / Main Admin)
-  const hasExactAdmin = Array.from(db.users).some(u => {
-    const uRole = (u.role || '').toLowerCase().replace(/_/g, ' ');
-    if (manager.role === 'state_manager') return uRole.includes('state') && !uRole.includes('manager') && matchesState(u, manager);
-    if (manager.role === 'district_manager') return uRole.includes('district') && !uRole.includes('manager') && matchesDistrict(u, manager);
-    if (manager.role === 'division_manager') return (uRole.includes('division') || uRole.includes('divisional')) && !uRole.includes('manager') && matchesDivision(u, manager);
-    if (manager.role === 'pincode_manager') return uRole.includes('pincode') && !uRole.includes('manager') && matchesPincode(u, manager);
-    return false;
-  });
-
-  if (!hasExactAdmin && (adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || adminRoleLower === 'admin')) {
-    return true;
-  }
-
-  return false;
-};
-
 // Check if an Administrator has jurisdiction to view / oversee a Field Manager
 const canAdminManage = (admin, manager) => {
   if (!admin || !manager) return false;
@@ -159,6 +122,12 @@ const canAdminManage = (admin, manager) => {
   }
 
   return false;
+};
+
+// Returns true if admin is the authorized administrator for this manager's role and jurisdiction
+const isRelatedAdminForManager = (admin, manager) => {
+  if (!admin || !manager) return false;
+  return canAdminManage(admin, manager);
 };
 
 const formatAddressString = (addr, fallback = 'Not provided') => {
@@ -887,7 +856,10 @@ const rejectManager = async (req, res) => {
       });
     }
 
-    const rejectionReason = (reason || '').trim() || 'Registration credentials or KYC documents did not meet the required criteria.';
+    const rejectionReason = (reason || '').trim();
+    if (!rejectionReason) {
+      return res.status(400).json({ success: false, message: 'A rejection reason is strictly required.' });
+    }
     const now = new Date().toISOString();
 
     // Update status to rejected
@@ -907,6 +879,48 @@ const rejectManager = async (req, res) => {
     await db.users.findByIdAndUpdate(manager._id || manager.id, rejectUpdates);
     if (db.managers) {
       await db.managers.findByIdAndUpdate(manager._id || manager.id, rejectUpdates).catch(() => {});
+    }
+
+    // Forward rejection details to KYC queue for review and closure
+    if (db.kycRecords) {
+      const mgrIdStr = String(manager._id || manager.id);
+      const kycId = `KYC-MGR-${mgrIdStr}`;
+      const existingKyc = await db.kycRecords.findOne({ $or: [{ _id: kycId }, { id: kycId }, { managerId: mgrIdStr }] });
+      if (existingKyc) {
+        await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
+          status: 'Pending',
+          kycStatus: 'Pending Verification',
+          notes: `Territory-rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
+          updatedAt: now
+        });
+      } else {
+        await db.kycRecords.insertOne({
+          _id: kycId,
+          id: kycId,
+          type: 'Manager',
+          managerId: mgrIdStr,
+          name: manager.name,
+          category: 'Operations Management',
+          role: manager.role,
+          phone: manager.mobile || manager.phone,
+          email: manager.email,
+          state: manager.state,
+          district: manager.district,
+          division: manager.division,
+          pincode: manager.pincode,
+          stateId: manager.stateId,
+          districtId: manager.districtId,
+          divisionId: manager.divisionId,
+          pincodeId: manager.pincodeId,
+          status: 'Pending',
+          kycStatus: 'Pending Verification',
+          submittedDate: (manager.createdAt || now).split('T')[0],
+          documents: manager.documents || {},
+          notes: `Territory-rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
+          createdAt: now,
+          updatedAt: now
+        });
+      }
     }
 
     // Audit log entry
@@ -933,6 +947,89 @@ const rejectManager = async (req, res) => {
   } catch (err) {
     console.error('Reject manager error:', err);
     res.status(500).json({ success: false, message: 'Failed to reject manager', error: err.message });
+  }
+};
+
+// POST /api/managers/:id/pending - Keep manager registration pending with mandatory reason
+const keepPendingManager = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const allUsers = Array.from(db.users);
+    const manager = allUsers.find(u => String(u._id || u.id) === String(id));
+
+    if (!manager) {
+      return res.status(404).json({ success: false, message: 'Manager not found' });
+    }
+
+    if (!isRelatedAdminForManager(req.user, manager)) {
+      const targetRole = getRelatedAdminRole(manager.role);
+      const targetPlace = manager.pincode ? `Pincode ${manager.pincode}` : manager.division ? `${manager.division} Division` : manager.district ? `${manager.district} District` : `${manager.state || 'State'} Jurisdiction`;
+      return res.status(403).json({
+        success: false,
+        message: `You do not have administrative authority to manage ${manager.name} (${formatRoleTitle(manager.role)}). Must be handled by designated ${targetRole} for ${targetPlace}.`
+      });
+    }
+
+    const pendingReason = (reason || '').trim();
+    if (!pendingReason) {
+      return res.status(400).json({ success: false, message: 'A meaningful pending reason or administrative note is required.' });
+    }
+
+    const now = new Date().toISOString();
+    const pendingUpdates = {
+      status: 'pending',
+      adminApprovalStatus: 'pending',
+      pendingReason,
+      adminNotes: pendingReason,
+      adminPendingBy: req.user.name || req.user.email,
+      adminPendingById: req.user.id || req.user._id,
+      adminPendingByRole: req.user.role,
+      adminPendingAt: now,
+      updatedAt: now
+    };
+    Object.assign(manager, pendingUpdates);
+
+    await db.users.findByIdAndUpdate(manager._id || manager.id, pendingUpdates);
+    if (db.managers) {
+      await db.managers.findByIdAndUpdate(manager._id || manager.id, pendingUpdates).catch(() => {});
+    }
+
+    if (db.kycRecords) {
+      const mgrIdStr = String(manager._id || manager.id);
+      const kycId = `KYC-MGR-${mgrIdStr}`;
+      const existingKyc = await db.kycRecords.findOne({ $or: [{ _id: kycId }, { id: kycId }, { managerId: mgrIdStr }] });
+      if (existingKyc) {
+        await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
+          notes: `Kept pending by ${req.user.role} "${req.user.name}". Reason: ${pendingReason}`,
+          updatedAt: now
+        });
+      }
+    }
+
+    await db.auditLogs.insertOne({
+      action: 'MANAGER_REGISTRATION_KEPT_PENDING',
+      adminId: req.user.id || req.user._id,
+      adminName: req.user.name,
+      adminRole: req.user.role,
+      targetUserId: manager._id || manager.id,
+      targetUserName: manager.name,
+      targetUserRole: manager.role,
+      details: `${manager.role.replace('_', ' ')} "${manager.name}" registration kept pending by ${req.user.role} "${req.user.name}". Reason: ${pendingReason}`,
+      ip: req.ip || '127.0.0.1',
+      timestamp: now
+    });
+
+    const populated = await populateManager(manager, 'subordinate', req.user);
+
+    return res.json({
+      success: true,
+      message: `Registration for ${manager.name} (${formatRoleTitle(manager.role)}) kept pending. Note saved.`,
+      manager: populated
+    });
+  } catch (err) {
+    console.error('Keep pending manager error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update manager pending status', error: err.message });
   }
 };
 
@@ -1345,14 +1442,14 @@ const addManager = async (req, res) => {
       passwordHash,
       role: mgrRole,
       level,
-      status: 'active',
+      status: 'pending_kyc',
       registrationType: 'admin',
       adminApprovalStatus: 'approved',
       adminApprovedBy: req.user.name || req.user.email,
       adminApprovedById: req.user.id || req.user._id,
       adminApprovedByRole: req.user.role,
       adminApprovedAt: now,
-      kycStatus: 'Verified',
+      kycStatus: 'pending_verification',
       state,
       stateId: stateId || null,
       assignedState: state,
@@ -1428,6 +1525,38 @@ const addManager = async (req, res) => {
       await db.managers.insertOne(newManager).catch(() => {});
     }
 
+    // Queue in db.kycRecords for KYC team verification
+    if (db.kycRecords) {
+      const mgrIdStr = String(newManager._id || newManager.id);
+      const kycId = `KYC-MGR-${mgrIdStr}`;
+      await db.kycRecords.insertOne({
+        _id: kycId,
+        id: kycId,
+        type: 'Manager',
+        managerId: mgrIdStr,
+        name: newManager.name,
+        category: 'Operations Management',
+        role: newManager.role,
+        phone: newManager.mobile || newManager.phone,
+        email: newManager.email,
+        state: newManager.state,
+        district: newManager.district,
+        division: newManager.division,
+        pincode: newManager.pincode,
+        stateId: newManager.stateId,
+        districtId: newManager.districtId,
+        divisionId: newManager.divisionId,
+        pincodeId: newManager.pincodeId,
+        status: 'Pending',
+        kycStatus: 'Pending Verification',
+        submittedDate: now.split('T')[0],
+        documents: newManager.documents || {},
+        notes: `Registered and territory-approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team for verification.`,
+        createdAt: now,
+        updatedAt: now
+      }).catch(() => {});
+    }
+
     // Audit log
     await db.auditLogs.insertOne({
       action: 'MANAGER_CREATED',
@@ -1437,7 +1566,7 @@ const addManager = async (req, res) => {
       targetUserId: newManager._id,
       targetUserName: newManager.name,
       targetUserRole: newManager.role,
-      details: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered with complete verified documents and activated by ${req.user.role} "${req.user.name}".`,
+      details: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered and territory-approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team review.`,
       ip: req.ip || '127.0.0.1',
       timestamp: now
     });
@@ -1446,7 +1575,7 @@ const addManager = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered successfully. Account is active and login is enabled.`,
+      message: `${formatRoleTitle(newManager.role)} "${newManager.name}" registered successfully. Territory approved and forwarded to KYC review.`,
       manager: populated
     });
   } catch (err) {
@@ -1613,6 +1742,7 @@ module.exports = {
   getManagerById,
   approveManager,
   rejectManager,
+  keepPendingManager,
   addManager,
   updateManagerDocuments,
   isRelatedAdminForManager,

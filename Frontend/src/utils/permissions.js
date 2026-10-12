@@ -109,7 +109,12 @@ export function getRoleDashboardPath(role) {
     return '/pincode-admin/dashboard';
   }
 
-  // Strictly deny non-admin roles access to any dashboard
+  // Manager -> /manager/dashboard
+  if (raw.includes('manager')) {
+    return '/manager/dashboard';
+  }
+
+  // Strictly deny other roles access to any administrative dashboard
   return '/login';
 }
 
@@ -138,6 +143,9 @@ export function isRoleAllowed(userRole, allowedRoles = []) {
 
     // Divisional Admin aliases
     if (userNorm === 'Divisional Admin' && allowedNorm === 'Divisional Admin') return true;
+
+    // Manager role group match
+    if ((allowedRaw === 'manager' || allowedRaw.includes('manager')) && userRaw.includes('manager')) return true;
 
     return false;
   });

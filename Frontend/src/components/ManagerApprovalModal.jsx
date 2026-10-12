@@ -38,6 +38,8 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   const [successMsg, setSuccessMsg] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [showPendingBox, setShowPendingBox] = useState(false);
+  const [pendingReason, setPendingReason] = useState('');
   const [previewMedia, setPreviewMedia] = useState(null); // { url, title, isPdf }
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
@@ -47,6 +49,12 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
 
   useEffect(() => {
     setCurrentMgr(manager);
+    setShowRejectBox(false);
+    setShowPendingBox(false);
+    setRejectReason('');
+    setPendingReason('');
+    setError('');
+    setSuccessMsg('');
   }, [manager]);
 
   if (!isOpen || !currentMgr) return null;
@@ -111,6 +119,34 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
       }
     } catch (err) {
       setError(err.message || 'Error occurred while rejecting manager.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeepPending = async () => {
+    if (!pendingReason.trim()) {
+      setError('Please provide a reason or note explaining why this manager is kept pending.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await dataService.keepPendingManager(activeMgr.id || activeMgr._id, { reason: pendingReason.trim() });
+      if (res.success) {
+        setSuccessMsg(res.message || 'Manager registration kept pending. Note saved.');
+        const updated = res.manager || { ...activeMgr, status: 'pending', adminApprovalStatus: 'pending', pendingReason: pendingReason.trim() };
+        setCurrentMgr(updated);
+        if (onManagerUpdated) onManagerUpdated(updated);
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      } else {
+        setError(res.message || 'Failed to update manager pending status.');
+      }
+    } catch (err) {
+      setError(err.message || 'Error occurred while updating pending status.');
     } finally {
       setLoading(false);
     }
@@ -653,6 +689,39 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
             </div>
           )}
 
+          {/* Pending Reason Input Box */}
+          {showPendingBox && (
+            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 space-y-3 animate-fadeIn">
+              <label className="block text-xs font-bold text-amber-700 dark:text-amber-300">
+                Reason / Note for Keeping Request Pending (Visible to applicant):
+              </label>
+              <textarea
+                rows={3}
+                value={pendingReason}
+                onChange={(e) => setPendingReason(e.target.value)}
+                placeholder="e.g. Awaiting additional proofs, clarification required regarding assigned jurisdiction, or pending senior executive verification..."
+                className="w-full text-xs p-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPendingBox(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleKeepPending}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition disabled:opacity-50 cursor-pointer"
+                >
+                  {loading ? 'Saving...' : 'Confirm Pending'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Actions Footer */}
           <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
             <button
@@ -669,8 +738,18 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
               </span>
             )}
 
-            {!isActive && !showRejectBox && activeMgr.canApprove !== false && (
+            {!isActive && !showRejectBox && !showPendingBox && activeMgr.canApprove !== false && (
               <>
+                <button
+                  type="button"
+                  onClick={() => setShowPendingBox(true)}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800/60 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  Keep Pending
+                </button>
+
                 {!isRejected && (
                   <button
                     type="button"

@@ -275,8 +275,15 @@ function getHierarchicalScopedAgents(allAgents, user) {
 // ─────────────────────────────────────────────────────────────────
 // GET /operations/agents
 // ─────────────────────────────────────────────────────────────────
-function getAgents(req, res) {
+async function getAgents(req, res) {
   try {
+    if (db.agents && typeof db.agents.reloadFromMongo === 'function' && db.agents._mongoCol) {
+      try {
+        await db.agents.reloadFromMongo(false);
+      } catch (err) {
+        // silent
+      }
+    }
     const rawAgents = Array.from(db.agents);
     const { search, status, level, state, district, division, pincode } = req.query;
 
@@ -414,8 +421,15 @@ function getAgents(req, res) {
 // ─────────────────────────────────────────────────────────────────
 // GET /operations/agents/hierarchy
 // ─────────────────────────────────────────────────────────────────
-function getAgentHierarchy(req, res) {
+async function getAgentHierarchy(req, res) {
   try {
+    if (db.agents && typeof db.agents.reloadFromMongo === 'function' && db.agents._mongoCol) {
+      try {
+        await db.agents.reloadFromMongo(false);
+      } catch (err) {
+        // silent
+      }
+    }
     const rawAgents = Array.from(db.agents);
     const scopedAgents = getHierarchicalScopedAgents(rawAgents, req.user);
 
@@ -772,53 +786,7 @@ function getDeliveryPartners(req, res) {
 
 function isRelatedAdminForAgent(admin, agent) {
   if (!admin || !agent) return false;
-  const adminRole = String(admin.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-  const aLevel = normalizeLevel(getAgentLevel(agent));
-  const t = getAgentTerritory(agent);
-
-  const uState = (admin.state || '').toLowerCase().trim();
-  const uDist = (admin.district || '').toLowerCase().trim();
-  const uDiv = (admin.division || '').toLowerCase().trim();
-  const uPin = String(admin.pincode || '').trim();
-
-  const matchState = !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
-  const matchDist = matchState && (!uDist || uDist === 'all districts' || (t.district && t.district.toLowerCase() === uDist));
-  const matchDiv = matchDist && (!uDiv || uDiv === 'all divisions' || (t.division && divisionMatches(t.division, uDiv)));
-  const matchPin = matchDiv && (!uPin || uPin === 'all' || (t.pincode && t.pincode === uPin));
-
-  if (aLevel === 'state') {
-    if (adminRole.includes('state') && !adminRole.includes('manager') && matchState) return true;
-  }
-  if (aLevel === 'district') {
-    if (adminRole.includes('district') && !adminRole.includes('manager') && matchDist) return true;
-  }
-  if (aLevel === 'division') {
-    if ((adminRole.includes('division') || adminRole.includes('divisional')) && !adminRole.includes('manager') && matchDiv) return true;
-  }
-  if (aLevel === 'pincode') {
-    if (adminRole.includes('pincode') && !adminRole.includes('manager') && matchPin) return true;
-  }
-
-  // Fallback: If no exact territory administrator exists in system, flag for authorized administrative review
-  const allUsers = Array.from(db.users || []);
-  const hasExactAdmin = allUsers.some(u => {
-    const uR = (u.role || '').toLowerCase().replace(/_/g, ' ');
-    const s = (u.state || '').toLowerCase().trim();
-    const d = (u.district || '').toLowerCase().trim();
-    const v = (u.division || '').toLowerCase().trim();
-    const p = String(u.pincode || '').trim();
-    if (aLevel === 'state') return uR.includes('state') && !uR.includes('manager') && (!s || s === 'all india' || s === (t.state || '').toLowerCase());
-    if (aLevel === 'district') return uR.includes('district') && !uR.includes('manager') && (!d || d === (t.district || '').toLowerCase());
-    if (aLevel === 'division') return (uR.includes('division') || uR.includes('divisional')) && !uR.includes('manager') && divisionMatches(v, t.division);
-    if (aLevel === 'pincode') return uR.includes('pincode') && !uR.includes('manager') && (p === t.pincode);
-    return false;
-  });
-
-  if (!hasExactAdmin && (adminRole === 'super admin' || adminRole === 'main admin' || adminRole === 'admin')) {
-    return true;
-  }
-
-  return false;
+  return canAdminViewAgent(admin, agent);
 }
 
 function canAdminViewAgent(admin, agent) {
@@ -865,7 +833,55 @@ function canAdminViewAgent(admin, agent) {
 
 async function getAgentRequests(req, res) {
   try {
-    const rawAgents = Array.from(db.agents || []);
+    // 1. Ensure agents collection is reloaded from MongoDB Atlas to pick up new registrations from agent portal
+    if (db.agents && typeof db.agents.reloadFromMongo === 'function' && db.agents._mongoCol) {
+      try {
+        await db.agents.reloadFromMongo(false);
+      } catch (err) {
+        console.warn('[getAgentRequests] Atlas agents reload notice:', err.message);
+      }
+    } else {
+      try {
+        const { getMongoDb } = require('../config/mongo');
+        const mdb = await getMongoDb();
+        if (mdb && db.agents && typeof db.agents.initMongo === 'function') {
+          await db.agents.initMongo(mdb);
+        }
+      } catch (err) {
+        // fallback
+      }
+    }
+
+    // 2. Also ensure db.users is reloaded if possible
+    if (db.users && typeof db.users.reloadFromMongo === 'function' && db.users._mongoCol) {
+      try {
+        await db.users.reloadFromMongo(false);
+      } catch (err) {
+        // silent
+      }
+    }
+
+    // 3. Build unified list of agents, merging db.agents and any agent-role records in db.users
+    const agentMap = new Map();
+    (Array.from(db.agents || [])).forEach(a => {
+      const idKey = String(a._id || a.id || '').trim();
+      const emailKey = String(a.email || '').toLowerCase().trim();
+      if (idKey) agentMap.set(idKey, a);
+      if (emailKey) agentMap.set(emailKey, a);
+    });
+
+    (Array.from(db.users || [])).forEach(u => {
+      const r = String(u.role || '').toLowerCase();
+      if (r.includes('agent') || r === 'division' || r === 'district' || r === 'pincode' || r === 'state') {
+        const idKey = String(u._id || u.id || '').trim();
+        const emailKey = String(u.email || '').toLowerCase().trim();
+        if ((!idKey || !agentMap.has(idKey)) && (!emailKey || !agentMap.has(emailKey))) {
+          agentMap.set(idKey || emailKey, u);
+        }
+      }
+    });
+
+    const rawAgents = Array.from(new Set(agentMap.values()));
     // Scoped to pending/under-review agent requests
     const pendingAgents = rawAgents.filter(a => {
       const s = (a.status || '').toLowerCase().trim();
@@ -924,6 +940,8 @@ async function getAgentRequests(req, res) {
         workflowStage = 'KYC Rejected';
       } else if (s === 'pending_kyc' || adminApproval === 'approved') {
         workflowStage = 'Awaiting KYC Review';
+      } else if (adminApproval === 'pending' && (a.pendingReason || a.adminNotes)) {
+        workflowStage = 'Territory Pending';
       } else if (s === 'active' || s === 'approved') {
         workflowStage = 'Activated';
       }
@@ -952,6 +970,7 @@ async function getAgentRequests(req, res) {
         adminApprovalStatus: adminApproval || 'pending',
         kycStatus: a.kycStatus || 'pending_verification',
         rejectionReason: a.rejectionReason || null,
+        pendingReason: a.pendingReason || a.adminNotes || null,
         workflowStage,
         canApprove,
         documents: a.documents || a.kycDocs || {}
@@ -967,8 +986,16 @@ async function getAgentRequests(req, res) {
 async function approveAgent(req, res) {
   try {
     const { id } = req.params;
-    const rawAgents = Array.from(db.agents || []);
-    const agent = rawAgents.find(a => String(a._id || a.id) === String(id));
+    let agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    if (!agent && db.agents && typeof db.agents.reloadFromMongo === 'function') {
+      try {
+        await db.agents.reloadFromMongo(true);
+      } catch (_) {}
+      agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    }
+    if (!agent) {
+      agent = Array.from(db.users || []).find(u => String(u._id || u.id) === String(id));
+    }
 
     if (!agent) {
       return res.status(404).json({ success: false, message: 'Agent request not found' });
@@ -1030,6 +1057,26 @@ async function approveAgent(req, res) {
       }
     }
 
+    // Synchronize corresponding user record in db.users
+    if (db.users) {
+      const user = (await db.users.findById(agent._id || agent.id)) ||
+        Array.from(db.users || []).find(u => String(u._id || u.id) === String(agent._id || agent.id) || (u.email && agent.email && u.email.toLowerCase() === agent.email.toLowerCase()));
+      if (user) {
+        user.status = 'pending_kyc';
+        user.adminApprovalStatus = 'approved';
+        user.adminApprovedBy = req.user.name;
+        user.adminApprovedAt = now;
+        user.updatedAt = now;
+        await db.users.findByIdAndUpdate(user._id || user.id, {
+          status: 'pending_kyc',
+          adminApprovalStatus: 'approved',
+          adminApprovedBy: req.user.name,
+          adminApprovedAt: now,
+          updatedAt: now
+        });
+      }
+    }
+
     // Audit log entry
     if (db.auditLogs) {
       await db.auditLogs.insertOne({
@@ -1060,8 +1107,16 @@ async function rejectAgent(req, res) {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const rawAgents = Array.from(db.agents || []);
-    const agent = rawAgents.find(a => String(a._id || a.id) === String(id));
+    let agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    if (!agent && db.agents && typeof db.agents.reloadFromMongo === 'function') {
+      try {
+        await db.agents.reloadFromMongo(true);
+      } catch (_) {}
+      agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    }
+    if (!agent) {
+      agent = Array.from(db.users || []).find(u => String(u._id || u.id) === String(id));
+    }
 
     if (!agent) {
       return res.status(404).json({ success: false, message: 'Agent request not found' });
@@ -1074,8 +1129,12 @@ async function rejectAgent(req, res) {
       });
     }
 
-    const rejectionReason = (reason || '').trim() || 'Registration credentials or documents did not meet the required criteria.';
+    const rejectionReason = (reason || '').trim();
+    if (!rejectionReason) {
+      return res.status(400).json({ success: false, message: 'A rejection reason is strictly required.' });
+    }
     const now = new Date().toISOString();
+    const terr = getAgentTerritory(agent);
     const rejectUpdates = {
       status: 'rejected',
       adminApprovalStatus: 'rejected',
@@ -1092,6 +1151,68 @@ async function rejectAgent(req, res) {
     Object.assign(agent, rejectUpdates);
 
     await db.agents.findByIdAndUpdate(agent._id || agent.id, rejectUpdates);
+
+    // Forward rejection details to KYC team queue for review and closure
+    if (db.kycRecords) {
+      const agIdStr = String(agent._id || agent.id);
+      const kycId = `KYC-AGT-${agIdStr}`;
+      const existingKyc = await db.kycRecords.findOne({ $or: [{ _id: kycId }, { id: kycId }, { agentId: agIdStr }] });
+      if (existingKyc) {
+        await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
+          status: 'Pending',
+          kycStatus: 'Pending Verification',
+          notes: `Territory-rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
+          updatedAt: now
+        });
+      } else {
+        await db.kycRecords.insertOne({
+          _id: kycId,
+          id: kycId,
+          type: 'Agent',
+          agentId: agIdStr,
+          name: agent.name,
+          category: 'Field Agency Network',
+          role: agent.role || `${getAgentLevel(agent)} Agent`,
+          phone: agent.phone || agent.mobile,
+          email: agent.email,
+          state: terr.state,
+          district: terr.district,
+          division: terr.division,
+          pincode: terr.pincode,
+          status: 'Pending',
+          kycStatus: 'Pending Verification',
+          submittedDate: (agent.createdAt || now).split('T')[0],
+          documents: agent.documents || agent.kycDocs || {},
+          notes: `Territory-rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+    }
+
+    // Synchronize corresponding user record in db.users
+    if (db.users) {
+      const user = (await db.users.findById(agent._id || agent.id)) ||
+        Array.from(db.users || []).find(u => String(u._id || u.id) === String(agent._id || agent.id) || (u.email && agent.email && u.email.toLowerCase() === agent.email.toLowerCase()));
+      if (user) {
+        user.status = 'rejected';
+        user.adminApprovalStatus = 'rejected';
+        user.kycStatus = 'Rejected';
+        user.isActive = false;
+        user.rejectionReason = rejectionReason;
+        user.adminRejectionReason = rejectionReason;
+        user.updatedAt = now;
+        await db.users.findByIdAndUpdate(user._id || user.id, {
+          status: 'rejected',
+          adminApprovalStatus: 'rejected',
+          kycStatus: 'Rejected',
+          isActive: false,
+          rejectionReason,
+          adminRejectionReason: rejectionReason,
+          updatedAt: now
+        });
+      }
+    }
 
     if (db.auditLogs) {
       await db.auditLogs.insertOne({
@@ -1117,6 +1238,110 @@ async function rejectAgent(req, res) {
   }
 }
 
+// POST /api/operations/agents/:id/pending - Keep agent registration pending with mandatory reason
+async function keepPendingAgent(req, res) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    let agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    if (!agent && db.agents && typeof db.agents.reloadFromMongo === 'function') {
+      try {
+        await db.agents.reloadFromMongo(true);
+      } catch (_) {}
+      agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    }
+    if (!agent) {
+      agent = Array.from(db.users || []).find(u => String(u._id || u.id) === String(id));
+    }
+
+    if (!agent) {
+      return res.status(404).json({ success: false, message: 'Agent request not found' });
+    }
+
+    if (!isRelatedAdminForAgent(req.user, agent)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have administrative authority to manage this agent registration.'
+      });
+    }
+
+    const pendingReason = (reason || '').trim();
+    if (!pendingReason) {
+      return res.status(400).json({ success: false, message: 'A meaningful pending reason or administrative note is required.' });
+    }
+
+    const now = new Date().toISOString();
+    const pendingUpdates = {
+      status: 'pending',
+      adminApprovalStatus: 'pending',
+      pendingReason,
+      adminNotes: pendingReason,
+      adminPendingBy: req.user.name || req.user.email,
+      adminPendingById: req.user.id || req.user._id,
+      adminPendingByRole: req.user.role,
+      adminPendingAt: now,
+      updatedAt: now
+    };
+    Object.assign(agent, pendingUpdates);
+
+    await db.agents.findByIdAndUpdate(agent._id || agent.id, pendingUpdates);
+
+    if (db.kycRecords) {
+      const agIdStr = String(agent._id || agent.id);
+      const kycId = `KYC-AGT-${agIdStr}`;
+      const existingKyc = await db.kycRecords.findOne({ $or: [{ _id: kycId }, { id: kycId }, { agentId: agIdStr }] });
+      if (existingKyc) {
+        await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
+          notes: `Kept pending by ${req.user.role} "${req.user.name}". Reason: ${pendingReason}`,
+          updatedAt: now
+        });
+      }
+    }
+
+    // Synchronize corresponding user record in db.users
+    if (db.users) {
+      const user = (await db.users.findById(agent._id || agent.id)) ||
+        Array.from(db.users || []).find(u => String(u._id || u.id) === String(agent._id || agent.id) || (u.email && agent.email && u.email.toLowerCase() === agent.email.toLowerCase()));
+      if (user) {
+        user.status = 'pending';
+        user.adminApprovalStatus = 'pending';
+        user.pendingReason = pendingReason;
+        user.adminNotes = pendingReason;
+        user.updatedAt = now;
+        await db.users.findByIdAndUpdate(user._id || user.id, {
+          status: 'pending',
+          adminApprovalStatus: 'pending',
+          pendingReason,
+          adminNotes: pendingReason,
+          updatedAt: now
+        });
+      }
+    }
+
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        action: 'AGENT_REGISTRATION_KEPT_PENDING',
+        adminId: req.user.id || req.user._id,
+        adminName: req.user.name,
+        adminRole: req.user.role,
+        targetUserId: agent._id || agent.id,
+        targetUserName: agent.name,
+        details: `Agent "${agent.name}" registration kept pending by ${req.user.role} "${req.user.name}". Reason: ${pendingReason}`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Agent registration for ${agent.name} kept pending. Note saved.`,
+      agent: { ...agent, ...pendingUpdates, canApprove: true, workflowStage: 'Territory Pending' }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to update agent pending status', error: error.message });
+  }
+}
+
 module.exports = {
   getExecutives,
   getSupportTeam,
@@ -1130,6 +1355,7 @@ module.exports = {
   getAgentRequests,
   approveAgent,
   rejectAgent,
+  keepPendingAgent,
   isRelatedAdminForAgent,
   canAdminViewAgent
 };

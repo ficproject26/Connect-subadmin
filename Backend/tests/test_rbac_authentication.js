@@ -116,12 +116,12 @@ async function request(path, options = {}) {
       createdAt: new Date()
     });
 
-    // 3. Insert Test Manager
+    // 3. Insert Test Customer (non-management role)
     await mdb.collection('users').insertOne({
-      name: 'Test State Manager',
+      name: 'Test Customer User',
       email: testManagerEmail,
       phone: '9999900002',
-      role: 'state_manager',
+      role: 'customer',
       status: 'active',
       isActive: true,
       password: testManagerHash,
@@ -211,8 +211,8 @@ async function request(path, options = {}) {
       assert.strictEqual(res.data.message, 'Invalid credentials');
     });
 
-    // Scenario 5: Registered Manager or other unauthorized role -> access denied
-    await test('Scenario 5: Registered Manager or non-admin role -> access denied with 401 Invalid credentials', async () => {
+    // Scenario 5: Registered Customer or other unauthorized role -> access denied
+    await test('Scenario 5: Registered Customer or non-admin role -> access denied with 401 Invalid credentials', async () => {
       const res = await request('/api/auth/login', {
         method: 'POST',
         body: { email: testManagerEmail, password: testManagerPw }

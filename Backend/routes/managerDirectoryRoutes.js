@@ -23,6 +23,9 @@ router.post('/:id/approve', managerDirectoryController.approveManager);
 // POST /api/managers/:id/reject - Reject manager registration
 router.post('/:id/reject', managerDirectoryController.rejectManager);
 
+// POST /api/managers/:id/pending - Keep manager registration pending with mandatory reason
+router.post('/:id/pending', managerDirectoryController.keepPendingManager);
+
 // PATCH /api/managers/:id/documents - Update/replace manager identity & official documents
 router.patch('/:id/documents', managerDirectoryController.updateManagerDocuments);
 

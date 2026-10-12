@@ -249,6 +249,10 @@ export const dataService = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  keepPendingAgent: (id, data = {}) => apiRequest(`/operations/agents/${id}/pending`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
   getAgentHierarchy: () => apiRequest('/operations/agents/hierarchy'),
   getAgentActivities: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -278,6 +282,10 @@ export const dataService = {
     body: JSON.stringify(data)
   }),
   rejectManager: (id, data = {}) => apiRequest(`/managers/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  keepPendingManager: (id, data = {}) => apiRequest(`/managers/${id}/pending`, {
     method: 'POST',
     body: JSON.stringify(data)
   }),

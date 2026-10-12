@@ -8,6 +8,7 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 
 // Auth Pages
 import { Login } from '../pages/auth/Login';
+import { RegistrationStatus } from '../pages/auth/RegistrationStatus';
 
 // State Admin Pages
 import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
@@ -147,6 +148,9 @@ function RootRedirect() {
     );
   }
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+  if (user.requiresApproval || user.status !== 'active') {
+    return <Navigate to="/registration-status" replace />;
+  }
   return <Navigate to={getRoleDashboardPath(user.role)} replace />;
 }
 
@@ -156,6 +160,7 @@ export function AppRoutes() {
       <Route path="/" element={<RootRedirect />} />
       {/* /login: already-authenticated users are redirected to their dashboard inside Login.jsx */}
       <Route path="/login" element={<Login />} />
+      <Route path="/registration-status" element={<RegistrationStatus />} />
 
       {/* /dashboard: canonical route for Super Admin and Admin roles */}
       <Route element={<ProtectedRoute />}>
@@ -340,6 +345,11 @@ export function AppRoutes() {
             <Route path="/pincode-admin/notifications" element={<NotificationsPage />} />
             <Route path="/pincode-admin/profile" element={<PincodeProfile />} />
             <Route path="/pincode-admin/settings" element={<PincodeSettings />} />
+          </Route>
+
+          {/* Manager Routes */}
+          <Route element={<RoleBasedRoute allowedRoles={['Manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager']} />}>
+            <Route path="/manager/dashboard" element={<ManagerDashboard />} />
           </Route>
 
         </Route>

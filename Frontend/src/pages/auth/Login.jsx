@@ -26,7 +26,11 @@ export function Login() {
   // and stay on the login page when the user is actually logged in.
   useEffect(() => {
     if (!authLoading && isAuthenticated && user?.role) {
-      navigate(getRoleDashboardPath(user.role), { replace: true });
+      if (user.requiresApproval || user.status !== 'active') {
+        navigate('/registration-status', { replace: true });
+      } else {
+        navigate(getRoleDashboardPath(user.role), { replace: true });
+      }
     }
   }, [authLoading, isAuthenticated, user, navigate]);
 
@@ -57,7 +61,11 @@ export function Login() {
           localStorage.removeItem('ams_remembered_email');
           localStorage.setItem('ams_remember_me', 'false');
         }
-        navigate(getRoleDashboardPath(res.user.role), { replace: true });
+        if (res.requiresApproval || res.user.requiresApproval || res.user.status !== 'active') {
+          navigate('/registration-status', { replace: true });
+        } else {
+          navigate(getRoleDashboardPath(res.user.role), { replace: true });
+        }
       }
     } catch (err) {
       const errMsg = (err?.message || '').toLowerCase();

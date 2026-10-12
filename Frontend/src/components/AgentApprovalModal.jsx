@@ -40,6 +40,8 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [showPendingBox, setShowPendingBox] = useState(false);
+  const [pendingReason, setPendingReason] = useState('');
   const [previewMedia, setPreviewMedia] = useState(null); // { url, title, isPdf }
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
@@ -52,7 +54,9 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
     setError('');
     setSuccessMsg('');
     setShowRejectBox(false);
+    setShowPendingBox(false);
     setRejectReason('');
+    setPendingReason('');
   }, [agent]);
 
   if (!isOpen || !currentAgent) return null;
@@ -116,6 +120,34 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
       }
     } catch (err) {
       setError(err.message || 'Error occurred while rejecting agent.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeepPending = async () => {
+    if (!pendingReason.trim()) {
+      setError('Please provide a reason or note explaining why this agent is kept pending.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await dataService.keepPendingAgent(activeAgent.id || activeAgent._id, { reason: pendingReason.trim() });
+      if (res.success) {
+        setSuccessMsg(res.message || 'Agent registration kept pending. Note saved.');
+        const updated = res.agent || { ...activeAgent, status: 'pending', adminApprovalStatus: 'pending', pendingReason: pendingReason.trim(), canApprove: true, workflowStage: 'Territory Pending' };
+        setCurrentAgent(updated);
+        if (onAgentUpdated) onAgentUpdated(updated);
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      } else {
+        setError(res.message || 'Failed to update agent pending status.');
+      }
+    } catch (err) {
+      setError(err.message || 'Error occurred while updating pending status.');
     } finally {
       setLoading(false);
     }
@@ -507,6 +539,39 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
             </div>
           )}
 
+          {/* Pending Reason Input Box */}
+          {showPendingBox && (
+            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 space-y-3 animate-fadeIn">
+              <label className="block text-xs font-bold text-amber-700 dark:text-amber-300">
+                Mandatory Reason / Note for Keeping Request Pending:
+              </label>
+              <textarea
+                value={pendingReason}
+                onChange={(e) => setPendingReason(e.target.value)}
+                rows={3}
+                placeholder="Enter mandatory reason or note explaining why this agent registration is kept pending (e.g. Awaiting proof of address, clarification on operational division, pending background check)..."
+                className="w-full text-xs p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPendingBox(false)}
+                  className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleKeepPending}
+                  disabled={loading || !pendingReason.trim()}
+                  className="px-4 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-lg shadow transition"
+                >
+                  {loading ? 'Saving...' : 'Confirm Pending'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Modal Footer Controls */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
             <button
@@ -524,8 +589,18 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
                 </span>
               )}
 
-              {isPending && !showRejectBox && activeAgent.canApprove !== false && (
+              {isPending && !showRejectBox && !showPendingBox && activeAgent.canApprove !== false && (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => setShowPendingBox(true)}
+                    disabled={loading}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800/60 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    Keep Pending
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setShowRejectBox(true)}

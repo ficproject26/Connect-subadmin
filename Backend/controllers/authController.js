@@ -4,12 +4,13 @@ const { db } = require('../config/db');
 const { generateToken, JWT_SECRET } = require('../utils/jwt');
 const { getMongoDb } = require('../config/mongo');
 const { getAssignedPermissions } = require('../utils/permissions');
+const { validateKycDocuments } = require('../utils/validation');
 
 const ROLE_LIMITS = {
-  state_manager: 8,      // 8 managers per State
-  district_manager: 2,   // 2 managers per District
-  division_manager: 2,   // 2 managers per Division
-  pincode_manager: 10    // 10 managers per PIN Code
+  state_manager: 25,     // 25 managers per State
+  district_manager: 25,  // 25 managers per District
+  division_manager: 25,  // 25 managers per Division
+  pincode_manager: 50    // 50 managers per PIN Code
 };
 
 const ROLE_LEVELS = {
@@ -114,8 +115,8 @@ const resolveAdminRole = (user) => {
 // Calculate occupancy for a location and role
 const getOccupancy = async (role, { stateId, districtId, divisionId, pincodeId }) => {
   const users = await db.users.find();
-  const occupiedUsers = users.filter(u => u.status === 'active' || u.status === 'under_review' || u.status === 'kyc_pending');
-  const limit = ROLE_LIMITS[role] || 2;
+  const occupiedUsers = users.filter(u => u.status === 'active' || u.status === 'approved');
+  const limit = ROLE_LIMITS[role] || 5;
 
   if (role === 'state_manager') {
     if (!stateId) return { count: 0, limit, isFull: false, remaining: limit };
@@ -275,28 +276,32 @@ const login = async (req, res) => {
       }
     }
 
+    // 2b. Check db.agents if not found in db.users
+    if (!user && db.agents) {
+      const allAgents = Array.from(db.agents);
+      const matches = allAgents.filter(u =>
+        (u.email && u.email.toLowerCase() === loginId) ||
+        (u.loginId && (u.loginId.toLowerCase() === loginId || u.loginId === rawId)) ||
+        (u.registrationId && (u.registrationId.toLowerCase() === loginId || u.registrationId === rawId)) ||
+        (isPhone && u.mobile && u.mobile.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
+        (isPhone && u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
+        (u.id && String(u.id).toLowerCase() === loginId) ||
+        (u._id && String(u._id).toLowerCase() === loginId)
+      );
+      if (matches.length > 0) {
+        user = { ...matches[0] };
+      }
+    }
+
     if (!user) {
       console.warn(`[AUTH] Failed login: User identifier '${loginId}' not found in database or local users.`);
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // 1. Authoritative Role & Hierarchy Evaluation
-    const roleInfo = resolveAdminRole(user);
-
-    // Strictly enforce authorized Sub-Admin management portal access
-    // Non-admin roles (Managers, Agents, Vendors, Customers) are denied access
-    if (!roleInfo.isAdmin) {
-      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' has role '${user.role}' which is not permitted for the Sub-Admin Portal.`);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-
-    // 2. Authoritative Password Verification
+    // 1. Authoritative Password Verification
     let isMatch = false;
-    const userHash = String(user.passwordHash || user.hash || user.hashedPassword || '').trim();
-    if (userHash) {
+    const userHash = String(user.passwordHash || user.hash || user.hashedPassword || user.password || '').trim();
+    if (userHash && (userHash.startsWith('$2a$') || userHash.startsWith('$2b$') || userHash.startsWith('$2y$'))) {
       try {
         isMatch = bcrypt.compareSync(password, userHash) || (typeof password === 'string' && bcrypt.compareSync(password.trim(), userHash));
       } catch (e) {}
@@ -319,87 +324,182 @@ const login = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    // 3. Status Evaluation
-    let currentStatus = (user.status || 'active').toLowerCase().trim();
-    if (currentStatus === 'approved' || currentStatus === 'active') {
-      currentStatus = 'active';
-    }
+    // 2. Authoritative Role & Hierarchy Evaluation
+    const roleInfo = resolveAdminRole(user);
 
-    if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
-      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${currentStatus}'.`);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-
-    if (currentStatus === 'rejected') {
-      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' application was rejected.`);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-
-    if (currentStatus !== 'active') {
-      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${user.status || 'inactive'}'.`);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
-
-    // Ensure active administrator is consistently marked active in database
-    if (user.isActive === false || user.status !== 'approved') {
-      user.isActive = true;
-      user.status = 'approved';
-      try {
-        const mdb = await getMongoDb();
-        if (mdb && user._id) {
-          await mdb.collection('users').updateOne(
-            { _id: user._id },
-            { $set: { status: 'approved', isActive: true, kycStatus: 'Verified', adminApprovalStatus: 'approved' } }
-          );
-        }
-      } catch (syncErr) {
-        console.warn('Admin status sync warning:', syncErr.message);
+    // If caller is an authorized Admin
+    if (roleInfo.isAdmin) {
+      // Status Evaluation
+      let currentStatus = (user.status || 'active').toLowerCase().trim();
+      if (currentStatus === 'approved' || currentStatus === 'active') {
+        currentStatus = 'active';
       }
+
+      if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
+        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${currentStatus}'.`);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+      }
+
+      if (currentStatus === 'rejected') {
+        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' application was rejected.`);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+      }
+
+      if (currentStatus !== 'active') {
+        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${user.status || 'inactive'}'.`);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials'
+        });
+      }
+
+      // Ensure active administrator is consistently marked active in database
+      if (user.isActive === false || user.status !== 'approved') {
+        user.isActive = true;
+        user.status = 'approved';
+        try {
+          const mdb = await getMongoDb();
+          if (mdb && user._id) {
+            await mdb.collection('users').updateOne(
+              { _id: user._id },
+              { $set: { status: 'approved', isActive: true, kycStatus: 'Verified', adminApprovalStatus: 'approved' } }
+            );
+          }
+        } catch (syncErr) {
+          console.warn('Admin status sync warning:', syncErr.message);
+        }
+      }
+
+      // Territory Synchronization & User Mapping
+      const finalState = user.state || user.assignedState || '';
+      const finalDistrict = user.district || user.assignedDistrict || '';
+      const finalDivision = user.division || user.assignedDivision || '';
+      const finalPincode = user.pincode || user.assignedPincode || '';
+
+      const mappedUser = {
+        ...user,
+        _id: user._id || user.id,
+        id: user._id || user.id,
+        role: roleInfo.role,
+        level: roleInfo.level,
+        status: 'active',
+        isActive: true,
+        state: finalState,
+        assignedState: finalState,
+        district: finalDistrict,
+        assignedDistrict: finalDistrict,
+        division: finalDivision,
+        assignedDivision: finalDivision,
+        pincode: finalPincode,
+        assignedPincode: finalPincode,
+        mobile: user.mobile || user.phone || '',
+        phone: user.phone || user.mobile || ''
+      };
+
+      const token = generateToken(mappedUser);
+      const userProfile = await buildUserProfile(mappedUser);
+
+      return res.json({
+        success: true,
+        requiresApproval: false,
+        message: 'Welcome ' + (mappedUser.name || 'Admin') + '. Logged in successfully.',
+        token,
+        user: userProfile
+      });
     }
 
-    // 4. Territory Synchronization & User Mapping
-    const finalState = user.state || user.assignedState || '';
-    const finalDistrict = user.district || user.assignedDistrict || '';
-    const finalDivision = user.division || user.assignedDivision || '';
-    const finalPincode = user.pincode || user.assignedPincode || '';
+    // Caller is a Manager or Agent
+    const rawUserRole = String(user.role || '').toLowerCase();
+    const isManager = rawUserRole.includes('manager') ||
+      ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(user.role);
+    const isAgent = rawUserRole.includes('agent') ||
+      ['state_agent', 'district_agent', 'division_agent', 'pincode_agent', 'state', 'district', 'division', 'pincode'].includes(user.role) ||
+      user.registrationFeePaid !== undefined || Boolean(user.territory);
 
-    const mappedUser = {
-      ...user,
-      _id: user._id || user.id,
-      id: user._id || user.id,
-      role: roleInfo.role,
-      level: roleInfo.level,
-      status: 'active',
-      isActive: true,
-      state: finalState,
-      assignedState: finalState,
-      district: finalDistrict,
-      assignedDistrict: finalDistrict,
-      division: finalDivision,
-      assignedDivision: finalDivision,
-      pincode: finalPincode,
-      assignedPincode: finalPincode,
-      mobile: user.mobile || user.phone || '',
-      phone: user.phone || user.mobile || ''
-    };
+    if (isManager || isAgent) {
+      const currentStatus = (user.status || 'pending').toLowerCase().trim();
+      const adminApprovalStatus = (user.adminApprovalStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'approved' : currentStatus === 'rejected' ? 'rejected' : 'pending')).toLowerCase().trim();
+      const kycStatus = (user.kycStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'Verified' : currentStatus === 'rejected' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
 
-    const token = generateToken(mappedUser);
-    const userProfile = await buildUserProfile(mappedUser);
+      const isFullyApproved = (currentStatus === 'active' || currentStatus === 'approved') &&
+        adminApprovalStatus === 'approved' &&
+        (kycStatus === 'verified' || kycStatus === 'approved') &&
+        user.isActive !== false;
 
-    return res.json({
-      success: true,
-      message: 'Welcome ' + (mappedUser.name || 'Admin') + '. Logged in successfully.',
-      token,
-      user: userProfile
+      const finalState = user.state || user.assignedState || (user.territory && user.territory.state) || '';
+      const finalDistrict = user.district || user.assignedDistrict || (user.territory && user.territory.district) || '';
+      const finalDivision = user.division || user.assignedDivision || (user.territory && user.territory.division) || '';
+      const finalPincode = user.pincode || user.assignedPincode || (user.territory && user.territory.pincode) || '';
+
+      const mappedUser = {
+        ...user,
+        _id: user._id || user.id,
+        id: user._id || user.id,
+        role: user.role,
+        level: user.level || ROLE_LEVELS[user.role] || 4,
+        status: isFullyApproved ? 'active' : (user.status || 'pending'),
+        isActive: isFullyApproved,
+        requiresApproval: !isFullyApproved,
+        adminApprovalStatus: user.adminApprovalStatus || (isFullyApproved ? 'approved' : 'pending'),
+        kycStatus: user.kycStatus || (isFullyApproved ? 'Verified' : 'pending_verification'),
+        rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
+        pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
+        state: finalState,
+        assignedState: finalState,
+        district: finalDistrict,
+        assignedDistrict: finalDistrict,
+        division: finalDivision,
+        assignedDivision: finalDivision,
+        pincode: finalPincode,
+        assignedPincode: finalPincode,
+        mobile: user.mobile || user.phone || '',
+        phone: user.phone || user.mobile || ''
+      };
+
+      const token = generateToken(mappedUser);
+      const userProfile = await buildUserProfile(mappedUser);
+
+      if (!isFullyApproved) {
+        return res.json({
+          success: true,
+          requiresApproval: true,
+          status: user.status || 'pending',
+          adminApprovalStatus: user.adminApprovalStatus || 'pending',
+          kycStatus: user.kycStatus || 'pending_verification',
+          rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
+          pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
+          token,
+          user: {
+            ...userProfile,
+            requiresApproval: true,
+            status: user.status || 'pending',
+            adminApprovalStatus: user.adminApprovalStatus || 'pending',
+            kycStatus: user.kycStatus || 'pending_verification',
+            rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
+            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null
+          }
+        });
+      }
+
+      return res.json({
+        success: true,
+        requiresApproval: false,
+        message: 'Welcome ' + (mappedUser.name || 'User') + '. Logged in successfully.',
+        token,
+        user: userProfile
+      });
+    }
+
+    console.warn(`[AUTH] Access denied: User '${user.email || loginId}' has role '${user.role}' which is not permitted.`);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid credentials'
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -431,6 +531,10 @@ const getMe = async (req, res) => {
       user = allUsers.find(u => String(u._id || u.id) === String(userId));
     }
 
+    if (!user && db.agents) {
+      user = Array.from(db.agents).find(u => String(u._id || u.id) === String(userId));
+    }
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -438,6 +542,41 @@ const getMe = async (req, res) => {
     // Role check
     const roleInfo = resolveAdminRole(user);
     if (!roleInfo.isAdmin) {
+      const rawUserRole = String(user.role || '').toLowerCase();
+      const isManager = rawUserRole.includes('manager') ||
+        ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(user.role);
+      const isAgent = rawUserRole.includes('agent') ||
+        ['state_agent', 'district_agent', 'division_agent', 'pincode_agent', 'state', 'district', 'division', 'pincode'].includes(user.role) ||
+        user.registrationFeePaid !== undefined || Boolean(user.territory);
+
+      if (isManager || isAgent) {
+        const currentStatus = (user.status || 'pending').toLowerCase().trim();
+        const adminApprovalStatus = (user.adminApprovalStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'approved' : currentStatus === 'rejected' ? 'rejected' : 'pending')).toLowerCase().trim();
+        const kycStatus = (user.kycStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'Verified' : currentStatus === 'rejected' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
+
+        const isFullyApproved = (currentStatus === 'active' || currentStatus === 'approved') &&
+          adminApprovalStatus === 'approved' &&
+          (kycStatus === 'verified' || kycStatus === 'approved') &&
+          user.isActive !== false;
+
+        const profile = await buildUserProfile(user);
+        return res.json({
+          success: true,
+          requiresApproval: !isFullyApproved,
+          isFullyApproved,
+          user: {
+            ...profile,
+            requiresApproval: !isFullyApproved,
+            isFullyApproved,
+            status: user.status || 'pending',
+            adminApprovalStatus: user.adminApprovalStatus || (isFullyApproved ? 'approved' : 'pending'),
+            kycStatus: user.kycStatus || (isFullyApproved ? 'Verified' : 'pending_verification'),
+            rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
+            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null
+          }
+        });
+      }
+
       return res.status(403).json({
         success: false,
         message: 'Your account does not have permission to access this application.'
@@ -557,26 +696,40 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide all required fields: Full Name, Email, Mobile, Password, and Role.' });
     }
 
-    const kycErr = validateKycDocuments(req.body);
-    if (kycErr) {
-      return res.status(400).json({ success: false, message: kycErr });
+    if (req.body.documents || req.body.aadharNumber || req.body.aadhaarNumber || req.body.panNumber) {
+      const kycErr = validateKycDocuments(req.body);
+      if (kycErr) {
+        return res.status(400).json({ success: false, message: kycErr });
+      }
     }
 
-    if (!['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(role)) {
-      return res.status(400).json({ success: false, message: 'Invalid manager role selected.' });
+    const normRole = (role || '').trim().toLowerCase().replace(/[\s-]/g, '_');
+    const isManagerRole = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(normRole);
+    const isAgentRole = ['state_agent', 'district_agent', 'division_agent', 'pincode_agent'].includes(normRole) || normRole === 'agent';
+    const effectiveRole = isAgentRole && normRole === 'agent'
+      ? (pincodeId || pincode ? 'pincode_agent' : divisionId || division ? 'division_agent' : districtId || district ? 'district_agent' : 'state_agent')
+      : normRole;
+
+    if (!isManagerRole && !isAgentRole) {
+      return res.status(400).json({ success: false, message: 'Invalid role selected. Must be a valid Manager or Agent role.' });
     }
 
-    if (role === 'state_manager' && !stateId && !state) {
-      return res.status(400).json({ success: false, message: 'State selection is required for State Manager.' });
+    const isStateLevel = effectiveRole === 'state_manager' || effectiveRole === 'state_agent';
+    const isDistrictLevel = effectiveRole === 'district_manager' || effectiveRole === 'district_agent';
+    const isDivisionLevel = effectiveRole === 'division_manager' || effectiveRole === 'division_agent';
+    const isPincodeLevel = effectiveRole === 'pincode_manager' || effectiveRole === 'pincode_agent';
+
+    if (isStateLevel && !stateId && !state) {
+      return res.status(400).json({ success: false, message: `State selection is required for ${effectiveRole.replace('_', ' ')}.` });
     }
-    if (role === 'district_manager' && (!stateId && !state || !districtId && !district)) {
-      return res.status(400).json({ success: false, message: 'State and District selections are required for District Manager.' });
+    if (isDistrictLevel && (!stateId && !state || !districtId && !district)) {
+      return res.status(400).json({ success: false, message: `State and District selections are required for ${effectiveRole.replace('_', ' ')}.` });
     }
-    if (role === 'division_manager' && (!stateId && !state || !districtId && !district || !divisionId && !division)) {
-      return res.status(400).json({ success: false, message: 'State, District, and Division selections are required for Division Manager.' });
+    if (isDivisionLevel && (!stateId && !state || !districtId && !district || !divisionId && !division)) {
+      return res.status(400).json({ success: false, message: `State, District, and Division selections are required for ${effectiveRole.replace('_', ' ')}.` });
     }
-    if (role === 'pincode_manager' && (!stateId && !state || !districtId && !district || !divisionId && !division || !pincodeId && !pincode)) {
-      return res.status(400).json({ success: false, message: 'State, District, Division, and PIN Code selections are required for PIN Code Manager.' });
+    if (isPincodeLevel && (!stateId && !state || !districtId && !district || !divisionId && !division || !pincodeId && !pincode)) {
+      return res.status(400).json({ success: false, message: `State, District, Division, and PIN Code selections are required for ${effectiveRole.replace('_', ' ')}.` });
     }
 
     const existingEmail = await db.users.findOne({ email: email.trim().toLowerCase() });
@@ -589,17 +742,19 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'An account with this mobile number already exists. Please sign in or use another mobile number.' });
     }
 
-    const occupancy = await getOccupancy(role, { stateId, districtId, divisionId, pincodeId });
-    if (occupancy.isFull) {
-      return res.status(400).json({
-        success: false,
-        limitReached: true,
-        message: `This place has reached its maximum manager capacity (${occupancy.count}/${occupancy.limit}). Registration not allowed for this location.`
-      });
+    if (isManagerRole) {
+      const occupancy = await getOccupancy(effectiveRole, { stateId, districtId, divisionId, pincodeId });
+      if (occupancy.isFull) {
+        return res.status(400).json({
+          success: false,
+          limitReached: true,
+          message: `This place has reached its maximum manager capacity (${occupancy.count}/${occupancy.limit}). Registration not allowed for this location.`
+        });
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const level = ROLE_LEVELS[role] || 1;
+    const level = ROLE_LEVELS[effectiveRole] || (isStateLevel ? 1 : isDistrictLevel ? 2 : isDivisionLevel ? 3 : 4);
 
     const [selectedState, selectedDistrict, selectedDivision, selectedPincode] = await Promise.all([
       stateId ? db.states.findById(stateId) : null,
@@ -613,14 +768,14 @@ const register = async (req, res) => {
     const divisionName = selectedDivision?.name || req.body.division || null;
     const pincodeCode = selectedPincode?.code || req.body.pincode || null;
 
-    // Resolve the related administrator for this manager's role and jurisdiction
+    // Resolve the related administrator for this role and jurisdiction
     let targetAdminRole = null;
     let targetJurisdiction = null;
     let relatedAdmin = null;
 
     const allAdmins = Array.from(db.users).filter(u => (u.role || '').toLowerCase().includes('admin'));
 
-    if (role === 'state_manager') {
+    if (isStateLevel) {
       targetAdminRole = 'State Admin';
       targetJurisdiction = `State: ${stateName || stateId}`;
       relatedAdmin = allAdmins.find(a => 
@@ -628,7 +783,7 @@ const register = async (req, res) => {
         ((a.stateId && stateId && String(a.stateId).toLowerCase() === String(stateId).toLowerCase()) ||
          (a.state && stateName && a.state.trim().toLowerCase() === stateName.trim().toLowerCase()))
       );
-    } else if (role === 'district_manager') {
+    } else if (isDistrictLevel) {
       targetAdminRole = 'District Admin';
       targetJurisdiction = `District: ${districtName || districtId}, ${stateName || stateId}`;
       relatedAdmin = allAdmins.find(a => 
@@ -637,7 +792,7 @@ const register = async (req, res) => {
          (a.district && districtName && a.district.trim().toLowerCase() === districtName.trim().toLowerCase()) ||
          ((a.district === 'Salem' || a.districtId === 'dist_salem') && (districtId === 'dist_salem' || districtName === 'Salem')))
       );
-    } else if (role === 'division_manager') {
+    } else if (isDivisionLevel) {
       targetAdminRole = 'Divisional Admin';
       targetJurisdiction = `Division: ${divisionName || divisionId}, ${districtName || districtId}`;
       relatedAdmin = allAdmins.find(a => 
@@ -646,7 +801,7 @@ const register = async (req, res) => {
          (a.division && divisionName && a.division.trim().toLowerCase() === divisionName.trim().toLowerCase()) ||
          ((a.division === 'Salem North' || a.divisionId === 'div_dist_salem_urban') && (divisionId === 'div_dist_salem_urban' || divisionName === 'Salem North')))
       );
-    } else if (role === 'pincode_manager') {
+    } else if (isPincodeLevel) {
       targetAdminRole = 'Pincode Admin';
       targetJurisdiction = `PIN: ${pincodeCode || pincodeId}`;
       relatedAdmin = allAdmins.find(a => 
@@ -718,15 +873,44 @@ const register = async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
+    if (isAgentRole && db.agents) {
+      const agentRecord = {
+        _id: newUser._id,
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        phone: newUser.mobile,
+        mobile: newUser.mobile,
+        role: effectiveRole.replace('_agent', ''),
+        level: effectiveRole.replace('_agent', ''),
+        registrationId: `REG-AGT-${Date.now().toString().slice(-6)}`,
+        territory: {
+          state: stateName,
+          district: districtName,
+          division: divisionName,
+          pincode: pincodeCode
+        },
+        status: 'pending',
+        adminApprovalStatus: 'pending',
+        kycStatus: 'pending_verification',
+        isActive: false,
+        isApproved: false,
+        documents: newUser.documents,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt
+      };
+      await db.agents.insertOne(agentRecord).catch(() => {});
+    }
+
     await db.auditLogs.insertOne({
-      action: 'MANAGER_DIRECT_REGISTERED_PENDING_ADMIN',
+      action: isAgentRole ? 'AGENT_DIRECT_REGISTERED_PENDING_ADMIN' : 'MANAGER_DIRECT_REGISTERED_PENDING_ADMIN',
       userId: newUser._id,
       userName: newUser.name,
       userRole: newUser.role,
       targetAdminRole,
       targetAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
       targetAdminName: relatedAdmin ? relatedAdmin.name : null,
-      details: `New ${role.replace('_', ' ')} direct registration submitted. Routed to ${targetAdminRole} (${relatedAdmin ? relatedAdmin.name : 'Pending admin assignment'}) for jurisdiction: ${targetJurisdiction}. Status: pending_admin_approval.`,
+      details: `New ${effectiveRole.replace('_', ' ')} direct registration submitted. Routed to ${targetAdminRole} (${relatedAdmin ? relatedAdmin.name : 'Pending admin assignment'}) for jurisdiction: ${targetJurisdiction}. Status: pending_admin_approval.`,
       ip: req.ip || '127.0.0.1'
     });
 
@@ -735,7 +919,8 @@ const register = async (req, res) => {
     res.status(201).json({
       success: true,
       status: 'pending_admin_approval',
-      message: `Manager registration submitted successfully. Your request has been routed to your designated ${targetAdminRole} (${targetJurisdiction}) for review and approval. Once approved, your account will be activated for login.`,
+      requiresApproval: true,
+      message: `${isAgentRole ? 'Agent' : 'Manager'} registration submitted successfully. Your request has been routed to your designated ${targetAdminRole} (${targetJurisdiction}) for review and approval. Once approved and verified, your account will be activated.`,
       user: userProfile
     });
   } catch (err) {
