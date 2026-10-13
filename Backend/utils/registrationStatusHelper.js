@@ -55,8 +55,9 @@ function getRegistrationState(user) {
     };
   }
 
-  // State 2: Awaiting KYC verification
-  if (adminApprovalStatus === 'approved' || currentStatus === 'pending_kyc' || kycStatus === 'pending_verification') {
+  // State 2: Awaiting KYC verification (Requires Sub-admin approval completed first)
+  const isSubAdminApproved = adminApprovalStatus === 'approved' || currentStatus === 'pending_kyc' || currentStatus === 'pending_kyc_approval';
+  if (isSubAdminApproved && (kycStatus !== 'verified' && kycStatus !== 'approved')) {
     return {
       stateKey: 'awaiting_kyc',
       stateNumber: 2,

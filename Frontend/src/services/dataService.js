@@ -113,6 +113,8 @@ export const dataService = {
     method: 'POST',
     body: JSON.stringify(data)
   }),
+  getCustomerHistory: (id) => apiRequest(`/customers/${id}/history`),
+  getCustomerDetails: (id) => apiRequest(`/customers/${id}`),
 
   // Vendors
   getVendors: (params = {}) => {

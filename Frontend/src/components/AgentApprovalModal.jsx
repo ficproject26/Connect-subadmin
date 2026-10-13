@@ -62,10 +62,11 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
   if (!isOpen || !currentAgent) return null;
 
   const activeAgent = currentAgent;
-  const isPending = activeAgent.status === 'under_review' || activeAgent.status === 'pending' || activeAgent.status === 'pending_admin_approval';
-  const isPendingKyc = activeAgent.status === 'pending_kyc';
-  const isActive = activeAgent.status === 'active' || activeAgent.status === 'approved';
-  const isRejected = activeAgent.status === 'rejected';
+  const s = String(activeAgent.status || '').toLowerCase();
+  const isPending = s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
+  const isPendingKyc = s === 'pending_kyc' || s === 'pending_kyc_approval';
+  const isActive = s === 'active' || s === 'approved';
+  const isRejected = s === 'rejected';
 
   const resolveMediaUrl = (url) => {
     if (!url) return '';
@@ -81,7 +82,7 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
       const res = await dataService.approveAgent(activeAgent.id || activeAgent._id);
       if (res.success) {
         setSuccessMsg(res.message || 'Agent registration approved! Forwarded to KYC Review queue.');
-        const updated = res.agent || { ...activeAgent, status: 'pending_kyc', adminApprovalStatus: 'approved', canApprove: false, workflowStage: 'Awaiting KYC Review' };
+        const updated = res.agent || { ...activeAgent, status: 'PENDING_KYC_APPROVAL', adminApprovalStatus: 'approved', canApprove: false, workflowStage: 'Awaiting KYC Review' };
         setCurrentAgent(updated);
         if (onAgentUpdated) onAgentUpdated(updated);
         setTimeout(() => {

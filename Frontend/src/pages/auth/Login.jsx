@@ -26,7 +26,18 @@ export function Login() {
   // and stay on the login page when the user is actually logged in.
   useEffect(() => {
     if (!authLoading && isAuthenticated && user?.role) {
-      if (user.requiresApproval || user.status !== 'active') {
+      const isManagerOrAgent = user?.role && (
+        user.role.toLowerCase().includes('manager') ||
+        user.role.toLowerCase().includes('agent')
+      );
+      const statusUpper = String(user?.status || '').toUpperCase();
+      const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+        String(user?.adminApprovalStatus || '').toLowerCase() === 'approved' &&
+        (String(user?.kycStatus || '').toLowerCase() === 'verified' || String(user?.kycStatus || '').toLowerCase() === 'approved') &&
+        user?.isActive !== false &&
+        !user?.requiresApproval;
+
+      if ((isManagerOrAgent && !isFullyApproved) || user.requiresApproval || (statusUpper !== 'ACTIVE' && statusUpper !== 'APPROVED')) {
         navigate('/registration-status', { replace: true });
       } else {
         navigate(getRoleDashboardPath(user.role), { replace: true });
@@ -61,10 +72,23 @@ export function Login() {
           localStorage.removeItem('ams_remembered_email');
           localStorage.setItem('ams_remember_me', 'false');
         }
-        if (res.requiresApproval || res.user.requiresApproval || res.user.status !== 'active') {
+        const loggedUser = res.user;
+        const isManagerOrAgent = loggedUser?.role && (
+          loggedUser.role.toLowerCase().includes('manager') ||
+          loggedUser.role.toLowerCase().includes('agent')
+        );
+        const statusUpper = String(loggedUser?.status || '').toUpperCase();
+        const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+          String(loggedUser?.adminApprovalStatus || '').toLowerCase() === 'approved' &&
+          (String(loggedUser?.kycStatus || '').toLowerCase() === 'verified' || String(loggedUser?.kycStatus || '').toLowerCase() === 'approved') &&
+          loggedUser?.isActive !== false &&
+          !loggedUser?.requiresApproval &&
+          !res.requiresApproval;
+
+        if ((isManagerOrAgent && !isFullyApproved) || res.requiresApproval || loggedUser.requiresApproval || (statusUpper !== 'ACTIVE' && statusUpper !== 'APPROVED')) {
           navigate('/registration-status', { replace: true });
         } else {
-          navigate(getRoleDashboardPath(res.user.role), { replace: true });
+          navigate(getRoleDashboardPath(loggedUser.role), { replace: true });
         }
       }
     } catch (err) {

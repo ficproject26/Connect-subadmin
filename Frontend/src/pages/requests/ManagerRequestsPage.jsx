@@ -198,9 +198,9 @@ export function ManagerRequestsPage() {
       if (statusFilter !== 'All') {
         const s = (item.status || 'pending').toLowerCase();
         if (statusFilter === 'Pending') {
-          if (s !== 'pending' && s !== 'under_review' && s !== 'pending_admin_approval') return false;
+          if (s !== 'pending' && s !== 'under_review' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval') return false;
         } else if (statusFilter === 'Approved') {
-          if (s !== 'approved' && s !== 'active' && s !== 'pending_kyc') return false;
+          if (s !== 'approved' && s !== 'active' && s !== 'pending_kyc' && s !== 'pending_kyc_approval') return false;
         } else if (statusFilter === 'Rejected') {
           if (s !== 'rejected') return false;
         }
@@ -266,7 +266,7 @@ export function ManagerRequestsPage() {
   // Workflow Stage Badge Helper
   const getWorkflowStageBadge = (stage, status) => {
     const s = (status || '').toLowerCase();
-    const stg = stage || (s === 'active' ? 'Activated' : s === 'rejected' ? 'Territory Rejected' : s === 'pending_kyc' ? 'Awaiting KYC Review' : 'Awaiting Territory Approval');
+    const stg = stage || (s === 'active' || s === 'approved' ? 'Activated' : s === 'rejected' ? 'Territory Rejected' : (s === 'pending_kyc' || s === 'pending_kyc_approval') ? 'Awaiting KYC Review' : 'Awaiting Territory Approval');
     
     if (stg === 'Activated' || s === 'active') {
       return (
@@ -275,7 +275,7 @@ export function ManagerRequestsPage() {
         </span>
       );
     }
-    if (stg === 'Awaiting KYC Review' || s === 'pending_kyc') {
+    if (stg === 'Awaiting KYC Review' || s === 'pending_kyc' || s === 'pending_kyc_approval') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border-cyan-800">
           <ShieldCheck className="w-3 h-3" /> Awaiting KYC Review
@@ -400,7 +400,7 @@ export function ManagerRequestsPage() {
         } else if (s === 'rejected') {
           statusBadgeText = 'Rejected';
           statusVariant = 'danger';
-        } else if (s === 'pending_kyc') {
+        } else if (s === 'pending_kyc' || s === 'pending_kyc_approval') {
           statusBadgeText = 'Approved';
           statusVariant = 'info';
         }
@@ -562,7 +562,7 @@ export function ManagerRequestsPage() {
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
               }`}
             >
-              {status}
+              {status === 'All' ? 'All Requests' : status}
             </button>
           ))}
         </div>

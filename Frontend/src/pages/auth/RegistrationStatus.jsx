@@ -76,8 +76,9 @@ export function getRegistrationState(user) {
     };
   }
 
-  // State 2: Awaiting KYC verification
-  if (adminApprovalStatus === 'approved' || currentStatus === 'pending_kyc' || kycStatus === 'pending_verification') {
+  // State 2: Awaiting KYC verification (Requires Sub-admin approval completed first)
+  const isSubAdminApproved = adminApprovalStatus === 'approved' || currentStatus === 'pending_kyc' || currentStatus === 'pending_kyc_approval';
+  if (isSubAdminApproved && (kycStatus !== 'verified' && kycStatus !== 'approved')) {
     return {
       stateKey: 'awaiting_kyc',
       stateNumber: 2,
@@ -92,8 +93,8 @@ export function getRegistrationState(user) {
   return {
     stateKey: 'pending_admin',
     stateNumber: 1,
-    title: 'Pending Administrative Approval',
-    primaryMessage: 'Your registration request is pending administrative approval. Please contact your administrator for further information.',
+    title: 'Awaiting Sub-admin Approval',
+    primaryMessage: 'Your registration request is pending Sub-admin approval. Please contact your administrator for further information.',
     badgeVariant: 'yellow',
     badgeText: 'Pending Administrative Approval'
   };

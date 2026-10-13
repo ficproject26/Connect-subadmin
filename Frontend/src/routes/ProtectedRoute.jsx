@@ -20,8 +20,22 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
+  const isManagerOrAgent = user?.role && (
+    user.role.toLowerCase().includes('manager') ||
+    user.role.toLowerCase().includes('agent')
+  );
+  const statusUpper = String(user?.status || '').toUpperCase();
+  const adminApprovalStatus = String(user?.adminApprovalStatus || '').toLowerCase();
+  const kycStatus = String(user?.kycStatus || '').toLowerCase();
+
+  const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+    adminApprovalStatus === 'approved' &&
+    (kycStatus === 'verified' || kycStatus === 'approved') &&
+    user?.isActive !== false &&
+    !user?.requiresApproval;
+
   // Strictly block direct URL navigation to any dashboard for unapproved applicants
-  if (user.requiresApproval || user.status !== 'active') {
+  if ((isManagerOrAgent && !isFullyApproved) || user?.requiresApproval || (statusUpper !== 'ACTIVE' && statusUpper !== 'APPROVED')) {
     return <Navigate to="/registration-status" replace />;
   }
 

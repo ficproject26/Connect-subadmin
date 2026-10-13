@@ -190,9 +190,9 @@ const populateManager = async (m, relation, user) => {
     workflowStage = 'Territory Rejected';
   } else if (kycStat === 'rejected') {
     workflowStage = 'KYC Rejected';
-  } else if (kycStat === 'verified' || kycStat === 'approved') {
-    workflowStage = 'KYC Approved';
-  } else if (s === 'pending_kyc' || admApp === 'approved') {
+  } else if ((s === 'active' || s === 'approved') && admApp === 'approved' && (kycStat === 'verified' || kycStat === 'approved')) {
+    workflowStage = 'Activated';
+  } else if (s === 'pending_kyc' || s === 'pending_kyc_approval' || admApp === 'approved') {
     workflowStage = 'Awaiting KYC Review';
   } else if (s === 'active' || s === 'approved') {
     workflowStage = 'Activated';
@@ -505,14 +505,27 @@ const getLowerLevelManagers = async (req, res) => {
     // Applications that are pending, under-review, awaiting KYC, or rejected belong exclusively in Manager Requests.
     const requestedStatus = (status || 'active').toLowerCase().trim();
     const isApprovedAndActive = (m) => {
-      const s = (m.status || '').toLowerCase();
-      // Unapproved, pending, under_review, pending_kyc, or rejected records belong exclusively in Manager Requests.
-      if (s === 'pending' || s === 'under_review' || s === 'pending_admin_approval' || s === 'pending_kyc' || s === 'rejected') {
+      const s = (m.status || '').toLowerCase().trim();
+      const admApp = (m.adminApprovalStatus || '').toLowerCase().trim();
+      const kycStat = (m.kycStatus || '').toLowerCase().trim();
+      // Unapproved, pending, under_review, pending_sub_admin_approval, pending_kyc, or rejected records belong exclusively in Manager Requests.
+      if (
+        s === 'pending' ||
+        s === 'under_review' ||
+        s === 'pending_admin_approval' ||
+        s === 'pending_sub_admin_approval' ||
+        s === 'pending_kyc' ||
+        s === 'pending_kyc_approval' ||
+        s === 'rejected' ||
+        admApp !== 'approved' ||
+        (kycStat !== 'verified' && kycStat !== 'approved') ||
+        m.isActive === false
+      ) {
         return false;
       }
       if (requestedStatus === 'suspended') return s === 'suspended';
       if (requestedStatus === 'inactive') return s === 'inactive';
-      return s === 'active';
+      return s === 'active' || s === 'approved';
     };
 
     rawSubordinates = rawSubordinates.filter(isApprovedAndActive);
@@ -665,10 +678,10 @@ const getManagerRequests = async (req, res) => {
       scopedRequests = scopedRequests.filter(m => {
         const s = (m.status || 'pending').toLowerCase();
         if (statusLower === 'pending' || statusLower === 'under_review') {
-          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval';
+          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
         }
         if (statusLower === 'approved') {
-          return s === 'pending_kyc' || s === 'approved' || s === 'active';
+          return s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'approved' || s === 'active';
         }
         if (statusLower === 'rejected') {
           return s === 'rejected';
@@ -755,9 +768,12 @@ const approveManager = async (req, res) => {
     const now = new Date().toISOString();
     // Persist territory approval, move to KYC team review queue (account remains restricted pending KYC)
     const approveUpdates = {
-      status: 'pending_kyc',
+      status: 'PENDING_KYC_APPROVAL',
       adminApprovalStatus: 'approved',
-      kycStatus: 'pending_verification',
+      kycStatus: manager.kycStatus === 'Verified' || manager.kycStatus === 'verified' ? 'Verified' : 'pending_verification',
+      isActive: false,
+      requiresApproval: true,
+      isFullyApproved: false,
       adminApprovedBy: req.user.name || req.user.email,
       adminApprovedById: req.user.id || req.user._id,
       adminApprovedByRole: req.user.role,
@@ -1442,7 +1458,10 @@ const addManager = async (req, res) => {
       passwordHash,
       role: mgrRole,
       level,
-      status: 'pending_kyc',
+      status: 'PENDING_KYC_APPROVAL',
+      isActive: false,
+      requiresApproval: true,
+      isFullyApproved: false,
       registrationType: 'admin',
       adminApprovalStatus: 'approved',
       adminApprovedBy: req.user.name || req.user.email,

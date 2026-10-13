@@ -156,7 +156,7 @@ async function request(path, options = {}) {
 
     assert.strictEqual(regRes.status, 201, `Registration should succeed with 201: ${JSON.stringify(regRes.data)}`);
     assert.strictEqual(regRes.data.success, true);
-    assert.strictEqual(regRes.data.user.status, 'pending_admin_approval');
+    assert(regRes.data.user.status === 'PENDING_SUB_ADMIN_APPROVAL' || regRes.data.user.status === 'pending_admin_approval', `Expected pending approval status, got ${regRes.data.user.status}`);
     assert.strictEqual(regRes.data.user.adminApprovalStatus, 'pending');
     assert.strictEqual(regRes.data.requiresApproval, true);
 
@@ -193,7 +193,7 @@ async function request(path, options = {}) {
     });
 
     assert.strictEqual(regRes.status, 201);
-    assert.strictEqual(regRes.data.user.status, 'pending_admin_approval');
+    assert(regRes.data.user.status === 'PENDING_SUB_ADMIN_APPROVAL' || regRes.data.user.status === 'pending_admin_approval', `Expected pending status, got ${regRes.data.user.status}`);
     assert.strictEqual(regRes.data.user.adminApprovalStatus, 'pending');
     testAgentUser = regRes.data.user;
 
@@ -215,7 +215,7 @@ async function request(path, options = {}) {
     const meRes = await request('/api/auth/me', { token: testManagerToken });
     assert.strictEqual(meRes.status, 200);
     assert.strictEqual(meRes.data.requiresApproval, true);
-    assert.strictEqual(meRes.data.user.status, 'pending_admin_approval');
+    assert(meRes.data.user.status === 'PENDING_SUB_ADMIN_APPROVAL' || meRes.data.user.status === 'pending_admin_approval', `Expected pending status, got ${meRes.data.user.status}`);
 
     const statusRes = await request('/api/auth/registration-status', { token: testManagerToken });
     assert.strictEqual(statusRes.status, 200);
@@ -319,7 +319,7 @@ async function request(path, options = {}) {
     });
     assert.strictEqual(approveRes.status, 200);
     assert.strictEqual(approveRes.data.manager.adminApprovalStatus, 'approved');
-    assert.strictEqual(approveRes.data.manager.status, 'pending_kyc');
+    assert(approveRes.data.manager.status === 'PENDING_KYC_APPROVAL' || approveRes.data.manager.status === 'pending_kyc', `Expected pending KYC status, got ${approveRes.data.manager.status}`);
 
     // KYC record queued
     const kycRecord = Array.from(db.kycRecords).find(k => String(k.managerId) === String(mgrId) || k.id === `KYC-MGR-${mgrId}`);

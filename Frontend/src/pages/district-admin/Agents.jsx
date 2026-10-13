@@ -207,7 +207,10 @@ export function DistrictAgents({ level = 'district' }) {
 
   // Filtered agents based on territory locking and selection
   const filteredAgents = useMemo(() => {
-    let list = agents;
+    let list = agents.filter(a => {
+      const s = (a.status || '').toLowerCase().trim();
+      return s !== 'rejected' && s !== 'pending' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval' && s !== 'pending_kyc';
+    });
     const effState = locking.stateLocked ? locking.defaultState : selectedFilterState;
     const effDistrict = locking.districtLocked ? locking.defaultDistrict : selectedFilterDistrict;
     const effDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam);

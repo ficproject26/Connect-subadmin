@@ -62,12 +62,16 @@ const inFlightRequests = new Map();
 // Helper to determine cache TTL based on endpoint characteristics
 function getEndpointTTL(endpoint) {
   const ep = endpoint.toLowerCase();
+  // Auth profile & registration status -> strictly 0 ms (never cache, always revalidate from DB)
+  if (ep.includes('/auth/me') || ep.includes('/auth/registration-status') || ep.includes('/auth/status')) {
+    return 0;
+  }
   // Geography and hierarchy entities change very rarely -> 10 minutes
   if (ep.includes('/admin/districts') || ep.includes('/admin/divisions') || ep.includes('/admin/pincodes') || ep.includes('/admin/states') || ep.includes('/territory')) {
     return 10 * 60 * 1000;
   }
-  // User authentication and categories -> 5 minutes
-  if (ep.includes('/auth/me') || ep.includes('/categories')) {
+  // Categories -> 5 minutes
+  if (ep.includes('/categories')) {
     return 5 * 60 * 1000;
   }
   // Dynamic business data (orders, bookings, jobs, vendors, customers, reports) -> 45 seconds
@@ -269,10 +273,10 @@ export async function apiRequest(endpoint, options = {}) {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   const cacheKey = `${token}:${method}:${cleanEndpoint}`;
 
-  // Serve from client-side SWR cache if valid GET
-  if (isGet && !options.skipCache && !options.fresh) {
+  // Serve from client-side SWR cache if valid GET with positive TTL
+  const ttl = getEndpointTTL(cleanEndpoint);
+  if (isGet && !options.skipCache && !options.fresh && ttl > 0) {
     const cached = apiCache.get(cacheKey);
-    const ttl = getEndpointTTL(cleanEndpoint);
     const now = Date.now();
 
     if (cached && (now - cached.timestamp < ttl)) {
@@ -298,7 +302,7 @@ export async function apiRequest(endpoint, options = {}) {
 
   const fetchPromise = executeFetch(cleanEndpoint, options, headers)
     .then((data) => {
-      if (isGet) {
+      if (isGet && ttl > 0) {
         apiCache.set(cacheKey, { data, timestamp: Date.now() });
       }
       return data;

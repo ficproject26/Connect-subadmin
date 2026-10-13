@@ -162,7 +162,14 @@ const buildUserProfile = async (user) => {
   const avatar = user.avatar || user.avatarUrl || null;
   const mobile = user.mobile || user.phone || null;
   const phone = user.phone || user.mobile || null;
-  const status = user.status || 'active';
+  const status = user.status || 'PENDING_SUB_ADMIN_APPROVAL';
+  const statusUpper = String(status).toUpperCase();
+  const adminApprovalStatus = user.adminApprovalStatus || (statusUpper === 'PENDING_KYC_APPROVAL' || statusUpper === 'PENDING_KYC' ? 'approved' : statusUpper === 'ACTIVE' || statusUpper === 'APPROVED' ? 'approved' : statusUpper === 'REJECTED' ? 'rejected' : 'pending');
+  const kycStatus = user.kycStatus || (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED' ? 'Verified' : statusUpper === 'REJECTED' ? 'Rejected' : 'pending_verification');
+  const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+    String(adminApprovalStatus).toLowerCase() === 'approved' &&
+    (String(kycStatus).toLowerCase() === 'verified' || String(kycStatus).toLowerCase() === 'approved') &&
+    user.isActive === true;
 
   return {
     id: user._id || user.id,
@@ -177,8 +184,16 @@ const buildUserProfile = async (user) => {
       ? user.permissions
       : getAssignedPermissions(user.role),
     status,
-    adminApprovalStatus: user.adminApprovalStatus || (status === 'kyc_pending' ? 'approved' : 'pending'),
-    kycStatus: user.kycStatus || (status === 'active' ? 'Verified' : 'pending_verification'),
+    adminApprovalStatus,
+    kycStatus,
+    isActive: Boolean(user.isActive),
+    requiresApproval: !isFullyApproved,
+    isFullyApproved,
+    targetAdminRole: user.targetAdminRole || null,
+    targetAdminId: user.targetAdminId || user.assignedAdminId || null,
+    targetAdminName: user.targetAdminName || null,
+    targetJurisdiction: user.targetJurisdiction || null,
+    routingIssue: user.routingIssue || null,
     dob: user.dob || null,
     gender: user.gender || null,
     address: user.address || null,
@@ -423,14 +438,15 @@ const login = async (req, res) => {
       user.registrationFeePaid !== undefined || Boolean(user.territory);
 
     if (isManager || isAgent) {
-      const currentStatus = (user.status || 'pending').toLowerCase().trim();
-      const adminApprovalStatus = (user.adminApprovalStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'approved' : currentStatus === 'rejected' ? 'rejected' : 'pending')).toLowerCase().trim();
-      const kycStatus = (user.kycStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'Verified' : currentStatus === 'rejected' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
+      const rawStatus = (user.status || 'PENDING_SUB_ADMIN_APPROVAL').trim();
+      const currentStatusUpper = rawStatus.toUpperCase();
+      const adminApprovalStatus = (user.adminApprovalStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'approved' : currentStatusUpper === 'REJECTED' ? 'rejected' : 'pending')).toLowerCase().trim();
+      const kycStatus = (user.kycStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'Verified' : currentStatusUpper === 'REJECTED' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
 
-      const isFullyApproved = (currentStatus === 'active' || currentStatus === 'approved') &&
+      const isFullyApproved = (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED') &&
         adminApprovalStatus === 'approved' &&
         (kycStatus === 'verified' || kycStatus === 'approved') &&
-        user.isActive !== false;
+        user.isActive === true;
 
       const finalState = user.state || user.assignedState || (user.territory && user.territory.state) || '';
       const finalDistrict = user.district || user.assignedDistrict || (user.territory && user.territory.district) || '';
@@ -443,13 +459,15 @@ const login = async (req, res) => {
         id: user._id || user.id,
         role: user.role,
         level: user.level || ROLE_LEVELS[user.role] || 4,
-        status: isFullyApproved ? 'active' : (user.status || 'pending'),
+        status: isFullyApproved ? 'active' : (user.status || 'PENDING_SUB_ADMIN_APPROVAL'),
         isActive: isFullyApproved,
         requiresApproval: !isFullyApproved,
+        isFullyApproved,
         adminApprovalStatus: user.adminApprovalStatus || (isFullyApproved ? 'approved' : 'pending'),
         kycStatus: user.kycStatus || (isFullyApproved ? 'Verified' : 'pending_verification'),
         rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
         pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
+        routingIssue: user.routingIssue || null,
         state: finalState,
         assignedState: finalState,
         district: finalDistrict,
@@ -469,20 +487,24 @@ const login = async (req, res) => {
         return res.json({
           success: true,
           requiresApproval: true,
-          status: user.status || 'pending',
-          adminApprovalStatus: user.adminApprovalStatus || 'pending',
+          isFullyApproved: false,
+          status: user.status || 'PENDING_SUB_ADMIN_APPROVAL',
+          adminApprovalStatus: user.adminApprovalStatus || (currentStatusUpper === 'PENDING_KYC_APPROVAL' ? 'approved' : 'pending'),
           kycStatus: user.kycStatus || 'pending_verification',
           rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
           pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
+          routingIssue: user.routingIssue || null,
           token,
           user: {
             ...userProfile,
             requiresApproval: true,
-            status: user.status || 'pending',
-            adminApprovalStatus: user.adminApprovalStatus || 'pending',
+            isFullyApproved: false,
+            status: user.status || 'PENDING_SUB_ADMIN_APPROVAL',
+            adminApprovalStatus: user.adminApprovalStatus || (currentStatusUpper === 'PENDING_KYC_APPROVAL' ? 'approved' : 'pending'),
             kycStatus: user.kycStatus || 'pending_verification',
             rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
-            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null
+            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
+            routingIssue: user.routingIssue || null
           }
         });
       }
@@ -535,6 +557,10 @@ const getMe = async (req, res) => {
       user = Array.from(db.agents).find(u => String(u._id || u.id) === String(userId));
     }
 
+    if (!user && db.managers) {
+      user = Array.from(db.managers).find(u => String(u._id || u.id) === String(userId));
+    }
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -550,14 +576,15 @@ const getMe = async (req, res) => {
         user.registrationFeePaid !== undefined || Boolean(user.territory);
 
       if (isManager || isAgent) {
-        const currentStatus = (user.status || 'pending').toLowerCase().trim();
-        const adminApprovalStatus = (user.adminApprovalStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'approved' : currentStatus === 'rejected' ? 'rejected' : 'pending')).toLowerCase().trim();
-        const kycStatus = (user.kycStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'Verified' : currentStatus === 'rejected' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
+        const rawStatus = (user.status || 'PENDING_SUB_ADMIN_APPROVAL').trim();
+        const currentStatusUpper = rawStatus.toUpperCase();
+        const adminApprovalStatus = (user.adminApprovalStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'approved' : currentStatusUpper === 'REJECTED' ? 'rejected' : 'pending')).toLowerCase().trim();
+        const kycStatus = (user.kycStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'Verified' : currentStatusUpper === 'REJECTED' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
 
-        const isFullyApproved = (currentStatus === 'active' || currentStatus === 'approved') &&
+        const isFullyApproved = (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED') &&
           adminApprovalStatus === 'approved' &&
           (kycStatus === 'verified' || kycStatus === 'approved') &&
-          user.isActive !== false;
+          user.isActive === true;
 
         const profile = await buildUserProfile(user);
         return res.json({
@@ -568,11 +595,12 @@ const getMe = async (req, res) => {
             ...profile,
             requiresApproval: !isFullyApproved,
             isFullyApproved,
-            status: user.status || 'pending',
+            status: user.status || 'PENDING_SUB_ADMIN_APPROVAL',
             adminApprovalStatus: user.adminApprovalStatus || (isFullyApproved ? 'approved' : 'pending'),
             kycStatus: user.kycStatus || (isFullyApproved ? 'Verified' : 'pending_verification'),
             rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
-            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null
+            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
+            routingIssue: user.routingIssue || null
           }
         });
       }
@@ -812,6 +840,9 @@ const register = async (req, res) => {
       );
     }
 
+    const routingIssue = !relatedAdmin ? `No matching ${targetAdminRole || 'Sub-admin'} found for territory: ${targetJurisdiction || 'unspecified'}` : null;
+    const initialStatus = 'PENDING_SUB_ADMIN_APPROVAL';
+
     const newUser = await db.users.insertOne({
       name: name.trim(),
       email: email.trim().toLowerCase(),
@@ -820,8 +851,13 @@ const register = async (req, res) => {
       passwordHash,
       role,
       level,
-      status: 'pending_admin_approval',
+      status: initialStatus,
       adminApprovalStatus: 'pending',
+      kycStatus: 'pending_verification',
+      isActive: false,
+      requiresApproval: true,
+      isFullyApproved: false,
+      routingIssue: routingIssue || null,
       registrationType: 'direct',
       targetAdminRole,
       targetAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
@@ -857,7 +893,6 @@ const register = async (req, res) => {
         passport: { url: req.body.passportUrl || null, name: req.body.passportFileName || 'Passport_Document' }
       },
       declarationAccepted: !!declarationAccepted,
-      kycStatus: 'pending_verification',
       state: stateName,
       district: districtName,
       division: divisionName,
@@ -890,16 +925,58 @@ const register = async (req, res) => {
           division: divisionName,
           pincode: pincodeCode
         },
-        status: 'pending',
+        status: initialStatus,
         adminApprovalStatus: 'pending',
         kycStatus: 'pending_verification',
         isActive: false,
         isApproved: false,
+        requiresApproval: true,
+        isFullyApproved: false,
+        routingIssue: routingIssue || null,
         documents: newUser.documents,
         createdAt: newUser.createdAt,
         updatedAt: newUser.updatedAt
       };
       await db.agents.insertOne(agentRecord).catch(() => {});
+    }
+
+    if (!isAgentRole && db.managers) {
+      const managerRecord = {
+        _id: newUser._id,
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        phone: newUser.mobile,
+        mobile: newUser.mobile,
+        role: newUser.role,
+        level: newUser.level,
+        registrationId: `REG-MGR-${Date.now().toString().slice(-6)}`,
+        state: stateName,
+        district: districtName,
+        division: divisionName,
+        pincode: pincodeCode,
+        stateId: stateId || null,
+        districtId: districtId || null,
+        divisionId: divisionId || null,
+        pincodeId: pincodeId || null,
+        targetAdminRole,
+        targetAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
+        targetAdminName: relatedAdmin ? relatedAdmin.name : null,
+        targetJurisdiction,
+        assignedAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
+        routingIssue: routingIssue || null,
+        status: initialStatus,
+        adminApprovalStatus: 'pending',
+        kycStatus: 'pending_verification',
+        isActive: false,
+        requiresApproval: true,
+        isFullyApproved: false,
+        documents: newUser.documents,
+        kycDocs: newUser.kycDocs,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt
+      };
+      await db.managers.insertOne(managerRecord).catch(() => {});
     }
 
     await db.auditLogs.insertOne({
@@ -910,7 +987,7 @@ const register = async (req, res) => {
       targetAdminRole,
       targetAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
       targetAdminName: relatedAdmin ? relatedAdmin.name : null,
-      details: `New ${effectiveRole.replace('_', ' ')} direct registration submitted. Routed to ${targetAdminRole} (${relatedAdmin ? relatedAdmin.name : 'Pending admin assignment'}) for jurisdiction: ${targetJurisdiction}. Status: pending_admin_approval.`,
+      details: `New ${effectiveRole.replace('_', ' ')} direct registration submitted. Routed to ${targetAdminRole} (${relatedAdmin ? relatedAdmin.name : 'Pending admin assignment'}) for jurisdiction: ${targetJurisdiction}. Status: ${initialStatus}.${routingIssue ? ` [ROUTING WARNING: ${routingIssue}]` : ''}`,
       ip: req.ip || '127.0.0.1'
     });
 
@@ -918,8 +995,10 @@ const register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      status: 'pending_admin_approval',
+      status: initialStatus,
       requiresApproval: true,
+      isFullyApproved: false,
+      routingIssue: routingIssue || null,
       message: `${isAgentRole ? 'Agent' : 'Manager'} registration submitted successfully. Your request has been routed to your designated ${targetAdminRole} (${targetJurisdiction}) for review and approval. Once approved and verified, your account will be activated.`,
       user: userProfile
     });

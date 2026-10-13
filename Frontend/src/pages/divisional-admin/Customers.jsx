@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { TierBadge, StatusBadge } from '../../components/Badge';
+import { CustomerDetailsModal } from '../../components/CustomerDetailsModal';
 import { useTheme } from '../../context/ThemeContext';
 import { Users, Phone, MapPin, CreditCard, UserCheck, TrendingUp } from 'lucide-react';
 
@@ -14,6 +15,7 @@ export function DivisionalCustomers() {
   const [allCustomers, setAllCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tierFilter, setTierFilter] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [searchParams] = useSearchParams();
 
   const pincodeFilter = searchParams.get('pincode');
@@ -85,6 +87,16 @@ export function DivisionalCustomers() {
 
   const columns = [
     {
+      header: 'S.No.',
+      accessor: (row, idx) => idx + 1,
+      className: 'w-14 text-center',
+      render: (row, idx) => (
+        <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-400">
+          {idx + 1}
+        </span>
+      )
+    },
+    {
       header: 'Customer Details',
       accessor: 'name',
       render: (row) => (
@@ -129,16 +141,28 @@ export function DivisionalCustomers() {
     {
       header: 'Orders & Spend',
       accessor: 'totalSpent',
-      render: (row) => (
-        <div>
-          <div className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-            ₹{row.totalSpent?.toLocaleString()}
+      render: (row) => {
+        const spent = Number(row.totalSpent || row.totalSpend || 0);
+        const orders = Number(row.totalOrders || row.ordersCount || 0);
+        const bookings = Number(row.totalBookings || row.bookingsCount || 0);
+
+        return (
+          <div>
+            <div className={`font-bold font-mono text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              ₹{spent.toLocaleString('en-IN')}
+            </div>
+            <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'} flex items-center gap-1 mt-0.5`}>
+              <span>{orders} {orders === 1 ? 'total order' : 'total orders'}</span>
+              {bookings > 0 && (
+                <>
+                  <span>•</span>
+                  <span>{bookings} {bookings === 1 ? 'booking' : 'bookings'}</span>
+                </>
+              )}
+            </div>
           </div>
-          <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-            {row.totalOrders} total orders
-          </div>
-        </div>
-      )
+        );
+      }
     },
     {
       header: 'Status',
@@ -224,6 +248,7 @@ export function DivisionalCustomers() {
         data={customers}
         loading={loading}
         onRefresh={loadData}
+        onRowClick={(row) => setSelectedCustomer(row)}
         filterOptions={[
           { label: 'All Customers', value: '' },
           { label: 'Diamond Card', value: 'Diamond' },
@@ -235,6 +260,15 @@ export function DivisionalCustomers() {
         onFilterChange={setTierFilter}
         exportFileName="divisional_customers.csv"
       />
+
+      {/* Customer Details Modal with Orders and Bookings tabs */}
+      {selectedCustomer && (
+        <CustomerDetailsModal
+          isOpen={!!selectedCustomer}
+          onClose={() => setSelectedCustomer(null)}
+          customer={selectedCustomer}
+        />
+      )}
     </div>
   );
 }

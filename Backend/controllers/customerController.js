@@ -174,19 +174,105 @@ function enrichCustomer(c, indicesOrArray) {
   };
 }
 
+// Helper to calculate customer transaction metrics across orders and bookings
+function calculateCustomerTransactionMetrics(customers, allOrders, allBookings) {
+  const combinedTx = [...allOrders];
+  const seenIds = new Set(allOrders.map(o => String(o._id || o.id || o.order_number || o.bookingNumber || '')));
+  allBookings.forEach(b => {
+    const bId = String(b._id || b.id || b.order_number || b.bookingNumber || '');
+    if (bId && !seenIds.has(bId)) {
+      combinedTx.push(b);
+      seenIds.add(bId);
+    }
+  });
+
+  const isBooking = (o) => {
+    const cat = String(o.category || o.type || o.bookingType || '').toLowerCase().trim();
+    const id = String(o.id || o.order_number || o._id || o.bookingNumber || '').toUpperCase();
+    return cat === 'stay' || cat === 'service' || cat === 'services' || cat === 'travel' || id.startsWith('BKG');
+  };
+
+  const isEligiblePaid = (o) => {
+    const p = String(o.paymentStatus || o.payment_status || o.payment || '').toLowerCase().trim();
+    const s = String(o.status || '').toLowerCase().trim();
+    if (p === 'failed' || p === 'refunded' || p === 'cancelled' || p === 'unpaid') return false;
+    if (s === 'cancelled' || s === 'failed' || s === 'refunded') return false;
+    return p === 'paid' || p === 'completed' || p === 'success' || p === 'successful' || s === 'delivered' || s === 'completed';
+  };
+
+  const byCustId = new Map();
+  const byPhone = new Map();
+  const byEmail = new Map();
+  const byName = new Map();
+
+  const addMap = (map, key, val) => {
+    if (!key) return;
+    const k = String(key).trim().toLowerCase();
+    if (!k || k === 'not provided' || k === 'customer' || k === 'null' || k === 'undefined') return;
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(val);
+  };
+
+  combinedTx.forEach(t => {
+    [t.customerId, t.customer_id, t.memberId].forEach(id => addMap(byCustId, id, t));
+    [t.customerPhone, t.phone].forEach(p => addMap(byPhone, p, t));
+    [t.customerEmail, t.email].forEach(e => addMap(byEmail, e, t));
+    [t.customerName, t.customer_name].forEach(n => addMap(byName, n, t));
+  });
+
+  return customers.map(c => {
+    const cIds = [c._id, c.id, c.customerId].filter(Boolean).map(x => String(x).trim().toLowerCase());
+    const cPhone = String(c.phone || '').trim().toLowerCase();
+    const cEmail = String(c.email || '').trim().toLowerCase();
+    const cName = String(c.name || '').trim().toLowerCase();
+
+    const matchedSet = new Set();
+    const addMatches = (list) => {
+      if (list && Array.isArray(list)) list.forEach(item => matchedSet.add(item));
+    };
+
+    cIds.forEach(id => addMatches(byCustId.get(id)));
+    if (cPhone) addMatches(byPhone.get(cPhone));
+    if (cEmail) addMatches(byEmail.get(cEmail));
+    if (matchedSet.size === 0 && cName) {
+      addMatches(byName.get(cName));
+    }
+
+    const matchedList = Array.from(matchedSet);
+    const orders = matchedList.filter(m => !isBooking(m));
+    const bookings = matchedList.filter(m => isBooking(m));
+    const paidList = matchedList.filter(isEligiblePaid);
+    const totalSpent = paidList.reduce((sum, m) => sum + Number(m.amount || m.totalAmount || m.finalAmount || 0), 0);
+
+    return {
+      ...c,
+      totalOrders: orders.length,
+      ordersCount: orders.length,
+      totalBookings: bookings.length,
+      bookingsCount: bookings.length,
+      totalSpent: Math.round(totalSpent),
+      totalSpend: Math.round(totalSpent),
+      formattedSpend: `₹${Math.round(totalSpent).toLocaleString('en-IN')}`
+    };
+  });
+}
+
 async function getCustomers(req, res) {
   try {
     const allCardholders = Array.from(db.cardholders || []);
     const rawCustomers = Array.from(db.customers || []);
+    const allOrders = Array.from(db.orders || []);
+    const allBookings = Array.from(db.bookings || []);
 
     // Build O(1) indices for fast cardholder lookups
     const cardholderIndices = buildCardholderIndices(allCardholders);
 
-    // Enrich all customers with verified coordinates & membership tier
+    // Enrich all customers with verified coordinates, membership tier & order/spend metrics
     const enriched = rawCustomers.map(c => enrichCustomer(c, cardholderIndices));
+    const withMetrics = calculateCustomerTransactionMetrics(enriched, allOrders, allBookings);
 
     // Apply strict location filtering
-    let scoped = filterByLocation(enriched, req.user);
+    let scoped = filterByLocation(withMetrics, req.user);
 
     // Apply query filters
     const { search, tier, status, pincode, page, limit } = req.query;
@@ -461,8 +547,143 @@ async function upgradeMembership(req, res) {
   }
 }
 
+async function getCustomerHistory(req, res) {
+  try {
+    const { id } = req.params;
+    const rawCustomers = Array.from(db.customers || []);
+    const customer = rawCustomers.find(c => String(c._id || c.id || c.customerId).toLowerCase() === String(id).toLowerCase());
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    const allCardholders = Array.from(db.cardholders || []);
+    const cardIndices = buildCardholderIndices(allCardholders);
+    const enrichedCustomer = enrichCustomer(customer, cardIndices);
+
+    const allOrders = Array.from(db.orders || []);
+    const allBookings = Array.from(db.bookings || []);
+
+    const combinedTx = [...allOrders];
+    const seenIds = new Set(allOrders.map(o => String(o._id || o.id || o.order_number || o.bookingNumber || '')));
+    allBookings.forEach(b => {
+      const bId = String(b._id || b.id || b.order_number || b.bookingNumber || '');
+      if (bId && !seenIds.has(bId)) {
+        combinedTx.push(b);
+        seenIds.add(bId);
+      }
+    });
+
+    const isBooking = (o) => {
+      const cat = String(o.category || o.type || o.bookingType || '').toLowerCase().trim();
+      const oId = String(o.id || o.order_number || o._id || o.bookingNumber || '').toUpperCase();
+      return cat === 'stay' || cat === 'service' || cat === 'services' || cat === 'travel' || oId.startsWith('BKG');
+    };
+
+    const isEligiblePaid = (o) => {
+      const p = String(o.paymentStatus || o.payment_status || o.payment || '').toLowerCase().trim();
+      const s = String(o.status || '').toLowerCase().trim();
+      if (p === 'failed' || p === 'refunded' || p === 'cancelled' || p === 'unpaid') return false;
+      if (s === 'cancelled' || s === 'failed' || s === 'refunded') return false;
+      return p === 'paid' || p === 'completed' || p === 'success' || p === 'successful' || s === 'delivered' || s === 'completed';
+    };
+
+    const cIds = new Set([
+      String(customer._id || '').trim().toLowerCase(),
+      String(customer.id || '').trim().toLowerCase(),
+      String(customer.customerId || '').trim().toLowerCase()
+    ].filter(Boolean));
+    const cPhone = String(customer.phone || '').trim().toLowerCase();
+    const cEmail = String(customer.email || '').trim().toLowerCase();
+    const cName = String(customer.name || '').trim().toLowerCase();
+
+    const matchedTx = combinedTx.filter(t => {
+      const tIds = [
+        String(t.customerId || '').trim().toLowerCase(),
+        String(t.customer_id || '').trim().toLowerCase(),
+        String(t.memberId || '').trim().toLowerCase()
+      ].filter(Boolean);
+      for (const tid of tIds) {
+        if (cIds.has(tid)) return true;
+      }
+      const tPhone = String(t.customerPhone || t.phone || '').trim().toLowerCase();
+      if (cPhone && tPhone && cPhone === tPhone) return true;
+      const tEmail = String(t.customerEmail || t.email || '').trim().toLowerCase();
+      if (cEmail && tEmail && cEmail === tEmail) return true;
+      const tName = String(t.customerName || t.customer_name || '').trim().toLowerCase();
+      if (cName && tName && cName === tName) return true;
+      return false;
+    });
+
+    const orderRecords = matchedTx.filter(m => !isBooking(m)).map(o => {
+      const rawDate = o.created_at || o.createdAt || o.orderDate || o.date;
+      const amount = Number(o.amount || o.totalAmount || o.finalAmount || 0);
+      const items = Array.isArray(o.items) && o.items.length > 0 ? o.items : [];
+      const productName = items.length > 0 ? items.map(i => i.name || i.productName || 'Item').join(', ') : (o.product_details || o.productName || 'Product Item');
+      const category = (items[0]?.category) || o.category || o.type || 'Products';
+      const quantity = items.reduce((acc, it) => acc + Number(it.quantity || it.qty || 1), 0) || Number(o.quantity || o.qty || 1);
+
+      return {
+        orderId: o.order_number || o.orderNumber || o.orderId || o.id || o._id,
+        orderDate: rawDate ? new Date(rawDate).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent',
+        createdAt: rawDate,
+        productName,
+        category,
+        quantity,
+        amount,
+        paymentStatus: o.paymentStatus || o.payment_status || (isEligiblePaid(o) ? 'Paid' : 'Pending'),
+        status: o.status || 'Order Received'
+      };
+    });
+
+    const bookingRecords = matchedTx.filter(m => isBooking(m)).map(b => {
+      const rawDate = b.created_at || b.createdAt || b.bookingDate || b.date;
+      const schedule = b.appointmentDate || b.checkInDate || (rawDate ? new Date(rawDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Scheduled');
+      const amount = Number(b.amount || b.totalAmount || b.finalAmount || b.charge || 0);
+      
+      const rawType = String(b.type || b.bookingType || b.category || '').toLowerCase();
+      const isStay = rawType.includes('stay') || (b.product_details && /hotel|room|deluxe|resort/i.test(b.product_details));
+      const isTravel = rawType.includes('travel') || (b.product_details && /travel|cab|tour/i.test(b.product_details));
+      const category = isStay ? 'Stay' : (isTravel ? 'Travel' : 'Service');
+
+      const serviceName = b.product_details || (b.items && b.items[0]?.name) || b.service || (isStay ? 'Deluxe Room' : (isTravel ? 'Travel Service' : 'Specialized Service'));
+
+      return {
+        bookingId: b.bookingNumber || b.order_number || b.bookingId || b.id || b._id,
+        bookingDate: rawDate ? new Date(rawDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent',
+        createdAt: rawDate,
+        category,
+        serviceName,
+        schedule,
+        amount,
+        paymentStatus: b.paymentStatus || b.payment_status || (isEligiblePaid(b) ? 'Paid' : 'Pending'),
+        status: b.status || 'Booking Confirmed'
+      };
+    });
+
+    const paidList = matchedTx.filter(isEligiblePaid);
+    const totalSpent = paidList.reduce((sum, m) => sum + Number(m.amount || m.totalAmount || m.finalAmount || 0), 0);
+
+    return res.json({
+      success: true,
+      customer: {
+        ...enrichedCustomer,
+        totalOrders: orderRecords.length,
+        totalBookings: bookingRecords.length,
+        totalSpent: Math.round(totalSpent),
+        formattedSpend: `₹${Math.round(totalSpent).toLocaleString('en-IN')}`
+      },
+      orders: orderRecords,
+      bookings: bookingRecords
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch customer history', error: error.message });
+  }
+}
+
 module.exports = {
   getCustomers,
   getMembershipCards,
-  upgradeMembership
+  upgradeMembership,
+  getCustomerHistory,
+  getCustomerDetails: getCustomerHistory
 };

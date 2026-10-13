@@ -14,7 +14,7 @@ export const authService = {
   },
 
   async getMe() {
-    return await apiRequest('/auth/me');
+    return await apiRequest('/auth/me', { skipCache: true, fresh: true });
   },
 
   async getDemoAdmins() {

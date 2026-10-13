@@ -364,7 +364,18 @@ async function getAgents(req, res) {
 
     // Step 7: Status filter
     if (status) {
-      scoped = scoped.filter(a => a.status && String(a.status).toLowerCase() === String(status).toLowerCase());
+      if (String(status).toLowerCase() === 'all') {
+        // Explicit all-records view
+      } else {
+        scoped = scoped.filter(a => a.status && String(a.status).toLowerCase() === String(status).toLowerCase());
+      }
+    } else {
+      // By default in Agent Directories / Rosters, strictly show ONLY approved/active agents.
+      // Rejected and pending applicants belong exclusively in the Agent Requests workflow.
+      scoped = scoped.filter(a => {
+        const s = (a.status || '').toLowerCase().trim();
+        return (s === 'active' || s === 'approved') && s !== 'rejected' && !s.includes('pending');
+      });
     }
 
     // Step 8: Format each agent with standard normalized fields

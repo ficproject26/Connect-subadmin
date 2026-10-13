@@ -49,6 +49,9 @@ function authMiddleware(req, res, next) {
     if (!dbUser && db.agents) {
       dbUser = Array.from(db.agents).find(a => String(a._id || a.id) === String(userId));
     }
+    if (!dbUser && db.managers) {
+      dbUser = Array.from(db.managers).find(m => String(m._id || m.id) === String(userId));
+    }
 
     const effectiveUser = dbUser ? { ...userPayload, ...dbUser } : userPayload;
     const rawRole = String(effectiveUser.role || '').toLowerCase();
@@ -57,30 +60,35 @@ function authMiddleware(req, res, next) {
       effectiveUser.registrationFeePaid !== undefined || Boolean(effectiveUser.territory);
 
     if (isManagerOrAgent) {
-      const currentStatus = String(effectiveUser.status || 'pending').toLowerCase().trim();
-      const adminApprovalStatus = String(effectiveUser.adminApprovalStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'approved' : currentStatus === 'rejected' ? 'rejected' : 'pending')).toLowerCase().trim();
-      const kycStatus = String(effectiveUser.kycStatus || (currentStatus === 'active' || currentStatus === 'approved' ? 'verified' : currentStatus === 'rejected' ? 'rejected' : 'pending_verification')).toLowerCase().trim();
+      const rawStatus = String(effectiveUser.status || 'PENDING_SUB_ADMIN_APPROVAL').trim();
+      const currentStatusUpper = rawStatus.toUpperCase();
+      const adminApprovalStatus = String(effectiveUser.adminApprovalStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'approved' : currentStatusUpper === 'REJECTED' ? 'rejected' : 'pending')).toLowerCase().trim();
+      const kycStatus = String(effectiveUser.kycStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'verified' : currentStatusUpper === 'REJECTED' ? 'rejected' : 'pending_verification')).toLowerCase().trim();
 
-      const isFullyApproved = (currentStatus === 'active' || currentStatus === 'approved') &&
+      const isFullyApproved = (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED') &&
         adminApprovalStatus === 'approved' &&
         (kycStatus === 'verified' || kycStatus === 'approved') &&
-        effectiveUser.isActive !== false;
+        effectiveUser.isActive === true;
 
       // If user is unapproved
       if (!isFullyApproved) {
-        // Allow querying profile / registration status on auth routes
+        // Allow querying profile / registration status on auth routes ONLY
         const reqPath = (req.originalUrl || req.url || '').toLowerCase();
-        if (reqPath.includes('/auth/me') || reqPath.includes('/auth/registration-status')) {
-          req.user = { ...effectiveUser, requiresApproval: true };
+        const isStatusPath = reqPath.includes('/auth/me') || reqPath.includes('/auth/registration-status');
+        if (isStatusPath) {
+          req.user = { ...effectiveUser, requiresApproval: true, isFullyApproved: false };
           req.userId = userId;
           return next();
         }
 
-        // Strictly block access to all protected dashboard, admin, and business endpoints
+        // Strictly block access to all protected dashboard, manager, admin, and business endpoints
         return res.status(403).json({
           success: false,
           requiresApproval: true,
-          status: effectiveUser.status || 'pending',
+          isFullyApproved: false,
+          status: effectiveUser.status || 'PENDING_SUB_ADMIN_APPROVAL',
+          adminApprovalStatus: effectiveUser.adminApprovalStatus || 'pending',
+          kycStatus: effectiveUser.kycStatus || 'pending_verification',
           message: 'Account registration approval is incomplete. Access to protected dashboard resources is restricted.'
         });
       }

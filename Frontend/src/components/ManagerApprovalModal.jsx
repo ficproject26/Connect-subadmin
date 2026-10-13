@@ -60,11 +60,12 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   if (!isOpen || !currentMgr) return null;
 
   const activeMgr = currentMgr;
-  const isPendingAdmin = activeMgr.status === 'under_review' || activeMgr.status === 'pending' || activeMgr.status === 'pending_admin_approval';
-  const isPendingKyc = activeMgr.status === 'pending_kyc';
+  const s = String(activeMgr.status || '').toLowerCase();
+  const isPendingAdmin = s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
+  const isPendingKyc = s === 'pending_kyc' || s === 'pending_kyc_approval';
   const isPending = isPendingAdmin || isPendingKyc;
-  const isActive = activeMgr.status === 'active';
-  const isRejected = activeMgr.status === 'rejected';
+  const isActive = s === 'active';
+  const isRejected = s === 'rejected';
 
   // Format relative uploads so they route via current host & Vite proxy cleanly
   const resolveMediaUrl = (url) => {
@@ -81,7 +82,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
       const res = await dataService.approveManager(activeMgr.id || activeMgr._id);
       if (res.success) {
         setSuccessMsg(res.message || 'Registration accepted & approved! Manager queued for KYC review.');
-        const updated = res.manager || { ...activeMgr, status: 'pending_kyc', adminApprovalStatus: 'approved', canApprove: false, workflowStage: 'Awaiting KYC Review' };
+        const updated = res.manager || { ...activeMgr, status: 'PENDING_KYC_APPROVAL', adminApprovalStatus: 'approved', canApprove: false, workflowStage: 'Awaiting KYC Review' };
         setCurrentMgr(updated);
         if (onManagerUpdated) onManagerUpdated(updated);
         setTimeout(() => {

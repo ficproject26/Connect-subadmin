@@ -5,7 +5,7 @@ async function getKYCRecords(req, res) {
     // Ensure all managers waiting for KYC verification have an entry in db.kycRecords
     if (db.kycRecords && db.users) {
       const pendingManagers = db.users.filter(u => 
-        (u.status === 'pending_kyc' || (u.adminApprovalStatus === 'approved' && u.kycStatus === 'pending_verification')) &&
+        (u.status === 'pending_kyc' || u.status === 'PENDING_KYC_APPROVAL' || (u.adminApprovalStatus === 'approved' && (u.kycStatus === 'pending_verification' || u.kycStatus === 'pending'))) &&
         (u.role && u.role.includes('manager'))
       );
 
@@ -113,7 +113,7 @@ async function getKYCRecords(req, res) {
 async function processKYC(req, res) {
   try {
     const { id } = req.params;
-    const { status, reason } = req.body; // status: 'Verified' | 'Approved' | 'Rejected' | 'Pending'
+    const { status, action, reason } = req.body; // status: 'Verified' | 'Approved' | 'Rejected' | 'Pending', or action: 'approve' | 'reject' | 'pending'
 
     const record = (await db.kycRecords.findById(id)) || Array.from(db.kycRecords || []).find(k => String(k._id || k.id) === String(id));
     if (!record) return res.status(404).json({ success: false, message: 'KYC record not found' });
@@ -123,9 +123,9 @@ async function processKYC(req, res) {
       return res.status(403).json({ success: false, message: 'Record outside your jurisdiction' });
     }
 
-    const normStatus = (status || '').toLowerCase();
-    const isApprovedAction = normStatus === 'verified' || normStatus === 'approved' || normStatus === 'kyc approved';
-    const isRejectedAction = normStatus === 'rejected';
+    const normStatus = (status || action || '').toLowerCase();
+    const isApprovedAction = normStatus === 'verified' || normStatus === 'approved' || normStatus === 'kyc approved' || normStatus === 'approve';
+    const isRejectedAction = normStatus === 'rejected' || normStatus === 'reject';
     const isPendingAction = normStatus === 'pending';
 
     const trimmedReason = (reason || '').trim();
@@ -180,9 +180,20 @@ async function processKYC(req, res) {
             manager.isActive = true;
           } else {
             // Keep status pending administrative approval
+            manager.status = manager.status || 'PENDING_SUB_ADMIN_APPROVAL';
             manager.isActive = false;
           }
           await db.users.update(manager);
+          if (db.managers) {
+            await db.managers.findByIdAndUpdate(manager._id || manager.id, {
+              status: manager.status,
+              kycStatus: manager.kycStatus,
+              isActive: manager.isActive,
+              kycVerifiedAt: manager.kycVerifiedAt,
+              kycVerifiedBy: manager.kycVerifiedBy,
+              updatedAt: now
+            }).catch(() => {});
+          }
 
           if (db.auditLogs) {
             await db.auditLogs.insertOne({
@@ -210,6 +221,18 @@ async function processKYC(req, res) {
           manager.kycRejectedBy = verifiedBy;
           manager.updatedAt = now;
           await db.users.update(manager);
+          if (db.managers) {
+            await db.managers.findByIdAndUpdate(manager._id || manager.id, {
+              status: 'rejected',
+              kycStatus: 'Rejected',
+              isActive: false,
+              rejectionReason: trimmedReason,
+              kycRejectionReason: trimmedReason,
+              kycRejectedAt: now,
+              kycRejectedBy: verifiedBy,
+              updatedAt: now
+            }).catch(() => {});
+          }
 
           if (db.auditLogs) {
             await db.auditLogs.insertOne({
@@ -235,6 +258,18 @@ async function processKYC(req, res) {
           manager.kycPendingBy = verifiedBy;
           manager.updatedAt = now;
           await db.users.update(manager);
+          if (db.managers) {
+            await db.managers.findByIdAndUpdate(manager._id || manager.id, {
+              status: 'pending',
+              kycStatus: 'pending',
+              isActive: false,
+              pendingReason: trimmedReason,
+              kycPendingReason: trimmedReason,
+              kycPendingAt: now,
+              kycPendingBy: verifiedBy,
+              updatedAt: now
+            }).catch(() => {});
+          }
 
           if (db.auditLogs) {
             await db.auditLogs.insertOne({

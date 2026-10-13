@@ -231,7 +231,10 @@ export function StateAgents({ level = 'state' }) {
   const totalEarnedSum = agents.reduce((acc, a) => acc + (Number(a.totalEarned ?? a.earnings ?? a.disbursedAmount) || 0), 0);
   // Filtered agents based on territory locking and selection
   const filteredAgents = useMemo(() => {
-    let list = agents;
+    let list = agents.filter(a => {
+      const s = (a.status || '').toLowerCase().trim();
+      return s !== 'rejected' && s !== 'pending' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval' && s !== 'pending_kyc';
+    });
     const effState = locking.stateLocked ? locking.defaultState : (selectedFilterState || stateFilterParam);
     const effDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || districtFilterParam);
     const effDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam);
