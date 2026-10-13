@@ -155,14 +155,21 @@ export function StateAgents({ level = 'state' }) {
       // 1. Fetch Agents for active level with complete hierarchical scoping
       const params = { level: activeLevel };
       const reqState = locking.stateLocked ? locking.defaultState : (selectedFilterState || stateFilterParam || (user?.state && user.state !== 'All India' ? user.state : ''));
-      const reqDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || districtFilterParam || '');
-      const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam || '');
-      const reqPincode = locking.pincodeLocked ? locking.defaultPincode : (selectedFilterPincode || pincodeFilterParam || '');
-
       if (reqState) params.state = reqState;
-      if (reqDistrict) params.district = reqDistrict;
-      if (reqDivision) params.division = reqDivision;
-      if (reqPincode) params.pincode = reqPincode;
+
+      // Only apply child territory filters if relevant to active level
+      if (activeLevel !== 'state') {
+        const reqDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || districtFilterParam || '');
+        if (reqDistrict) params.district = reqDistrict;
+      }
+      if (activeLevel === 'divisional' || activeLevel === 'pincode') {
+        const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam || '');
+        if (reqDivision) params.division = reqDivision;
+      }
+      if (activeLevel === 'pincode') {
+        const reqPincode = locking.pincodeLocked ? locking.defaultPincode : (selectedFilterPincode || pincodeFilterParam || '');
+        if (reqPincode) params.pincode = reqPincode;
+      }
 
       const res = await dataService.getAgents(params);
       if (res.success && res.agents) {
@@ -243,17 +250,17 @@ export function StateAgents({ level = 'state' }) {
     if (effState) {
       list = list.filter(a => safeLowerCase(a.state || a.assignedState || a.stateName) === safeLowerCase(effState));
     }
-    if (effDistrict) {
+    if (effDistrict && activeLevel !== 'state') {
       list = list.filter(a => safeLowerCase(a.district || a.assignedDistrict || a.districtName) === safeLowerCase(effDistrict));
     }
-    if (effDivision) {
+    if (effDivision && (activeLevel === 'divisional' || activeLevel === 'pincode')) {
       list = list.filter(a => safeLowerCase(a.division || a.assignedDivision || a.divisionName) === safeLowerCase(effDivision));
     }
-    if (effPincode) {
+    if (effPincode && activeLevel === 'pincode') {
       list = list.filter(a => safeString(a.pincode || a.assignedPincode || a.pincodeCode) === safeString(effPincode));
     }
     return list;
-  }, [agents, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, stateFilterParam, districtFilterParam, divisionFilterParam, pincodeFilterParam]);
+  }, [agents, activeLevel, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, stateFilterParam, districtFilterParam, divisionFilterParam, pincodeFilterParam]);
 
   const LevelIcon = config.icon;
 
@@ -539,7 +546,7 @@ export function StateAgents({ level = 'state' }) {
       </div>
 
       {/* Active Hierarchical Parent Filter Breadcrumb */}
-      {(districtFilterParam || divisionFilterParam || pincodeFilterParam) && (
+      {activeLevel !== 'state' && (districtFilterParam || divisionFilterParam || pincodeFilterParam) && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-slate-500 dark:text-slate-400">Scoped Hierarchy:</span>
@@ -628,6 +635,7 @@ export function StateAgents({ level = 'state' }) {
 
       {/* AGENT NETWORK ROSTER */}
       <TerritoryHierarchyFilter
+        level={activeLevel}
         selectedState={selectedFilterState}
         onStateChange={(st) => setSelectedFilterState(st)}
         selectedDistrict={selectedFilterDistrict}

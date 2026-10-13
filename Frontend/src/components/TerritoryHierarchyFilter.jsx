@@ -23,7 +23,9 @@ export function TerritoryHierarchyFilter({
   territoryTree = [],
   title = 'Territory Hierarchy Filter',
   className = '',
+  level,
   managerLevel, // 'state' | 'district' | 'divisional' | 'pincode'
+  agentLevel,
   showState,
   showDistrict,
   showDivision,
@@ -37,53 +39,65 @@ export function TerritoryHierarchyFilter({
   const normalizedRole = useMemo(() => normalizeRole(user?.role, user), [user]);
   const userTier = locking.tier;
 
-  // Determine role-specific & manager-page-specific control visibility
+  // Determine role-specific & page-level control visibility
   let isStateVisible = showState !== undefined ? showState : true;
   let isDistrictVisible = showDistrict !== undefined ? showDistrict : true;
   let isDivisionVisible = showDivision !== undefined ? showDivision : true;
   let isPincodeVisible = showPincode !== undefined ? showPincode : true;
 
-  if (managerLevel) {
-    const lvl = String(managerLevel).toLowerCase().trim();
+  const activeLevel = level || agentLevel || managerLevel;
+
+  if (activeLevel) {
+    const lvl = String(activeLevel).toLowerCase().trim();
     if (userTier === 'pincode' || normalizedRole === ROLES.PINCODE_ADMIN || normalizedRole === 'pincode-admin') {
-      // E. Pincode Admin: Do not display the Territory Hierarchy Filter
+      // 4. Pincode Admin: Completely remove Territory Hierarchy Filter from all tabs
       isStateVisible = false;
       isDistrictVisible = false;
       isDivisionVisible = false;
       isPincodeVisible = false;
     } else if (userTier === 'division' || normalizedRole === ROLES.DIVISIONAL_ADMIN || normalizedRole === 'division-admin' || normalizedRole === 'divisional-admin') {
-      // D. Division Admin:
+      // 3. Divisional Admin:
+      // State, District, Divisional tabs -> completely remove filter section
+      // Pincode tab -> locked Division + selectable Pincode (no State or District)
       isStateVisible = false;
       isDistrictVisible = false;
       if (lvl === 'pincode') {
         isDivisionVisible = true; // locked
-        isPincodeVisible = true;
+        isPincodeVisible = true;  // selectable
       } else {
         isDivisionVisible = false;
         isPincodeVisible = false;
       }
     } else if (userTier === 'district' || normalizedRole === ROLES.DISTRICT_ADMIN || normalizedRole === 'district-admin') {
-      // C. District Admin:
+      // 2. District Admin:
+      // State tab -> completely remove filter section
+      // District tab -> completely remove filter section
+      // Divisional tab -> locked District + selectable Division (no State, no Pincode)
+      // Pincode tab -> locked District + selectable Division + selectable Pincode (no State)
       isStateVisible = false;
-      if (lvl === 'district') {
+      if (lvl === 'state' || lvl === 'district') {
         isDistrictVisible = false;
         isDivisionVisible = false;
         isPincodeVisible = false;
       } else if (lvl === 'divisional' || lvl === 'division') {
         isDistrictVisible = true; // locked
-        isDivisionVisible = true;
+        isDivisionVisible = true; // selectable
         isPincodeVisible = false;
       } else if (lvl === 'pincode') {
         isDistrictVisible = true; // locked
-        isDivisionVisible = true;
-        isPincodeVisible = true;
+        isDivisionVisible = true; // selectable
+        isPincodeVisible = true;  // selectable
       } else {
         isDistrictVisible = false;
         isDivisionVisible = false;
         isPincodeVisible = false;
       }
     } else if (userTier === 'state' || normalizedRole === ROLES.STATE_ADMIN || normalizedRole === 'state-admin') {
-      // B. State Admin:
+      // 1. State Admin:
+      // State tab -> completely remove filter section (no State, District, Division, Pincode)
+      // District tab -> locked State + selectable District (no Division, Pincode)
+      // Divisional tab -> locked State + selectable District + selectable Division (no Pincode)
+      // Pincode tab -> locked State + selectable District, Division, Pincode (all 4 fields)
       if (lvl === 'state') {
         isStateVisible = false;
         isDistrictVisible = false;
@@ -91,22 +105,22 @@ export function TerritoryHierarchyFilter({
         isPincodeVisible = false;
       } else if (lvl === 'district') {
         isStateVisible = true; // locked
-        isDistrictVisible = true;
+        isDistrictVisible = true; // selectable
         isDivisionVisible = false;
         isPincodeVisible = false;
       } else if (lvl === 'divisional' || lvl === 'division') {
         isStateVisible = true; // locked
-        isDistrictVisible = true;
-        isDivisionVisible = true;
+        isDistrictVisible = true; // selectable
+        isDivisionVisible = true; // selectable
         isPincodeVisible = false;
       } else if (lvl === 'pincode') {
         isStateVisible = true; // locked
-        isDistrictVisible = true;
-        isDivisionVisible = true;
-        isPincodeVisible = true;
+        isDistrictVisible = true; // selectable
+        isDivisionVisible = true; // selectable
+        isPincodeVisible = true; // selectable
       }
     } else {
-      // A. Super Admin:
+      // Super Admin:
       if (lvl === 'state') {
         isStateVisible = false;
         isDistrictVisible = false;
@@ -130,6 +144,12 @@ export function TerritoryHierarchyFilter({
       }
     }
   }
+
+  // Explicit overrides if passed
+  if (showState !== undefined) isStateVisible = showState;
+  if (showDistrict !== undefined) isDistrictVisible = showDistrict;
+  if (showDivision !== undefined) isDivisionVisible = showDivision;
+  if (showPincode !== undefined) isPincodeVisible = showPincode;
 
   const visibleCount = [isStateVisible, isDistrictVisible, isDivisionVisible, isPincodeVisible].filter(Boolean).length;
 
@@ -192,7 +212,7 @@ export function TerritoryHierarchyFilter({
 
   // 3. Available Divisions for effective district
   const availableDivisions = useMemo(() => {
-    if (!effectiveDistrict || !Array.isArray(availableDistricts)) return [];
+    if (!effectiveDistrict || !Array.isArray(territoryTree)) return [];
     const matchedDistObj = territoryTree
       .flatMap(s => s.districts || [])
       .find(d => safeLowerCase(d.name) === safeLowerCase(effectiveDistrict));
@@ -201,11 +221,11 @@ export function TerritoryHierarchyFilter({
       id: String(v.id || v._id || v.divisionId || v.name),
       name: safeString(v.name)
     })).filter(v => Boolean(v.name));
-  }, [territoryTree, availableDistricts, effectiveDistrict]);
+  }, [territoryTree, effectiveDistrict]);
 
   // 4. Available Pincodes for effective division
   const availablePincodes = useMemo(() => {
-    if (!effectiveDivision || !Array.isArray(availableDivisions)) return [];
+    if (!effectiveDivision || !Array.isArray(territoryTree)) return [];
     const matchedDivObj = territoryTree
       .flatMap(s => (s.districts || []).flatMap(d => d.divisions || []))
       .find(v => safeLowerCase(v.name) === safeLowerCase(effectiveDivision));

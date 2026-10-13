@@ -34,6 +34,18 @@ import {
 } from 'lucide-react';
 
 const LEVEL_CONFIGS = {
+  state: {
+    title: 'State Agents',
+    subtitle: 'Apex state-level customer onboarding partners, lead coordinators, and network directors.',
+    breadcrumb: 'State Agents',
+    badge: 'State Agent',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/60',
+    icon: Award,
+    tableTitle: 'State Agent Network Roster',
+    tableSubtitle: 'Master agent network, regional referrals, and commission settlements across assigned territory',
+    exportFile: 'state_agents.csv',
+    defaultData: []
+  },
   district: {
     title: 'District Agents',
     subtitle: 'District-level field directors, territorial sales leads, and regional distribution coordinators.',
@@ -92,12 +104,9 @@ export function DistrictAgents({ level = 'district' }) {
   let activeLevel = level;
   if (location.pathname.includes('/agents/pincode')) activeLevel = 'pincode';
   else if (location.pathname.includes('/agents/divisional')) activeLevel = 'divisional';
-  else if (location.pathname.includes('/agents/district')) activeLevel = isDivisionalAdmin ? 'divisional' : 'district';
+  else if (location.pathname.includes('/agents/district')) activeLevel = 'district';
+  else if (location.pathname.includes('/agents/state')) activeLevel = 'state';
   else if (location.pathname.endsWith('/agents')) activeLevel = isDivisionalAdmin ? 'divisional' : 'district';
-
-  if (isDivisionalAdmin && activeLevel === 'district') {
-    activeLevel = 'divisional';
-  }
 
   const config = LEVEL_CONFIGS[activeLevel] || (isDivisionalAdmin ? LEVEL_CONFIGS.divisional : LEVEL_CONFIGS.district);
 
@@ -150,14 +159,22 @@ export function DistrictAgents({ level = 'district' }) {
     try {
       const params = { level: activeLevel };
       const reqState = locking.stateLocked ? locking.defaultState : selectedFilterState;
-      const reqDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || (district !== '-' ? district : ''));
-      const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam || division);
-      const reqPincode = locking.pincodeLocked ? locking.defaultPincode : selectedFilterPincode;
-
       if (reqState) params.state = reqState;
-      if (reqDistrict) params.district = reqDistrict;
-      if (reqDivision) params.division = reqDivision;
-      if (reqPincode) params.pincode = reqPincode;
+
+      if (activeLevel !== 'state') {
+        const reqDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || (district !== '-' ? district : ''));
+        if (reqDistrict) params.district = reqDistrict;
+      }
+
+      if (activeLevel === 'divisional' || activeLevel === 'pincode') {
+        const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam || division);
+        if (reqDivision) params.division = reqDivision;
+      }
+
+      if (activeLevel === 'pincode') {
+        const reqPincode = locking.pincodeLocked ? locking.defaultPincode : selectedFilterPincode;
+        if (reqPincode) params.pincode = reqPincode;
+      }
 
       const res = await dataService.getAgents(params);
       if (res.success && res.agents) {
@@ -217,11 +234,11 @@ export function DistrictAgents({ level = 'district' }) {
     const effPincode = locking.pincodeLocked ? locking.defaultPincode : selectedFilterPincode;
 
     if (effState) list = list.filter(a => safeLowerCase(a.state || a.assignedState || a.stateName) === safeLowerCase(effState));
-    if (effDistrict) list = list.filter(a => safeLowerCase(a.district || a.assignedDistrict || a.districtName) === safeLowerCase(effDistrict));
-    if (effDivision) list = list.filter(a => safeLowerCase(a.division || a.assignedDivision || a.divisionName) === safeLowerCase(effDivision));
-    if (effPincode) list = list.filter(a => safeString(a.pincode || a.assignedPincode || a.pincodeCode) === safeString(effPincode));
+    if (effDistrict && activeLevel !== 'state') list = list.filter(a => safeLowerCase(a.district || a.assignedDistrict || a.districtName) === safeLowerCase(effDistrict));
+    if (effDivision && (activeLevel === 'divisional' || activeLevel === 'pincode')) list = list.filter(a => safeLowerCase(a.division || a.assignedDivision || a.divisionName) === safeLowerCase(effDivision));
+    if (effPincode && activeLevel === 'pincode') list = list.filter(a => safeString(a.pincode || a.assignedPincode || a.pincodeCode) === safeString(effPincode));
     return list;
-  }, [agents, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, divisionFilterParam]);
+  }, [agents, activeLevel, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, divisionFilterParam]);
 
   // Filtered activities
   const filteredActivities = useMemo(() => {
@@ -539,6 +556,7 @@ export function DistrictAgents({ level = 'district' }) {
       {activeTab === 'roster' && (
         <div className="space-y-4">
           <TerritoryHierarchyFilter
+            level={activeLevel}
             selectedState={selectedFilterState}
             onStateChange={(st) => setSelectedFilterState(st)}
             selectedDistrict={selectedFilterDistrict}

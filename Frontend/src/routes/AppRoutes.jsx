@@ -267,6 +267,7 @@ export function AppRoutes() {
             <Route path="/district-admin/managers/pincode" element={<StateManagers level="pincode" />} />
             <Route path="/district-admin/managers/requests" element={<ManagerRequestsPage />} />
             <Route path="/district-admin/agents" element={<DistrictAgents level="district" />} />
+            <Route path="/district-admin/agents/state" element={<DistrictAgents level="state" />} />
             <Route path="/district-admin/agents/district" element={<DistrictAgents level="district" />} />
             <Route path="/district-admin/agents/divisional" element={<DistrictAgents level="divisional" />} />
             <Route path="/district-admin/agents/pincode" element={<DistrictAgents level="pincode" />} />
@@ -295,6 +296,8 @@ export function AppRoutes() {
             <Route path="/divisional-admin/managers/pincode" element={<StateManagers level="pincode" />} />
             <Route path="/divisional-admin/managers/requests" element={<ManagerRequestsPage />} />
             <Route path="/divisional-admin/agents" element={<DistrictAgents level="divisional" />} />
+            <Route path="/divisional-admin/agents/state" element={<DistrictAgents level="state" />} />
+            <Route path="/divisional-admin/agents/district" element={<DistrictAgents level="district" />} />
             <Route path="/divisional-admin/agents/divisional" element={<DistrictAgents level="divisional" />} />
             <Route path="/divisional-admin/agents/pincode" element={<DistrictAgents level="pincode" />} />
             <Route path="/divisional-admin/agents/requests" element={<AgentRequestsPage />} />

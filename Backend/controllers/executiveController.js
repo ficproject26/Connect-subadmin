@@ -287,8 +287,101 @@ async function getAgents(req, res) {
     const rawAgents = Array.from(db.agents);
     const { search, status, level, state, district, division, pincode } = req.query;
 
-    const userRole = String(req.user?.role || '').toLowerCase().replace(/_/g, ' ').trim();
-    const isSuperAdmin = userRole.includes('super admin') || userRole === 'admin' || userRole === 'super-admin' || req.user?.state === 'All India';
+    const userRole = String(req.user?.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+    const isSuperAdmin = userRole.includes('super admin') || userRole === 'admin' || userRole === 'main admin' || req.user?.state === 'All India';
+
+    // Step 0: Backend authorization validation of territory parameters against authenticated user session
+    if (!isSuperAdmin) {
+      const userState = (req.user?.state || '').toLowerCase().trim();
+      const userDistrict = (req.user?.district || '').toLowerCase().trim();
+      const userDivision = (req.user?.division || '').toLowerCase().trim();
+      const userPincode = String(req.user?.pincode || '').trim();
+
+      // State Admin: cannot access data outside their assigned state
+      if (userRole.includes('state')) {
+        if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. State Admins cannot access data outside their assigned state.'
+          });
+        }
+      }
+      // District Admin: cannot access State agents or data outside their assigned district
+      else if (userRole.includes('district')) {
+        if (level && normalizeLevel(level) === 'state') {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_LEVEL',
+            message: 'Unauthorized level access. District Admins cannot access State Agents.'
+          });
+        }
+        if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. District Admins cannot access data outside their assigned state.'
+          });
+        }
+        if (district && userDistrict && userDistrict !== 'all districts' && district.toLowerCase().trim() !== userDistrict) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. District Admins cannot access data outside their assigned district.'
+          });
+        }
+      }
+      // Divisional Admin: cannot access State/District agents or data outside their assigned division
+      else if (userRole.includes('division') || userRole.includes('divisional')) {
+        const normLvl = level ? normalizeLevel(level) : '';
+        if (normLvl === 'state' || normLvl === 'district') {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_LEVEL',
+            message: 'Unauthorized level access. Divisional Admins cannot access State or District Agents.'
+          });
+        }
+        if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. Divisional Admins cannot access data outside their assigned state.'
+          });
+        }
+        if (district && userDistrict && userDistrict !== 'all districts' && district.toLowerCase().trim() !== userDistrict) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. Divisional Admins cannot access data outside their assigned district.'
+          });
+        }
+        if (division && userDivision && userDivision !== 'all divisions' && !divisionMatches(division, userDivision)) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. Divisional Admins cannot access data outside their assigned division.'
+          });
+        }
+      }
+      // Pincode Admin: cannot access higher levels or data outside their assigned pincode
+      else if (userRole.includes('pincode')) {
+        const normLvl = level ? normalizeLevel(level) : '';
+        if (normLvl && normLvl !== 'pincode') {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_LEVEL',
+            message: 'Unauthorized level access. Pincode Admins can only access Pincode Agents.'
+          });
+        }
+        if (pincode && userPincode && userPincode !== 'all' && String(pincode).trim() !== userPincode) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. Pincode Admins cannot access data outside their assigned pincode.'
+          });
+        }
+      }
+    }
 
     // Step 1: Hierarchy-based scoping (enforced at data level)
     let scoped = getHierarchicalScopedAgents(rawAgents, req.user);
@@ -302,35 +395,55 @@ async function getAgents(req, res) {
       });
     }
 
-    // Step 3: Level filter — map 'divisional' → 'division' for consistent matching
+    // Step 3: Level filter & level-appropriate territory drill-downs
     if (level) {
       const normLevel = normalizeLevel(level);
       scoped = scoped.filter(a => {
         const aLevel = normalizeLevel(getAgentLevel(a));
         return aLevel === normLevel;
       });
-    }
 
-    // Step 4: Optional territory drill-down query params
-    if (district) {
-      scoped = scoped.filter(a => {
-        const t = getAgentTerritory(a);
-        return t.district && t.district.toLowerCase() === String(district).trim().toLowerCase();
-      });
-    }
+      if (normLevel !== 'state' && district) {
+        scoped = scoped.filter(a => {
+          const t = getAgentTerritory(a);
+          return t.district && t.district.toLowerCase() === String(district).trim().toLowerCase();
+        });
+      }
 
-    if (division) {
-      scoped = scoped.filter(a => {
-        const t = getAgentTerritory(a);
-        return divisionMatches(t.division, division);
-      });
-    }
+      if ((normLevel === 'division' || normLevel === 'pincode') && division) {
+        scoped = scoped.filter(a => {
+          const t = getAgentTerritory(a);
+          return divisionMatches(t.division, division);
+        });
+      }
 
-    if (pincode) {
-      scoped = scoped.filter(a => {
-        const t = getAgentTerritory(a);
-        return t.pincode === String(pincode).trim();
-      });
+      if (normLevel === 'pincode' && pincode) {
+        scoped = scoped.filter(a => {
+          const t = getAgentTerritory(a);
+          return t.pincode === String(pincode).trim();
+        });
+      }
+    } else {
+      if (district) {
+        scoped = scoped.filter(a => {
+          const t = getAgentTerritory(a);
+          return t.district && t.district.toLowerCase() === String(district).trim().toLowerCase();
+        });
+      }
+
+      if (division) {
+        scoped = scoped.filter(a => {
+          const t = getAgentTerritory(a);
+          return divisionMatches(t.division, division);
+        });
+      }
+
+      if (pincode) {
+        scoped = scoped.filter(a => {
+          const t = getAgentTerritory(a);
+          return t.pincode === String(pincode).trim();
+        });
+      }
     }
 
     // Step 5: Reject agents missing required territory fields for their level
@@ -844,6 +957,58 @@ function canAdminViewAgent(admin, agent) {
 
 async function getAgentRequests(req, res) {
   try {
+    const userRole = String(req.user?.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+    const isSuperAdmin = userRole.includes('super admin') || userRole === 'admin' || userRole === 'main admin' || req.user?.state === 'All India';
+
+    if (!isSuperAdmin) {
+      const { state, district, division, pincode } = req.query;
+      const userState = (req.user?.state || '').toLowerCase().trim();
+      const userDistrict = (req.user?.district || '').toLowerCase().trim();
+      const userDivision = (req.user?.division || '').toLowerCase().trim();
+      const userPincode = String(req.user?.pincode || '').trim();
+
+      if (userRole.includes('state')) {
+        if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. State Admins cannot access data outside their assigned state.'
+          });
+        }
+      } else if (userRole.includes('district')) {
+        if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. District Admins cannot access data outside their assigned state.'
+          });
+        }
+        if (district && userDistrict && userDistrict !== 'all districts' && district.toLowerCase().trim() !== userDistrict) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. District Admins cannot access data outside their assigned district.'
+          });
+        }
+      } else if (userRole.includes('division') || userRole.includes('divisional')) {
+        if (division && userDivision && userDivision !== 'all divisions' && !divisionMatches(division, userDivision)) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. Divisional Admins cannot access data outside their assigned division.'
+          });
+        }
+      } else if (userRole.includes('pincode')) {
+        if (pincode && userPincode && userPincode !== 'all' && String(pincode).trim() !== userPincode) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory access. Pincode Admins cannot access data outside their assigned pincode.'
+          });
+        }
+      }
+    }
+
     const nowTime = Date.now();
     // 1. Ensure agents collection is reloaded from MongoDB Atlas only if needed
     if (db.agents && typeof db.agents.reloadFromMongo === 'function' && db.agents._mongoCol) {
