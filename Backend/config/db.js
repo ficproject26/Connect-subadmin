@@ -54,6 +54,7 @@ class Collection extends Array {
       console.log(`[MongoDB] Connected to empty collection '${this.name}' (${this.mongoName})`);
     }
     this._isReady = true;
+    this._lastReload = Date.now();
   }
 
   async reloadFromMongo(force = false) {
@@ -195,6 +196,10 @@ class Collection extends Array {
   async findById(id) {
     if (!id) return null;
     const strId = String(id);
+    if (this._isReady && this.length > 0) {
+      const found = Array.from(this).find(item => String(item._id || item.id) === strId);
+      if (found) return found;
+    }
     if (this._mongoCol) {
       return await this._mongoCol.findOne({
         $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }]

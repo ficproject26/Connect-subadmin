@@ -844,18 +844,21 @@ function canAdminViewAgent(admin, agent) {
 
 async function getAgentRequests(req, res) {
   try {
-    // 1. Ensure agents collection is reloaded from MongoDB Atlas to pick up new registrations from agent portal
+    const nowTime = Date.now();
+    // 1. Ensure agents collection is reloaded from MongoDB Atlas only if needed
     if (db.agents && typeof db.agents.reloadFromMongo === 'function' && db.agents._mongoCol) {
-      try {
-        await db.agents.reloadFromMongo(false);
-      } catch (err) {
-        console.warn('[getAgentRequests] Atlas agents reload notice:', err.message);
+      if (!db.agents.length || (nowTime - (db.agents._lastReload || 0) > 10000)) {
+        try {
+          await db.agents.reloadFromMongo(false);
+        } catch (err) {
+          console.warn('[getAgentRequests] Atlas agents reload notice:', err.message);
+        }
       }
-    } else {
+    } else if (db.agents && typeof db.agents.initMongo === 'function' && !db.agents._mongoCol) {
       try {
         const { getMongoDb } = require('../config/mongo');
         const mdb = await getMongoDb();
-        if (mdb && db.agents && typeof db.agents.initMongo === 'function') {
+        if (mdb) {
           await db.agents.initMongo(mdb);
         }
       } catch (err) {
@@ -863,12 +866,14 @@ async function getAgentRequests(req, res) {
       }
     }
 
-    // 2. Also ensure db.users is reloaded if possible
+    // 2. Also ensure db.users is reloaded if needed
     if (db.users && typeof db.users.reloadFromMongo === 'function' && db.users._mongoCol) {
-      try {
-        await db.users.reloadFromMongo(false);
-      } catch (err) {
-        // silent
+      if (!db.users.length || (nowTime - (db.users._lastReload || 0) > 10000)) {
+        try {
+          await db.users.reloadFromMongo(false);
+        } catch (err) {
+          // silent
+        }
       }
     }
 

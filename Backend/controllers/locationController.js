@@ -1,28 +1,44 @@
 const { db } = require('../config/db');
 
+// In-memory cache for the complete hierarchy tree to prevent repeated heavy Atlas scans
+let cachedHierarchy = null;
+let lastHierarchyBuild = 0;
+const HIERARCHY_CACHE_TTL = 60 * 1000; // 60 seconds
+
+function invalidateHierarchyCache() {
+  cachedHierarchy = null;
+  lastHierarchyBuild = 0;
+}
+
 // Reload territory collections live from MongoDB Atlas if connected
-async function reloadTerritoryCollections() {
+async function reloadTerritoryCollections(force = false) {
   if (db.states && db.states.reloadFromMongo) {
     await Promise.all([
-      db.states.reloadFromMongo().catch(() => {}),
-      db.districts.reloadFromMongo().catch(() => {}),
-      db.divisions.reloadFromMongo().catch(() => {}),
-      db.pincodes.reloadFromMongo().catch(() => {})
+      db.states.reloadFromMongo(force).catch(() => {}),
+      db.districts.reloadFromMongo(force).catch(() => {}),
+      db.divisions.reloadFromMongo(force).catch(() => {}),
+      db.pincodes.reloadFromMongo(force).catch(() => {})
     ]);
   }
 }
 
 // Build complete hierarchical tree: State -> District -> Division -> Pincode
 async function buildCompleteHierarchy(scopeUser = null, assignedOnly = false) {
-  await reloadTerritoryCollections();
+  const now = Date.now();
+  let fullHierarchy;
 
-  const rawStates = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
-  const rawDistricts = Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
-  const rawDivisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
-  const rawPincodes = Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
+  if (cachedHierarchy && (now - lastHierarchyBuild < HIERARCHY_CACHE_TTL)) {
+    fullHierarchy = cachedHierarchy;
+  } else {
+    await reloadTerritoryCollections(false);
 
-  // Pre-group pincodes by divisionId and division name for fast O(1) retrieval
-  const pinByDivision = new Map();
+    const rawStates = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
+    const rawDistricts = Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
+    const rawDivisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
+    const rawPincodes = Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
+
+    // Pre-group pincodes by divisionId and division name for fast O(1) retrieval
+    const pinByDivision = new Map();
   for (const p of rawPincodes) {
     const kId = String(p.divisionId || p.division_id || '');
     const kName = (p.division || '').toLowerCase().trim();
@@ -66,7 +82,7 @@ async function buildCompleteHierarchy(scopeUser = null, assignedOnly = false) {
     }
   }
 
-  let fullHierarchy = rawStates.map(s => {
+  fullHierarchy = rawStates.map(s => {
     const sId = String(s._id || s.id || s.stateId);
     const sName = (s.name || '').trim();
 
@@ -125,6 +141,9 @@ async function buildCompleteHierarchy(scopeUser = null, assignedOnly = false) {
       })
     };
   });
+  cachedHierarchy = fullHierarchy;
+  lastHierarchyBuild = now;
+  }
 
   // Apply User Territory Scoping
   if (scopeUser && scopeUser.role) {

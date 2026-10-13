@@ -207,7 +207,7 @@ async function executeFetch(endpoint, options, headers) {
         }
 
         if (!response.ok) {
-          if (response.status === 503 && attempt < retriesForThisUrl) {
+          if ((response.status === 503 || response.status === 504) && attempt < retriesForThisUrl) {
             await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
             continue;
           }
@@ -230,7 +230,7 @@ async function executeFetch(endpoint, options, headers) {
         return data;
       } catch (error) {
         lastError = error;
-        if (attempt < retriesForThisUrl && (!error.status || error.status === 503)) {
+        if (attempt < retriesForThisUrl && (!error.status || error.status === 503 || error.status === 504)) {
           await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
           continue;
         }

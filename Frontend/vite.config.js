@@ -17,6 +17,8 @@ export default defineConfig(({ mode }) => ({
         target: 'http://127.0.0.1:8006',
         changeOrigin: true,
         secure: false,
+        timeout: 60000,
+        proxyTimeout: 60000,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, res) => {
             if (res && !res.headersSent && typeof res.writeHead === 'function') {
