@@ -1,11 +1,15 @@
 const { db, filterByLocation } = require('../config/db');
+const { getMongoDb } = require('../config/mongo');
 
 async function getKYCRecords(req, res) {
   try {
     // Ensure all managers waiting for KYC verification have an entry in db.kycRecords
     if (db.kycRecords && db.users) {
       const pendingManagers = db.users.filter(u => 
-        (u.status === 'pending_kyc' || u.status === 'PENDING_KYC_APPROVAL' || (u.adminApprovalStatus === 'approved' && (u.kycStatus === 'pending_verification' || u.kycStatus === 'pending'))) &&
+        (u.status === 'PENDING_KYC_VERIFICATION' || u.status === 'pending_kyc' || u.status === 'PENDING_KYC_APPROVAL' ||
+         u.overallRegistrationStatus === 'PENDING_KYC_VERIFICATION' ||
+         (u.subAdminApprovalStatus === 'approved' && u.mainAdminApprovalStatus === 'approved') ||
+         (u.adminApprovalStatus === 'approved' && (u.kycStatus === 'pending_verification' || u.kycStatus === 'pending'))) &&
         (u.role && u.role.includes('manager'))
       );
 
@@ -163,8 +167,23 @@ async function processKYC(req, res) {
       if (manager) {
         const mgrRoleLabel = (manager.role || 'manager').replace(/_/g, ' ');
         if (isApprovedAction) {
-          // STRICT RULE: Only activate account if Sub-Admin previously approved it
-          const priorAdminApproved = manager.adminApprovalStatus === 'approved';
+          // STRICT RULE: Both Sub-Admin and Main Admin must approve before KYC clearance can activate account
+          const priorSubAdminApproved = manager.subAdminApprovalStatus === 'approved' || manager.adminApprovalStatus === 'approved';
+          const priorMainAdminApproved = manager.mainAdminApprovalStatus === 'approved' || manager.overallRegistrationStatus === 'PENDING_KYC_VERIFICATION' || manager.status === 'PENDING_KYC_VERIFICATION';
+
+          if (!priorSubAdminApproved || !priorMainAdminApproved) {
+            return res.status(400).json({
+              success: false,
+              code: 'ADMIN_APPROVALS_REQUIRED',
+              message: 'Both territorial Sub-admin and Main Admin approvals must be completed before KYC clearance and account activation.'
+            });
+          }
+
+          manager.status = 'active';
+          manager.isActive = true;
+          manager.isApproved = true;
+          manager.overallRegistrationStatus = 'active';
+          manager.kycVerificationStatus = 'approved';
           manager.kycStatus = 'Verified';
           manager.kycVerifiedAt = now;
           manager.kycVerifiedBy = verifiedBy;
@@ -175,24 +194,43 @@ async function processKYC(req, res) {
           manager.kycPendingReason = null;
           manager.updatedAt = now;
 
-          if (priorAdminApproved) {
-            manager.status = 'active';
-            manager.isActive = true;
-          } else {
-            // Keep status pending administrative approval
-            manager.status = manager.status || 'PENDING_SUB_ADMIN_APPROVAL';
-            manager.isActive = false;
-          }
           await db.users.update(manager);
           if (db.managers) {
             await db.managers.findByIdAndUpdate(manager._id || manager.id, {
-              status: manager.status,
-              kycStatus: manager.kycStatus,
-              isActive: manager.isActive,
+              status: 'active',
+              isActive: true,
+              isApproved: true,
+              overallRegistrationStatus: 'active',
+              kycStatus: 'Verified',
               kycVerifiedAt: manager.kycVerifiedAt,
               kycVerifiedBy: manager.kycVerifiedBy,
               updatedAt: now
             }).catch(() => {});
+          }
+
+          // Sync to MongoDB Atlas managerrequests
+          try {
+            const mongoDb = await getMongoDb();
+            if (mongoDb) {
+              const mgrIdStr = String(manager._id || manager.id);
+              await mongoDb.collection('managerrequests').updateMany(
+                { $or: [{ userId: mgrIdStr }, { email: (manager.email || '').toLowerCase().trim() }] },
+                {
+                  $set: {
+                    status: 'Approved',
+                    approvalStage: 'approved',
+                    overallRegistrationStatus: 'active',
+                    kycVerificationStatus: 'approved',
+                    kycApprovedBy: req.user.id || req.user._id,
+                    kycApprovedByName: req.user.name,
+                    kycApprovedAt: new Date(),
+                    updatedAt: now
+                  }
+                }
+              );
+            }
+          } catch (syncErr) {
+            console.error('Error syncing managerrequests on KYC approval:', syncErr.message);
           }
 
           if (db.auditLogs) {
@@ -212,7 +250,9 @@ async function processKYC(req, res) {
             });
           }
         } else if (isRejectedAction) {
-          manager.status = 'rejected';
+          manager.status = 'KYC_REJECTED';
+          manager.overallRegistrationStatus = 'KYC_REJECTED';
+          manager.kycVerificationStatus = 'rejected';
           manager.kycStatus = 'Rejected';
           manager.isActive = false;
           manager.rejectionReason = trimmedReason;
@@ -221,6 +261,29 @@ async function processKYC(req, res) {
           manager.kycRejectedBy = verifiedBy;
           manager.updatedAt = now;
           await db.users.update(manager);
+
+          // Sync to MongoDB Atlas managerrequests
+          try {
+            const mongoDb = await getMongoDb();
+            if (mongoDb) {
+              const mgrIdStr = String(manager._id || manager.id);
+              await mongoDb.collection('managerrequests').updateMany(
+                { $or: [{ userId: mgrIdStr }, { email: (manager.email || '').toLowerCase().trim() }] },
+                {
+                  $set: {
+                    status: 'Rejected',
+                    approvalStage: 'rejected',
+                    overallRegistrationStatus: 'KYC_REJECTED',
+                    kycVerificationStatus: 'rejected',
+                    rejectionReason: trimmedReason,
+                    updatedAt: now
+                  }
+                }
+              );
+            }
+          } catch (syncErr) {
+            console.error('Error syncing managerrequests on KYC rejection:', syncErr.message);
+          }
           if (db.managers) {
             await db.managers.findByIdAndUpdate(manager._id || manager.id, {
               status: 'rejected',

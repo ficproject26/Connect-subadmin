@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { db } = require('../config/db');
+const { getMongoDb } = require('../config/mongo');
 const { validateBankAndAddress, validateKycDocuments } = require('../utils/validation');
 
 // Format human-readable role labels
@@ -807,12 +808,19 @@ const approveManager = async (req, res) => {
     const now = new Date().toISOString();
     // Persist territory approval, move to KYC team review queue (account remains restricted pending KYC)
     const approveUpdates = {
-      status: 'PENDING_KYC_APPROVAL',
+      status: 'PENDING_MAIN_ADMIN_APPROVAL',
+      overallRegistrationStatus: 'PENDING_MAIN_ADMIN_APPROVAL',
+      subAdminApprovalStatus: 'approved',
+      mainAdminApprovalStatus: manager.mainAdminApprovalStatus || 'pending',
+      kycVerificationStatus: manager.kycVerificationStatus || 'not_started',
       adminApprovalStatus: 'approved',
-      kycStatus: manager.kycStatus === 'Verified' || manager.kycStatus === 'verified' ? 'Verified' : 'pending_verification',
       isActive: false,
       requiresApproval: true,
       isFullyApproved: false,
+      subAdminApprovedBy: req.user.name || req.user.email,
+      subAdminApprovedById: req.user.id || req.user._id,
+      subAdminApprovedByRole: req.user.role,
+      subAdminApprovedAt: now,
       adminApprovedBy: req.user.name || req.user.email,
       adminApprovedById: req.user.id || req.user._id,
       adminApprovedByRole: req.user.role,
@@ -825,6 +833,39 @@ const approveManager = async (req, res) => {
     await db.users.findByIdAndUpdate(manager._id || manager.id, approveUpdates);
     if (db.managers) {
       await db.managers.findByIdAndUpdate(manager._id || manager.id, approveUpdates).catch(() => {});
+    }
+
+    // Sync Sub-Admin approval to MongoDB Atlas managerrequests so Main Admin can review
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const mgrIdStr = String(manager._id || manager.id);
+        await mongoDb.collection('managerrequests').updateMany(
+          { $or: [{ userId: mgrIdStr }, { email: (manager.email || '').toLowerCase().trim() }] },
+          {
+            $set: {
+              status: 'Pending',
+              approvalStage: 'mainadmin_review',
+              overallRegistrationStatus: 'PENDING_MAIN_ADMIN_APPROVAL',
+              subAdminApprovalStatus: 'approved',
+              mainAdminApprovalStatus: 'pending',
+              subadminApprovedBy: req.user.id || req.user._id,
+              subadminApprovedByName: req.user.name || req.user.email,
+              subadminApprovedAt: new Date(),
+              subAdminApproval: {
+                status: 'approved',
+                reviewerId: req.user.id || req.user._id,
+                reviewerName: req.user.name || req.user.email,
+                reviewerRole: req.user.role,
+                reviewedAt: now
+              },
+              updatedAt: now
+            }
+          }
+        );
+      }
+    } catch (mReqErr) {
+      console.error('[Sub-Admin] Error syncing managerrequests on approve:', mReqErr.message);
     }
 
     // Automatically ensure record is in db.kycRecords for the KYC verification queue
@@ -920,10 +961,16 @@ const rejectManager = async (req, res) => {
     // Update status to rejected
     const rejectUpdates = {
       status: 'REJECTED_BY_SUB_ADMIN',
+      overallRegistrationStatus: 'REJECTED_BY_SUB_ADMIN',
+      subAdminApprovalStatus: 'rejected',
       adminApprovalStatus: 'rejected',
       adminRejectionReason: rejectionReason,
       kycStatus: 'Rejected',
       rejectionReason,
+      subAdminRejectedBy: req.user.name || req.user.email,
+      subAdminRejectedById: req.user.id || req.user._id,
+      subAdminRejectedByRole: req.user.role,
+      subAdminRejectedAt: now,
       adminRejectedBy: req.user.name || req.user.email,
       adminRejectedById: req.user.id || req.user._id,
       adminRejectedByRole: req.user.role,
@@ -935,6 +982,29 @@ const rejectManager = async (req, res) => {
     await db.users.findByIdAndUpdate(manager._id || manager.id, rejectUpdates);
     if (db.managers) {
       await db.managers.findByIdAndUpdate(manager._id || manager.id, rejectUpdates).catch(() => {});
+    }
+
+    // Sync rejection to MongoDB Atlas managerrequests
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const mgrIdStr = String(manager._id || manager.id);
+        await mongoDb.collection('managerrequests').updateMany(
+          { $or: [{ userId: mgrIdStr }, { email: (manager.email || '').toLowerCase().trim() }] },
+          {
+            $set: {
+              status: 'Rejected',
+              approvalStage: 'rejected',
+              overallRegistrationStatus: 'REJECTED_BY_SUB_ADMIN',
+              subAdminApprovalStatus: 'rejected',
+              rejectionReason,
+              updatedAt: now
+            }
+          }
+        );
+      }
+    } catch (mReqErr) {
+      console.error('[Sub-Admin] Error syncing managerrequests on reject:', mReqErr.message);
     }
 
     // Forward rejection details to KYC queue for review and closure

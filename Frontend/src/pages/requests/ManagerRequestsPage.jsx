@@ -266,7 +266,13 @@ export function ManagerRequestsPage() {
   // Workflow Stage Badge Helper
   const getWorkflowStageBadge = (stage, status) => {
     const s = (status || '').toLowerCase();
-    const stg = stage || (s === 'active' || s === 'approved' ? 'Activated' : s === 'rejected' ? 'Territory Rejected' : (s === 'pending_kyc' || s === 'pending_kyc_approval') ? 'Awaiting KYC Review' : 'Awaiting Territory Approval');
+    const stg = stage || (
+      s === 'active' || s === 'approved' ? 'Activated' :
+      s.includes('rejected') ? 'Rejected' :
+      s === 'pending_main_admin_approval' ? 'Awaiting Main Admin Review' :
+      (s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'pending_kyc_verification') ? 'Awaiting KYC Review' :
+      'Awaiting Territory Approval'
+    );
     
     if (stg === 'Activated' || s === 'active') {
       return (
@@ -275,17 +281,24 @@ export function ManagerRequestsPage() {
         </span>
       );
     }
-    if (stg === 'Awaiting KYC Review' || s === 'pending_kyc' || s === 'pending_kyc_approval') {
+    if (stg === 'Awaiting Main Admin Review' || s === 'pending_main_admin_approval') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800">
+          <Clock className="w-3 h-3" /> Awaiting Main Admin Review
+        </span>
+      );
+    }
+    if (stg === 'Awaiting KYC Review' || s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'pending_kyc_verification') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border-cyan-800">
           <ShieldCheck className="w-3 h-3" /> Awaiting KYC Review
         </span>
       );
     }
-    if (stg.includes('Rejected') || s === 'rejected') {
+    if (stg.includes('Rejected') || s.includes('rejected')) {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800">
-          <XCircle className="w-3 h-3" /> {stg}
+          <XCircle className="w-3 h-3" /> {stg.includes('Rejected') ? stg : 'Rejected'}
         </span>
       );
     }
