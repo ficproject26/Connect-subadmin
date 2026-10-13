@@ -65,7 +65,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   const isPendingKyc = s === 'pending_kyc' || s === 'pending_kyc_approval';
   const isPending = isPendingAdmin || isPendingKyc;
   const isActive = s === 'active';
-  const isRejected = s === 'rejected';
+  const isRejected = s === 'rejected' || s === 'rejected_by_sub_admin' || s === 'kyc_rejected';
 
   // Format relative uploads so they route via current host & Vite proxy cleanly
   const resolveMediaUrl = (url) => {

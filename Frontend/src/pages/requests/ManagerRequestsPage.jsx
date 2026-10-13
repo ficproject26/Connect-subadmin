@@ -397,7 +397,7 @@ export function ManagerRequestsPage() {
         if (s === 'active' || s === 'approved') {
           statusBadgeText = 'Approved';
           statusVariant = 'success';
-        } else if (s === 'rejected') {
+        } else if (s === 'rejected' || s === 'rejected_by_sub_admin' || s === 'kyc_rejected') {
           statusBadgeText = 'Rejected';
           statusVariant = 'danger';
         } else if (s === 'pending_kyc' || s === 'pending_kyc_approval') {
@@ -434,7 +434,8 @@ export function ManagerRequestsPage() {
       header: 'Actions',
       key: 'actions',
       render: (row) => {
-        const isPending = row.status === 'under_review' || row.status === 'pending' || row.status === 'pending_admin_approval';
+        const s = (row.status || '').toLowerCase();
+        const isPending = s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
         const canApprove = row.canApprove !== false;
 
         return (

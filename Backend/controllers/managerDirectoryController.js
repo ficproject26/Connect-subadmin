@@ -86,48 +86,87 @@ const getRelatedAdminRole = (managerRole) => {
   }
 };
 
-// Check if an Administrator has jurisdiction to view / oversee a Field Manager
+// Check if an Administrator has jurisdiction to VIEW / OVERSEE a Field Manager
 const canAdminManage = (admin, manager) => {
   if (!admin || !manager) return false;
   const adminRole = (admin.role || '').trim();
   const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
 
-  // Super Admin / Main Admin can view all
-  if (adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || adminRoleLower === 'admin') return true;
+  // Global Unscoped Super Admin / Main Admin can view all
+  const isGlobalSuper = adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || (adminRoleLower === 'admin' && (!admin.state || admin.state.toLowerCase() === 'all india'));
+  if (isGlobalSuper) return true;
 
   const managerRoles = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'];
   if (!managerRoles.includes(manager.role)) return false;
 
-  // State Admin: can view all managers within their state
-  if (adminRoleLower.includes('state')) {
+  // State Admin (or admin scoped to a state): can view all managers within their state
+  if (adminRoleLower.includes('state') || (adminRoleLower === 'admin' && admin.state)) {
     return matchesState(admin, manager);
   }
 
   // District Admin: can view district, division, and pincode managers within their district
   if (adminRoleLower.includes('district')) {
-    if (manager.role === 'state_manager') return false;
+    if (manager.role === 'state_manager') return false; // Strictly never view State Manager
     return matchesDistrict(admin, manager);
   }
 
   // Division Admin: can view division and pincode managers within their division
   if (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) {
-    if (manager.role === 'state_manager' || manager.role === 'district_manager') return false;
+    if (manager.role === 'state_manager' || manager.role === 'district_manager') return false; // Strictly never view State or District Manager
     return matchesDivision(admin, manager);
   }
 
   // Pincode Admin: can view pincode managers within their pincode
   if (adminRoleLower.includes('pincode')) {
-    if (manager.role !== 'pincode_manager') return false;
+    if (manager.role !== 'pincode_manager') return false; // Strictly never view higher managers
     return matchesPincode(admin, manager);
   }
 
   return false;
 };
 
-// Returns true if admin is the authorized administrator for this manager's role and jurisdiction
-const isRelatedAdminForManager = (admin, manager) => {
+// Check if an admin is the designated territorial authority with APPROVAL / REJECTION / ACTION rights
+const isDesignatedTerritorialAdmin = (admin, manager) => {
   if (!admin || !manager) return false;
-  return canAdminManage(admin, manager);
+  const adminRole = (admin.role || '').trim();
+  const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
+
+  // Global Unscoped Super Admin
+  const isGlobalSuper = adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || (adminRoleLower === 'admin' && (!admin.state || admin.state.toLowerCase() === 'all india'));
+  if (isGlobalSuper) return true;
+
+  const mgrRole = (manager.role || '').toLowerCase();
+
+  // State Manager -> ONLY State Admin (or state-scoped admin) for that state
+  if (mgrRole === 'state_manager') {
+    if (!adminRoleLower.includes('state') && !(adminRoleLower === 'admin' && admin.state)) return false;
+    return matchesState(admin, manager);
+  }
+
+  // District Manager -> ONLY District Admin for that district
+  if (mgrRole === 'district_manager') {
+    if (!adminRoleLower.includes('district')) return false;
+    return matchesDistrict(admin, manager);
+  }
+
+  // Division Manager -> ONLY Division Admin for that division
+  if (mgrRole === 'division_manager') {
+    if (!adminRoleLower.includes('division') && !adminRoleLower.includes('divisional')) return false;
+    return matchesDivision(admin, manager);
+  }
+
+  // Pincode Manager -> ONLY Pincode Admin for that exact pincode
+  if (mgrRole === 'pincode_manager') {
+    if (!adminRoleLower.includes('pincode')) return false;
+    return matchesPincode(admin, manager);
+  }
+
+  return false;
+};
+
+// Returns true if admin is the authorized territorial administrator for approval
+const isRelatedAdminForManager = (admin, manager) => {
+  return isDesignatedTerritorialAdmin(admin, manager);
 };
 
 const formatAddressString = (addr, fallback = 'Not provided') => {
@@ -180,7 +219,7 @@ const populateManager = async (m, relation, user) => {
     if (matchedAdmin) resolvedTargetAdminName = matchedAdmin.name;
   }
 
-  const canApprove = isRelatedAdminForManager(user, m);
+  const canApprove = isDesignatedTerritorialAdmin(user, m);
 
   const s = (status || '').toLowerCase();
   const admApp = (adminApprovalStatus || '').toLowerCase();
@@ -684,7 +723,7 @@ const getManagerRequests = async (req, res) => {
           return s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'approved' || s === 'active';
         }
         if (statusLower === 'rejected') {
-          return s === 'rejected';
+          return s === 'rejected' || s === 'rejected_by_sub_admin' || s === 'kyc_rejected';
         }
         return s === statusLower;
       });
@@ -880,8 +919,9 @@ const rejectManager = async (req, res) => {
 
     // Update status to rejected
     const rejectUpdates = {
-      status: 'rejected',
+      status: 'REJECTED_BY_SUB_ADMIN',
       adminApprovalStatus: 'rejected',
+      adminRejectionReason: rejectionReason,
       kycStatus: 'Rejected',
       rejectionReason,
       adminRejectedBy: req.user.name || req.user.email,
@@ -994,8 +1034,9 @@ const keepPendingManager = async (req, res) => {
 
     const now = new Date().toISOString();
     const pendingUpdates = {
-      status: 'pending',
+      status: 'PENDING_SUB_ADMIN_APPROVAL',
       adminApprovalStatus: 'pending',
+      adminPendingReason: pendingReason,
       pendingReason,
       adminNotes: pendingReason,
       adminPendingBy: req.user.name || req.user.email,
