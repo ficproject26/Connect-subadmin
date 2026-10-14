@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getRoleDashboardPath } from '../../utils/permissions';
+import { getRoleDashboardPath, isRoleAllowed } from '../../utils/permissions';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export function Login() {
@@ -21,23 +21,20 @@ export function Login() {
   const navigate = useNavigate();
 
   // Redirect already-authenticated users to their dashboard.
-  // IMPORTANT: Only run after auth initialization is complete (authLoading=false).
-  // If we redirect while authLoading=true, we might see a stale isAuthenticated=false
-  // and stay on the login page when the user is actually logged in.
   useEffect(() => {
     if (!authLoading && isAuthenticated && user?.role) {
-      const isManagerOrAgent = user?.role && (
-        user.role.toLowerCase().includes('manager') ||
-        user.role.toLowerCase().includes('agent')
-      );
+      const authorizedRoles = ['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'];
+      if (!isRoleAllowed(user.role, authorizedRoles)) {
+        navigate('/access-denied', { replace: true });
+        return;
+      }
       const statusUpper = String(user?.status || '').toUpperCase();
-      const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
-        String(user?.adminApprovalStatus || '').toLowerCase() === 'approved' &&
-        (String(user?.kycStatus || '').toLowerCase() === 'verified' || String(user?.kycStatus || '').toLowerCase() === 'approved') &&
+      const isApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+        String(user?.adminApprovalStatus || 'approved').toLowerCase() === 'approved' &&
         user?.isActive !== false &&
         !user?.requiresApproval;
 
-      if ((isManagerOrAgent && !isFullyApproved) || user.requiresApproval || (statusUpper !== 'ACTIVE' && statusUpper !== 'APPROVED')) {
+      if (!isApproved) {
         navigate('/registration-status', { replace: true });
       } else {
         navigate(getRoleDashboardPath(user.role), { replace: true });
@@ -73,19 +70,19 @@ export function Login() {
           localStorage.setItem('ams_remember_me', 'false');
         }
         const loggedUser = res.user;
-        const isManagerOrAgent = loggedUser?.role && (
-          loggedUser.role.toLowerCase().includes('manager') ||
-          loggedUser.role.toLowerCase().includes('agent')
-        );
+        const authorizedRoles = ['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'];
+        if (!isRoleAllowed(loggedUser?.role, authorizedRoles)) {
+          navigate('/access-denied', { replace: true });
+          return;
+        }
         const statusUpper = String(loggedUser?.status || '').toUpperCase();
-        const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
-          String(loggedUser?.adminApprovalStatus || '').toLowerCase() === 'approved' &&
-          (String(loggedUser?.kycStatus || '').toLowerCase() === 'verified' || String(loggedUser?.kycStatus || '').toLowerCase() === 'approved') &&
+        const isApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+          String(loggedUser?.adminApprovalStatus || 'approved').toLowerCase() === 'approved' &&
           loggedUser?.isActive !== false &&
           !loggedUser?.requiresApproval &&
           !res.requiresApproval;
 
-        if ((isManagerOrAgent && !isFullyApproved) || res.requiresApproval || loggedUser.requiresApproval || (statusUpper !== 'ACTIVE' && statusUpper !== 'APPROVED')) {
+        if (!isApproved) {
           navigate('/registration-status', { replace: true });
         } else {
           navigate(getRoleDashboardPath(loggedUser.role), { replace: true });

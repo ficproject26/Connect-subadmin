@@ -90,7 +90,9 @@ export function StatusBadge({ status, className = '' }) {
   }
 
   let displayLabel = status;
-  if (s === 'pending pincode admin approval') {
+  if (s === 'approved' || s === 'active') {
+    displayLabel = 'Active';
+  } else if (s === 'pending pincode admin approval') {
     displayLabel = 'Pending Pincode Approval';
   } else if (s === 'pincode admin approved') {
     displayLabel = 'Pincode Approved';

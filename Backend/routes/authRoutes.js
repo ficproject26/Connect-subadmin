@@ -20,6 +20,7 @@ router.get('/demo-admins', authController.getDemoAdmins);
 // Protected endpoints
 router.get('/me', authMiddleware, authController.getMe);
 router.get('/registration-status', authMiddleware, authController.getMe);
+router.put('/profile', authMiddleware, authController.updateProfile);
 router.put('/change-password', authMiddleware, authController.changePassword);
 
 module.exports = router;

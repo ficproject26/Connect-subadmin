@@ -34,17 +34,17 @@ export function AuthProvider({ children }) {
           }
         }
       } catch (err) {
-        // Only clear session on definitive 401 (invalid/expired token).
-        // Do NOT clear on network errors (ECONNREFUSED, timeout, 503) — backend
-        // may still be starting up and the token is valid.
-        const is401 =
+        const isAuthError =
           err?.status === 401 ||
+          err?.status === 403 ||
           (err?.message || '').toLowerCase().includes('unauthorized') ||
+          (err?.message || '').toLowerCase().includes('permission') ||
+          (err?.message || '').toLowerCase().includes('access denied') ||
           (err?.message || '').toLowerCase().includes('invalid token') ||
           (err?.message || '').toLowerCase().includes('token expired');
 
-        if (is401) {
-          console.warn('Session expired or invalid on startup, logging out.');
+        if (isAuthError) {
+          console.warn('Session expired, invalid, or unauthorized on startup, clearing session.');
           authService.logout();
           if (isMounted) {
             setUser(null);
@@ -116,6 +116,24 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!token && !!user;
 
+  const updateUser = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('ams_user', JSON.stringify(updatedUser));
+  };
+
+  const refreshUser = async () => {
+    try {
+      const res = await authService.getMe();
+      if (res.success && res.user) {
+        setUser(res.user);
+        localStorage.setItem('ams_user', JSON.stringify(res.user));
+        return res.user;
+      }
+    } catch (e) {
+      console.warn('Failed to refresh user profile:', e);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -125,6 +143,8 @@ export function AuthProvider({ children }) {
         login,
         loginAsRole,
         logout,
+        updateUser,
+        refreshUser,
         demoAdmins,
         isAuthenticated,
       }}

@@ -3,7 +3,9 @@ import { dataService } from "../../services/dataService";
 import { useTheme } from "../../context/ThemeContext";
 import { Download, FileText, BarChart2, RefreshCw } from "lucide-react";
 import { ManagerReportsPanel } from "../../components/ManagerReportsPanel";
+import { AgentReportsPanel } from "../../components/AgentReportsPanel";
 import { BusinessFinancialOverview } from "../../components/BusinessFinancialOverview";
+import { Users } from "lucide-react";
 
 export function DivisionalReports() {
   const { isDark } = useTheme();
@@ -67,9 +69,16 @@ export function DivisionalReports() {
         >
           <FileText className="w-3.5 h-3.5" /> Manager Field Reports
         </button>
+        <button
+          onClick={() => setActiveTab("agent")}
+          className={`${tabBase} ${activeTab === "agent" ? (isDark ? "bg-violet-900/60 text-violet-300 border-violet-700" : "bg-violet-600 text-white border-violet-600") : (isDark ? "bg-slate-800 text-slate-400 border-slate-700" : "bg-white text-slate-600 border-slate-200")}`}
+        >
+          <Users className="w-3.5 h-3.5" /> Agent Reports
+        </button>
       </div>
 
       {activeTab === "manager" && <ManagerReportsPanel />}
+      {activeTab === "agent" && <AgentReportsPanel />}
 
       {activeTab === "business" && (
         <BusinessFinancialOverview report={report} loading={loading} />

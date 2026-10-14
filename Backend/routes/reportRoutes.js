@@ -8,6 +8,7 @@ router.use(authMiddleware);
 // Sub-Admin Dashboard & Business Reports
 router.get('/dashboard-summary', reportController.getDashboardSummary);
 router.get('/business-reports', reportController.getBusinessReports);
+router.get('/agents', reportController.getAgentReports);
 
 // Manager Portal Dashboard stats
 router.get('/dashboard', reportController.getDashboardStats);

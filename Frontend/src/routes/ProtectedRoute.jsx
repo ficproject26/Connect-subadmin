@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { normalizeRole, isRoleAllowed } from '../utils/permissions';
 
 export function ProtectedRoute() {
   const { user, isAuthenticated, loading } = useAuth();
@@ -20,22 +21,26 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  const isManagerOrAgent = user?.role && (
-    user.role.toLowerCase().includes('manager') ||
-    user.role.toLowerCase().includes('agent')
-  );
-  const statusUpper = String(user?.status || '').toUpperCase();
-  const adminApprovalStatus = String(user?.adminApprovalStatus || '').toLowerCase();
-  const kycStatus = String(user?.kycStatus || '').toLowerCase();
+  // 1. Role Authorization Check: Sub-Admin portal is strictly for Sub-Admins
+  const authorizedRoles = ['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'];
+  const hasAuthorizedRole = isRoleAllowed(user.role, authorizedRoles);
+  if (!hasAuthorizedRole) {
+    return <Navigate to="/access-denied" replace />;
+  }
 
-  const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
-    adminApprovalStatus === 'approved' &&
-    (kycStatus === 'verified' || kycStatus === 'approved') &&
-    user?.isActive !== false &&
-    !user?.requiresApproval;
+  // 2. Status & Approval Gate Check
+  const statusUpper = String(user.status || '').toUpperCase();
+  const isSuspendedOrBlocked = ['SUSPENDED', 'BLOCKED', 'REVOKED', 'INACTIVE', 'REJECTED'].includes(statusUpper);
+  if (isSuspendedOrBlocked) {
+    return <Navigate to="/access-denied" replace />;
+  }
 
-  // Strictly block direct URL navigation to any dashboard for unapproved applicants
-  if ((isManagerOrAgent && !isFullyApproved) || user?.requiresApproval || (statusUpper !== 'ACTIVE' && statusUpper !== 'APPROVED')) {
+  const isApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+    String(user.adminApprovalStatus || 'approved').toLowerCase() === 'approved' &&
+    user.isActive !== false &&
+    !user.requiresApproval;
+
+  if (!isApproved) {
     return <Navigate to="/registration-status" replace />;
   }
 

@@ -484,6 +484,7 @@ const deliveryStatusHistoryCollection = new Collection('delivery_status_history'
 const settlementsCollection = new Collection('settlements', [], 'settlements');
 const productsCollection = new Collection('products', [], 'products');
 const jobappliedsCollection = new Collection('jobapplieds', [], 'jobapplieds');
+const categoriesCollection = new Collection('categories', [], 'categories');
 
 // Full database store
 const db = {
@@ -522,6 +523,7 @@ const db = {
   settlements: settlementsCollection,
   products: productsCollection,
   jobapplieds: jobappliedsCollection,
+  categories: categoriesCollection,
 
   get admins() {
     return Array.from(usersCollection).filter(u => {
@@ -708,7 +710,8 @@ function initDatabase() {
         deliveryStatusHistoryCollection,
         settlementsCollection,
         productsCollection,
-        jobappliedsCollection
+        jobappliedsCollection,
+        categoriesCollection
       ];
 
       await Promise.all(collections.map(col => col.initMongo(mongoDb)));

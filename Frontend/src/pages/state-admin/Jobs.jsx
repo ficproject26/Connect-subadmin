@@ -2,25 +2,27 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
-import { ResumeModal } from '../../components/ResumeModal';
 import { JobApplicationDetailsModal } from '../../components/JobApplicationDetailsModal';
 import { useTheme } from '../../context/ThemeContext';
-import { FileText, MapPin, Building2, Briefcase, UserCheck, Award, XCircle, Code2, Wrench } from 'lucide-react';
+import { MapPin, Building2, Briefcase, UserCheck, Award, XCircle, Code2, Wrench, Filter } from 'lucide-react';
 
 export function StateJobs() {
   const { isDark } = useTheme();
   const [jobs, setJobs] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState(null);
-  const [showResumeModal, setShowResumeModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const loadData = async () => {
+  const loadData = async (cat = selectedCategory) => {
     setLoading(true);
     setErrorMessage('');
     try {
-      const res = await dataService.getJobs();
+      const params = {};
+      if (cat && cat !== 'All') params.category = cat;
+      const res = await dataService.getJobs(params);
       if (res.success) {
         const list = [...(res.jobs || res.data || [])];
         list.sort((a, b) => {
@@ -49,7 +51,18 @@ export function StateJobs() {
   };
 
   useEffect(() => {
-    loadData();
+    const fetchCats = async () => {
+      try {
+        const catRes = await dataService.getJobCategories();
+        if (catRes && catRes.success && Array.isArray(catRes.categories)) {
+          setCategories(catRes.categories);
+        }
+      } catch (err) {
+        console.warn('Failed to load job categories:', err);
+      }
+    };
+    fetchCats();
+    loadData('All');
   }, []);
 
   // Helper to identify IT vs Non-IT Job Applications
@@ -148,29 +161,6 @@ export function StateJobs() {
             {row.district || '-'}{row.division ? ` / ${row.division}` : ''}
           </div>
         </div>
-      )
-    },
-    {
-      header: 'Resume',
-      className: 'whitespace-nowrap min-w-[130px]',
-      render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedApplication(row);
-            setShowResumeModal(true);
-          }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold ${
-            isDark
-              ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-          } border transition shadow-sm cursor-pointer`}
-          title="View Candidate Application Resume"
-        >
-          <FileText className="w-3.5 h-3.5 text-blue-500" />
-          <span>View Resume</span>
-        </button>
       )
     },
     {
@@ -275,12 +265,53 @@ export function StateJobs() {
         </div>
       </div>
 
-      {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
-          <span>⚠️</span>
-          <span>{errorMessage}</span>
+      {/* Dynamic Job Category Filter Toolbar */}
+      <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'} shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+        <div className="flex items-center gap-2">
+          <Briefcase className="w-4 h-4 text-indigo-500" />
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Filter by Job Category:</span>
         </div>
-      )}
+        <div className="flex items-center gap-3">
+          {categories.length === 0 ? (
+            <span className="text-xs text-slate-400 italic">No job categories configured in Category Management</span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedCategory}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedCategory(val);
+                  loadData(val);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border outline-none ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-slate-200'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
+                }`}
+              >
+                <option value="All">All Categories ({categories.length})</option>
+                {categories.map((cat, idx) => (
+                  <option key={idx} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              {selectedCategory !== 'All' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory('All');
+                    loadData('All');
+                  }}
+                  className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-semibold underline"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       <DataTable
         title="Job Applications"
@@ -289,7 +320,7 @@ export function StateJobs() {
         data={jobs}
         loading={loading}
         error={errorMessage}
-        onRefresh={loadData}
+        onRefresh={() => loadData(selectedCategory)}
         emptyMessage="No job applications found under this territory."
         onRowClick={(row) => {
           setSelectedApplication(row);
@@ -304,18 +335,6 @@ export function StateJobs() {
         application={selectedApplication}
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
-        onViewResume={(app) => {
-          setSelectedApplication(app);
-          setShowDetailsModal(false);
-          setShowResumeModal(true);
-        }}
-      />
-
-      {/* Dedicated PDF Resume Viewer Modal (Resume Button Click) */}
-      <ResumeModal
-        application={selectedApplication}
-        isOpen={showResumeModal}
-        onClose={() => setShowResumeModal(false)}
       />
     </div>
   );

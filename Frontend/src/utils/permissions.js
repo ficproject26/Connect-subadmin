@@ -109,13 +109,8 @@ export function getRoleDashboardPath(role) {
     return '/pincode-admin/dashboard';
   }
 
-  // Manager -> /manager/dashboard
-  if (raw.includes('manager')) {
-    return '/manager/dashboard';
-  }
-
-  // Strictly deny other roles access to any administrative dashboard
-  return '/login';
+  // Strictly deny non-admin roles (Managers, Agents, Vendors, Customers) access to any Sub-Admin dashboard
+  return '/access-denied';
 }
 
 /**

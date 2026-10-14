@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { dataService } from '../services/dataService';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { getTerritoryLocking, safeString } from '../utils/territoryHelper';
 import { SearchBar } from './SearchBar';
 import {
   AlertTriangle, ClipboardList, Plus, Eye, CheckCircle, XCircle,
@@ -10,7 +11,7 @@ import {
   MapPin, Calendar, User, Tag, Layers, Flag, FileText, Camera,
   MessageSquare, Shield, ThumbsUp, ThumbsDown, Loader2, RefreshCw,
   Building2, Navigation, Search, Filter, ArrowRight, Check, AlertCircle,
-  Archive, Info, Download
+  Archive, Info, Download, Lock
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -211,7 +212,19 @@ function Textarea({ isDark, rows=3, ...props }) {
 }
 
 function Select({ isDark, children, ...props }) {
-  const base = { width:'100%', padding:'9px 12px', borderRadius:10, border:isDark?'1px solid #1a2d4a':'1px solid #e2e8f0', background:isDark?'#060e1c':'#f8fafc', color:isDark?'#e2e8f0':'#0f172a', fontSize:'0.84rem', outline:'none', boxSizing:'border-box' };
+  const base = {
+    width: '100%',
+    padding: '9px 12px',
+    borderRadius: 10,
+    border: isDark ? '1px solid #1a2d4a' : '1px solid #e2e8f0',
+    background: props.disabled ? (isDark ? '#0d1d33' : '#f1f5f9') : (isDark ? '#060e1c' : '#f8fafc'),
+    color: props.disabled ? (isDark ? '#64748b' : '#94a3b8') : (isDark ? '#e2e8f0' : '#0f172a'),
+    fontSize: '0.84rem',
+    outline: 'none',
+    boxSizing: 'border-box',
+    cursor: props.disabled ? 'not-allowed' : 'pointer',
+    opacity: props.disabled ? 0.7 : 1
+  };
   return <select style={base} {...props}>{children}</select>;
 }
 
@@ -288,7 +301,35 @@ function RaiseIssueModal({ isDark, onClose, onSuccess }) {
 
 // ─── Create Task Modal ────────────────────────────────────────────────────────
 
+function formatManagerRole(role) {
+  if (!role) return 'Manager';
+  const r = String(role).toLowerCase().replace(/_/g, ' ').trim();
+  if (r.includes('pincode')) return 'Pincode Manager';
+  if (r.includes('divis')) return 'Divisional Manager';
+  if (r.includes('dist')) return 'District Manager';
+  if (r.includes('state')) return 'State Manager';
+  return 'Manager';
+}
+
+function formatManagerOptionLabel(m) {
+  const roleTitle = m.roleTitle || formatManagerRole(m.role);
+  const parts = [];
+  if (m.district) parts.push(m.district);
+  if (m.state) parts.push(m.state);
+  const territoryStr = parts.join(', ');
+  const pinPrefix = m.pincode ? `PIN ${m.pincode} — ` : (m.division ? `${m.division} — ` : '');
+  return `${m.name} (${roleTitle}) — ${pinPrefix}${territoryStr || 'State Scope'}`;
+}
+
 function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
+  const { user } = useAuth();
+  const territoryLock = useMemo(() => getTerritoryLocking(user), [user]);
+
+  const initState = linkedIssue?.state || territoryLock.defaultState || 'Tamil Nadu';
+  const initDistrict = linkedIssue?.district || territoryLock.defaultDistrict || '';
+  const initDivision = linkedIssue?.division || territoryLock.defaultDivision || '';
+  const initPincode = linkedIssue?.pincode || territoryLock.defaultPincode || '';
+
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -300,10 +341,10 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
     assignedManagerRole: '',
     assignedManagerLevel: null,
     qcIssueId: linkedIssue?._id || linkedIssue?.id || '',
-    state: linkedIssue?.state || '',
-    district: linkedIssue?.district || '',
-    division: linkedIssue?.division || '',
-    pincode: linkedIssue?.pincode || '',
+    state: initState,
+    district: initDistrict,
+    division: initDivision,
+    pincode: initPincode,
     stateId: linkedIssue?.stateId || '',
     districtId: linkedIssue?.districtId || '',
     divisionId: linkedIssue?.divisionId || '',
@@ -311,60 +352,256 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
     location: linkedIssue?.location || '',
     remarks: ''
   });
-  const [managers, setManagers] = useState([]);
+
+  const [hierarchy, setHierarchy] = useState([]);
+  const [loadingHierarchy, setLoadingHierarchy] = useState(true);
+  const [allManagers, setAllManagers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingMgrs, setLoadingMgrs] = useState(true);
   const [err, setErr] = useState('');
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  // Load Territory Hierarchy from Pin Code Management Master Data
   useEffect(() => {
-    dataService.getQCTaskManagers()
-      .then(r => { if (r.success) setManagers(r.data || []); })
-      .catch(() => {})
-      .finally(() => setLoadingMgrs(false));
+    let mounted = true;
+    dataService.getTerritoryHierarchy()
+      .then(res => {
+        if (mounted && res) {
+          const list = res.hierarchy || res.states || [];
+          setHierarchy(list);
+        }
+      })
+      .catch(e => console.error('Failed to load hierarchy:', e))
+      .finally(() => { if (mounted) setLoadingHierarchy(false); });
+    return () => { mounted = false; };
   }, []);
+
+  // Load Managers for Scope
+  useEffect(() => {
+    let mounted = true;
+    setLoadingMgrs(true);
+    dataService.getQCTaskManagers()
+      .then(r => {
+        if (mounted && r.success) {
+          setAllManagers(r.data || []);
+        }
+      })
+      .catch(e => setErr(e.message))
+      .finally(() => { if (mounted) setLoadingMgrs(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  // Compute available districts, divisions, pincodes based on Pin Code Management data
+  const currentStateObj = useMemo(() => {
+    if (!form.state || !hierarchy.length) return null;
+    return hierarchy.find(s => (s.name || '').toLowerCase() === form.state.toLowerCase()) || null;
+  }, [hierarchy, form.state]);
+
+  const availableDistricts = useMemo(() => {
+    if (territoryLock.districtLocked) {
+      return territoryLock.defaultDistrict ? [{ name: territoryLock.defaultDistrict, id: territoryLock.defaultDistrict }] : [];
+    }
+    return currentStateObj?.districts || [];
+  }, [currentStateObj, territoryLock]);
+
+  const currentDistrictObj = useMemo(() => {
+    if (!form.district || !currentStateObj) return null;
+    return currentStateObj.districts?.find(d => (d.name || '').toLowerCase() === form.district.toLowerCase()) || null;
+  }, [currentStateObj, form.district]);
+
+  const availableDivisions = useMemo(() => {
+    if (territoryLock.divisionLocked) {
+      return territoryLock.defaultDivision ? [{ name: territoryLock.defaultDivision, id: territoryLock.defaultDivision }] : [];
+    }
+    return currentDistrictObj?.divisions || [];
+  }, [currentDistrictObj, territoryLock]);
+
+  const currentDivisionObj = useMemo(() => {
+    if (!form.division || !currentDistrictObj) return null;
+    return currentDistrictObj.divisions?.find(v => (v.name || '').toLowerCase() === form.division.toLowerCase()) || null;
+  }, [currentDistrictObj, form.division]);
+
+  const availablePincodes = useMemo(() => {
+    if (territoryLock.pincodeLocked) {
+      return territoryLock.defaultPincode ? [territoryLock.defaultPincode] : [];
+    }
+    if (!currentDivisionObj) return [];
+    if (Array.isArray(currentDivisionObj.pincodes) && currentDivisionObj.pincodes.length > 0) {
+      return currentDivisionObj.pincodes;
+    }
+    if (Array.isArray(currentDivisionObj.rawPincodes)) {
+      return currentDivisionObj.rawPincodes.map(p => p.code || p.pincode).filter(Boolean);
+    }
+    return [];
+  }, [currentDivisionObj, territoryLock]);
+
+  // Dependent cascading handlers:
+  // When a parent dropdown changes, clear all dependent selections and previously selected managers to prevent invalid combinations.
+  const handleStateChange = (e) => {
+    const newState = e.target.value;
+    const stDoc = hierarchy.find(s => s.name === newState);
+    setForm(p => ({
+      ...p,
+      state: newState,
+      stateId: stDoc?._id || stDoc?.id || '',
+      district: '',
+      districtId: '',
+      division: '',
+      divisionId: '',
+      pincode: '',
+      pincodeId: '',
+      assignedManagerId: '',
+      assignedManagerName: '',
+      assignedManagerRole: '',
+      assignedManagerLevel: null
+    }));
+  };
+
+  const handleDistrictChange = (e) => {
+    const newDistrict = e.target.value;
+    const distDoc = currentStateObj?.districts?.find(d => d.name === newDistrict);
+    setForm(p => ({
+      ...p,
+      district: newDistrict,
+      districtId: distDoc?._id || distDoc?.id || '',
+      division: '',
+      divisionId: '',
+      pincode: '',
+      pincodeId: '',
+      assignedManagerId: '',
+      assignedManagerName: '',
+      assignedManagerRole: '',
+      assignedManagerLevel: null
+    }));
+  };
+
+  const handleDivisionChange = (e) => {
+    const newDivision = e.target.value;
+    const divDoc = currentDistrictObj?.divisions?.find(v => v.name === newDivision);
+    setForm(p => ({
+      ...p,
+      division: newDivision,
+      divisionId: divDoc?._id || divDoc?.id || '',
+      pincode: '',
+      pincodeId: '',
+      assignedManagerId: '',
+      assignedManagerName: '',
+      assignedManagerRole: '',
+      assignedManagerLevel: null
+    }));
+  };
+
+  const handlePincodeChange = (e) => {
+    const newPin = e.target.value;
+    setForm(p => ({
+      ...p,
+      pincode: newPin,
+      pincodeId: '',
+      assignedManagerId: '',
+      assignedManagerName: '',
+      assignedManagerRole: '',
+      assignedManagerLevel: null
+    }));
+  };
+
+  // Filter managers by selected territory (State -> District -> Division -> Pincode)
+  const filteredManagers = useMemo(() => {
+    if (!allManagers || allManagers.length === 0) return [];
+    const selState = (form.state || '').trim().toLowerCase();
+    const selDistrict = (form.district || '').trim().toLowerCase();
+    const selDivision = (form.division || '').trim().toLowerCase();
+    const selPincode = String(form.pincode || '').trim();
+
+    return allManagers.filter(mgr => {
+      // Must be active and eligible
+      const status = String(mgr.status || '').toLowerCase().trim();
+      if (status && status !== 'active' && status !== 'approved') return false;
+      if (mgr.approvalStatus && String(mgr.approvalStatus).toLowerCase() === 'rejected') return false;
+      if (mgr.isSuspended || mgr.suspended) return false;
+
+      const mRole = String(mgr.role || '').toLowerCase();
+      const mState = (mgr.state || mgr.assignedState || '').trim().toLowerCase();
+      const mDistrict = (mgr.district || mgr.assignedDistrict || '').trim().toLowerCase();
+      const mDivision = (mgr.division || mgr.assignedDivision || '').trim().toLowerCase();
+      const mPincode = String(mgr.pincode || mgr.assignedPincode || '').trim();
+
+      // State check: Must match selected state (strictly prevent cross-state!)
+      if (selState && mState && mState !== selState) {
+        return false;
+      }
+
+      // 1. If Pincode is selected:
+      if (selPincode) {
+        if (mRole.includes('pincode')) {
+          return mPincode === selPincode;
+        }
+        if (mRole.includes('divis')) {
+          return selDivision ? mDivision === selDivision : true;
+        }
+        if (mRole.includes('dist')) {
+          return selDistrict ? mDistrict === selDistrict : true;
+        }
+        if (mRole.includes('state')) {
+          return selState ? mState === selState : true;
+        }
+        return false;
+      }
+
+      // 2. If Division is selected (no pincode):
+      if (selDivision) {
+        if (mRole.includes('pincode')) {
+          return mDivision === selDivision;
+        }
+        if (mRole.includes('divis')) {
+          return mDivision === selDivision;
+        }
+        if (mRole.includes('dist')) {
+          return selDistrict ? mDistrict === selDistrict : true;
+        }
+        if (mRole.includes('state')) {
+          return selState ? mState === selState : true;
+        }
+        return false;
+      }
+
+      // 3. If District is selected (no division):
+      if (selDistrict) {
+        if (mRole.includes('pincode')) {
+          return mDistrict === selDistrict;
+        }
+        if (mRole.includes('divis')) {
+          return mDistrict === selDistrict;
+        }
+        if (mRole.includes('dist')) {
+          return mDistrict === selDistrict;
+        }
+        if (mRole.includes('state')) {
+          return selState ? mState === selState : true;
+        }
+        return false;
+      }
+
+      // 4. If only State is selected (no district):
+      if (selState) {
+        return mState === selState;
+      }
+
+      return false;
+    });
+  }, [allManagers, form.state, form.district, form.division, form.pincode]);
 
   const handleManagerChange = (e) => {
     const mgrId = e.target.value;
-    const mgr = managers.find(m => String(m.id || m._id) === String(mgrId));
+    const mgr = filteredManagers.find(m => String(m.id || m._id) === String(mgrId));
     if (!mgr) {
       setForm(p => ({
         ...p,
         assignedManagerId: '',
         assignedManagerName: '',
         assignedManagerRole: '',
-        assignedManagerLevel: null,
-        state: linkedIssue?.state || '',
-        stateId: linkedIssue?.stateId || '',
-        district: linkedIssue?.district || '',
-        districtId: linkedIssue?.districtId || '',
-        division: linkedIssue?.division || '',
-        divisionId: linkedIssue?.divisionId || '',
-        pincode: linkedIssue?.pincode || '',
-        pincodeId: linkedIssue?.pincodeId || ''
+        assignedManagerLevel: null
       }));
       return;
-    }
-
-    const rLower = String(mgr.role || '').toLowerCase();
-    const isPincode = rLower.includes('pincode');
-    const isDivisional = rLower.includes('divis');
-    const isDistrict = rLower.includes('dist');
-    const isState = rLower.includes('state');
-
-    const mState = mgr.state || mgr.assignedState || linkedIssue?.state || '';
-    const mDistrict = mgr.district || mgr.assignedDistrict || linkedIssue?.district || '';
-    const mDivision = mgr.division || mgr.assignedDivision || linkedIssue?.division || '';
-    let mPincode = mgr.pincode || mgr.assignedPincode || (isPincode ? (linkedIssue?.pincode || '') : '');
-
-    if (!mPincode) {
-      if (isDivisional) {
-        mPincode = 'Division Scope (All Pincodes)';
-      } else if (isDistrict) {
-        mPincode = 'District Scope';
-      } else if (isState) {
-        mPincode = 'State Scope';
-      }
     }
 
     setForm(p => ({
@@ -372,21 +609,21 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
       assignedManagerId: mgr.id || mgr._id,
       assignedManagerName: mgr.name || mgr.username,
       assignedManagerRole: mgr.roleTitle || mgr.role,
-      assignedManagerLevel: mgr.level,
-      state: mState,
-      stateId: mgr.stateId || mgr.assignedStateId || '',
-      district: isState && !mDistrict ? 'State Scope (All Districts)' : mDistrict,
-      districtId: mgr.districtId || mgr.assignedDistrictId || '',
-      division: (isState || isDistrict) && !mDivision ? (isDistrict ? 'District Scope (All Divisions)' : '') : mDivision,
-      divisionId: mgr.divisionId || mgr.assignedDivisionId || '',
-      pincode: mPincode,
-      pincodeId: mgr.pincodeId || mgr.assignedPincodeId || ''
+      assignedManagerLevel: mgr.level
     }));
   };
 
   const submit = async () => {
-    if (!form.title || !form.assignedManagerId) {
-      setErr('Task title and assigned manager are required.');
+    if (!form.title || !form.title.trim()) {
+      setErr('Task title is required.');
+      return;
+    }
+    if (!form.assignedManagerId) {
+      setErr('Assigned manager is required.');
+      return;
+    }
+    if (!form.state) {
+      setErr('State territory is required.');
       return;
     }
     setLoading(true);
@@ -394,6 +631,7 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
     try {
       const payload = {
         ...form,
+        title: form.title.trim(),
         state: form.state?.includes('Scope') ? '' : form.state,
         district: form.district?.includes('Scope') ? '' : form.district,
         division: form.division?.includes('Scope') ? '' : form.division,
@@ -413,8 +651,6 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
     }
   };
 
-  const isTerritoryLocked = Boolean(form.assignedManagerId);
-
   return (
     <ModalShell onClose={onClose} isDark={isDark} title={linkedIssue ? `Create Task from Issue #${linkedIssue.issueNumber}` : 'Create New Task'} icon={ClipboardList} iconBg="linear-gradient(135deg,#6366f1,#4f46e5)">
       {linkedIssue && (
@@ -423,12 +659,15 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
         </div>
       )}
       {err && <div style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.3)', color:'#ef4444', padding:'10px 14px', borderRadius:10, marginBottom:16, fontSize:'0.83rem' }}>{err}</div>}
+      
       <Field label="Task Title" isDark={isDark} required>
         <Input isDark={isDark} placeholder="Enter task title…" value={form.title} onChange={e=>set('title',e.target.value)}/>
       </Field>
+      
       <Field label="Description" isDark={isDark}>
         <Textarea isDark={isDark} rows={3} placeholder="Task description…" value={form.description} onChange={e=>set('description',e.target.value)}/>
       </Field>
+      
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
         <Field label="Category" isDark={isDark}>
           <Select isDark={isDark} value={form.category} onChange={e=>set('category',e.target.value)}>
@@ -440,22 +679,11 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
             {PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}
           </Select>
         </Field>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
         <Field label="Due Date" isDark={isDark}>
           <Input isDark={isDark} type="date" value={form.dueDate} onChange={e=>set('dueDate',e.target.value)}/>
-        </Field>
-        <Field label="Assign Manager" isDark={isDark} required>
-          {loadingMgrs ? (
-            <div style={{ color:'#64748b', fontSize:'0.8rem', padding:'9px 0' }}>Loading managers…</div>
-          ) : (
-            <Select isDark={isDark} value={form.assignedManagerId} onChange={handleManagerChange}>
-              <option value="">Select manager…</option>
-              {managers.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.roleTitle || m.role}) {m.pincode ? `— PIN ${m.pincode}` : m.division ? `— ${m.division}` : m.district ? `— ${m.district}` : m.state ? `— ${m.state}` : ''}
-                </option>
-              ))}
-            </Select>
-          )}
         </Field>
       </div>
 
@@ -471,35 +699,147 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             <MapPin size={13} />
-            Territory Scope ({isTerritoryLocked ? 'Auto-populated from Manager Profile' : 'Target Location'})
+            Territory Scope (Target Location)
           </div>
-          {isTerritoryLocked && (
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: isDark ? 'rgba(99,102,241,0.2)' : '#e0e7ff', color: isDark ? '#a5b4fc' : '#4338ca' }}>
-              Read-Only Scope
+          {territoryLock.stateLocked && (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: isDark ? 'rgba(99,102,241,0.2)' : '#e0e7ff', color: isDark ? '#a5b4fc' : '#4338ca' }}>
+              <Lock size={10}/> Role-Restricted ({territoryLock.tier.toUpperCase()})
             </span>
           )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <Field label="State" isDark={isDark}>
-            <Input isDark={isDark} placeholder="State" value={form.state} readOnly={isTerritoryLocked} onChange={e=>set('state',e.target.value)}/>
+          {/* STATE */}
+          <Field label="State" isDark={isDark} required>
+            {territoryLock.stateLocked ? (
+              <Input
+                isDark={isDark}
+                value={form.state || territoryLock.defaultState || 'Tamil Nadu'}
+                readOnly
+                title="State is locked to your assigned jurisdiction"
+              />
+            ) : (
+              <Select isDark={isDark} value={form.state} onChange={handleStateChange}>
+                <option value="">Select State…</option>
+                {hierarchy.map(s => (
+                  <option key={s.id || s._id || s.name} value={s.name}>{s.name}</option>
+                ))}
+              </Select>
+            )}
           </Field>
+
+          {/* DISTRICT */}
           <Field label="District" isDark={isDark}>
-            <Input isDark={isDark} placeholder="District" value={form.district} readOnly={isTerritoryLocked} onChange={e=>set('district',e.target.value)}/>
+            {territoryLock.districtLocked ? (
+              <Input
+                isDark={isDark}
+                value={form.district || territoryLock.defaultDistrict}
+                readOnly
+                title="District is locked to your assigned jurisdiction"
+              />
+            ) : (
+              <Select
+                isDark={isDark}
+                value={form.district}
+                onChange={handleDistrictChange}
+                disabled={!form.state || availableDistricts.length === 0}
+              >
+                <option value="">Select District…</option>
+                {availableDistricts.map(d => (
+                  <option key={d.id || d._id || d.name} value={d.name}>{d.name}</option>
+                ))}
+              </Select>
+            )}
           </Field>
+
+          {/* DIVISION */}
           <Field label="Division" isDark={isDark}>
-            <Input isDark={isDark} placeholder="Division" value={form.division} readOnly={isTerritoryLocked} onChange={e=>set('division',e.target.value)}/>
+            {territoryLock.divisionLocked ? (
+              <Input
+                isDark={isDark}
+                value={form.division || territoryLock.defaultDivision}
+                readOnly
+                title="Division is locked to your assigned jurisdiction"
+              />
+            ) : (
+              <Select
+                isDark={isDark}
+                value={form.division}
+                onChange={handleDivisionChange}
+                disabled={!form.district || availableDivisions.length === 0}
+              >
+                <option value="">Select Division…</option>
+                {availableDivisions.map(v => (
+                  <option key={v.id || v._id || v.name} value={v.name}>{v.name}</option>
+                ))}
+              </Select>
+            )}
           </Field>
+
+          {/* PINCODE */}
           <Field label="Pincode" isDark={isDark}>
-            <Input isDark={isDark} placeholder="Pincode" value={form.pincode} readOnly={isTerritoryLocked} onChange={e=>set('pincode',e.target.value)}/>
+            {territoryLock.pincodeLocked ? (
+              <Input
+                isDark={isDark}
+                value={form.pincode || territoryLock.defaultPincode}
+                readOnly
+                title="Pincode is locked to your assigned jurisdiction"
+              />
+            ) : (
+              <Select
+                isDark={isDark}
+                value={form.pincode}
+                onChange={handlePincodeChange}
+                disabled={!form.division || availablePincodes.length === 0}
+              >
+                <option value="">Select Pincode…</option>
+                {availablePincodes.map(pin => (
+                  <option key={pin} value={pin}>{pin}</option>
+                ))}
+              </Select>
+            )}
           </Field>
         </div>
       </div>
 
-      <Field label="Remarks" isDark={isDark}><Textarea isDark={isDark} rows={2} placeholder="Any notes…" value={form.remarks} onChange={e=>set('remarks',e.target.value)}/></Field>
+      {/* ASSIGN MANAGER DROPDOWN */}
+      <Field label="Assign Manager" isDark={isDark} required>
+        {loadingMgrs ? (
+          <div style={{ color: '#64748b', fontSize: '0.8rem', padding: '9px 0' }}>Loading managers…</div>
+        ) : (
+          <Select
+            isDark={isDark}
+            value={form.assignedManagerId}
+            onChange={handleManagerChange}
+          >
+            <option value="">
+              {filteredManagers.length === 0
+                ? (form.state ? 'No eligible managers in selected territory' : 'Select territory first…')
+                : 'Select manager…'}
+            </option>
+            {filteredManagers.map(m => (
+              <option key={m.id || m._id} value={m.id || m._id}>
+                {formatManagerOptionLabel(m)}
+              </option>
+            ))}
+          </Select>
+        )}
+        <div style={{ fontSize: '0.72rem', color: isDark ? '#94a3b8' : '#64748b', marginTop: 4 }}>
+          {filteredManagers.length > 0
+            ? `${filteredManagers.length} eligible manager${filteredManagers.length > 1 ? 's' : ''} available for ${[form.pincode, form.division, form.district, form.state].filter(Boolean).join(' → ')}`
+            : form.state ? 'No active managers assigned to this specific territory' : 'Select a territory to filter eligible managers'}
+        </div>
+      </Field>
+
+      <Field label="Remarks" isDark={isDark}>
+        <Textarea isDark={isDark} rows={2} placeholder="Any notes…" value={form.remarks} onChange={e=>set('remarks',e.target.value)}/>
+      </Field>
+      
       <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:8 }}>
         <Btn variant="neutral" onClick={onClose}>Cancel</Btn>
-        <Btn variant="primary" onClick={submit} disabled={loading}><Plus size={14}/>{loading?'Creating…':'Create Task'}</Btn>
+        <Btn variant="primary" onClick={submit} disabled={loading}>
+          <Plus size={14}/>{loading ? 'Creating…' : 'Create Task'}
+        </Btn>
       </div>
     </ModalShell>
   );

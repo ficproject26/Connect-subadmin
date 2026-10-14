@@ -28,7 +28,36 @@ function roleBadgeCls(role = "", isDark) {
 }
 
 // ── Detail Modal ──────────────────────────────────────────────────────────────
-function ReportDetailModal({ report, isDark, onClose }) {
+function ReportDetailModal({ report: initialReport, isDark, onClose }) {
+  const [report, setReport] = useState(initialReport || null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDetails = async () => {
+      if (!initialReport) return;
+      const reportId = initialReport._id || initialReport.id || initialReport.reportNumber;
+      if (!reportId) return;
+      try {
+        setModalLoading(true);
+        setModalError(null);
+        const res = await dataService.getSubmittedManagerReportById(reportId);
+        if (isMounted && res && res.success && res.data) {
+          setReport(res.data);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.warn("Could not fetch enriched report details, using summary:", err.message);
+        }
+      } finally {
+        if (isMounted) setModalLoading(false);
+      }
+    };
+    fetchDetails();
+    return () => { isMounted = false; };
+  }, [initialReport]);
+
   if (!report) return null;
   const s = report.summary || {};
 
@@ -40,7 +69,7 @@ function ReportDetailModal({ report, isDark, onClose }) {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Field Performance Report - ${report.reportNumber || report.managerName}</title>
+          <title>Field Performance Report - ${report.reportNumber || report.reportCode || report.managerName}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
             body { font-family: 'Inter', sans-serif; background: #ffffff; color: #0f172a; margin: 20px; font-size: 12px; }
@@ -66,6 +95,8 @@ function ReportDetailModal({ report, isDark, onClose }) {
       printWindow.close();
     }, 400);
   };
+
+  const reportNo = report.reportNumber || report.reportCode || report.id || report._id || '—';
 
   return (
     <div
@@ -133,12 +164,15 @@ function ReportDetailModal({ report, isDark, onClose }) {
                 Official Field Performance Report
               </h3>
               <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "2px 0 0" }}>
-                Report No: <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{report.reportNumber}</span>
+                Report No: <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{reportNo}</span>
               </p>
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {modalLoading && (
+              <span style={{ fontSize: "0.75rem", color: "#0284c7", fontWeight: 600 }}>Refreshing...</span>
+            )}
             <button
               type="button"
               onClick={handlePrint}
@@ -248,7 +282,7 @@ function ReportDetailModal({ report, isDark, onClose }) {
           {/* 2. Performance Summary Metrics */}
           <div>
             <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>
-              Report Performance Summary ({report.dateRange || report.periodLabel})
+              Report Performance Summary ({report.dateRange || report.periodLabel || "Selected Period"})
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
@@ -303,130 +337,136 @@ function ReportDetailModal({ report, isDark, onClose }) {
               <span>Shop Visit Records ({report.shopVisits?.length || 0})</span>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {(report.shopVisits || []).map((v, vIdx) => (
-                <div
-                  key={v._id || v.id || vIdx}
-                  style={{
-                    padding: "14px 16px",
-                    background: "#f8fafc",
-                    borderRadius: 12,
-                    border: "1px solid #e2e8f0",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 8,
-                          background: "#ffffff",
-                          border: "1px solid #cbd5e1",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          overflow: "hidden"
-                        }}
-                      >
-                        {(() => {
-                          const pUrl = (v.shopPhoto && !v.shopPhoto.startsWith("blob:")) ? v.shopPhoto : (v.vendor?.documents?.[0]?.url || null);
-                          return pUrl ? (
-                            <img src={pUrl} alt="Shop" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          ) : (
-                            <Store size={18} style={{ color: "#0284c7" }} />
-                          );
-                        })()}
+            {(!report.shopVisits || report.shopVisits.length === 0) ? (
+              <div style={{ padding: "18px", textAlign: "center", color: "#64748b", fontSize: "0.82rem", background: "#f8fafc", borderRadius: 10, border: "1px dashed #cbd5e1" }}>
+                No shop visits recorded in this report period.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {report.shopVisits.map((v, vIdx) => (
+                  <div
+                    key={v._id || v.id || vIdx}
+                    style={{
+                      padding: "14px 16px",
+                      background: "#f8fafc",
+                      borderRadius: 12,
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: 8,
+                            background: "#ffffff",
+                            border: "1px solid #cbd5e1",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden"
+                          }}
+                        >
+                          {(() => {
+                            const pUrl = (typeof v.shopPhoto === 'string' && !v.shopPhoto.startsWith("blob:")) ? v.shopPhoto : (v.vendor?.documents?.[0]?.url || null);
+                            return pUrl ? (
+                              <img src={pUrl} alt="Shop" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              <Store size={18} style={{ color: "#0284c7" }} />
+                            );
+                          })()}
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "#e0f2fe", color: "#0369a1" }}>
+                              {v.category || "Products"}
+                            </span>
+                            <strong style={{ fontSize: "0.92rem", color: "#0f172a" }}>{v.shopName}</strong>
+                          </div>
+                          <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: 2 }}>
+                            {v.pincode && <span>PIN: {v.pincode} • </span>}
+                            {v.createdAt && <span>Visited: {new Date(v.createdAt).toLocaleString()}</span>}
+                          </div>
+                        </div>
                       </div>
+
                       <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "#e0f2fe", color: "#0369a1" }}>
-                            {v.category || "Products"}
+                        {v.interestedStatus === "YES" ? (
+                          <span style={{ fontSize: "0.72rem", fontWeight: 800, padding: "3px 8px", borderRadius: 6, background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" }}>
+                            ✓ Interested
                           </span>
-                          <strong style={{ fontSize: "0.92rem", color: "#0f172a" }}>{v.shopName}</strong>
-                        </div>
-                        <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: 2 }}>
-                          {v.pincode && <span>PIN: {v.pincode} • </span>}
-                          {v.createdAt && <span>Visited: {new Date(v.createdAt).toLocaleString()}</span>}
-                        </div>
+                        ) : (
+                          <span style={{ fontSize: "0.72rem", fontWeight: 800, padding: "3px 8px", borderRadius: 6, background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" }}>
+                            ✕ Not Interested
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div>
-                      {v.interestedStatus === "YES" ? (
-                        <span style={{ fontSize: "0.72rem", fontWeight: 800, padding: "3px 8px", borderRadius: 6, background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0" }}>
-                          ✓ Interested
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: "0.72rem", fontWeight: 800, padding: "3px 8px", borderRadius: 6, background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" }}>
-                          ✕ Not Interested
-                        </span>
-                      )}
-                    </div>
+                    {v.notInterestedReason && (
+                      <div style={{ fontSize: "0.76rem", color: "#b91c1c", background: "#fef2f2", padding: "6px 10px", borderRadius: 6 }}>
+                        <strong>Reason:</strong> {v.notInterestedReason}
+                      </div>
+                    )}
+
+                    {/* Vendor Approval & KYC Details */}
+                    {v.vendor && (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, padding: "10px 12px", background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                        <div>
+                          <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Pincode Admin Approval</div>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: (v.vendor.approvalStatus || "").toLowerCase().includes("approved") ? "#15803d" : "#d97706", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                            <BadgeCheck size={14} />
+                            <span>{v.vendor.approvalStatus || "Pending Pincode Admin Approval"}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>KYC Status</div>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: (v.vendor.kycStatus || "").toLowerCase().includes("verified") ? "#15803d" : "#0284c7", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                            <ShieldCheck size={14} />
+                            <span>{v.vendor.kycStatus || "Pending Verification"}</span>
+                          </div>
+                        </div>
+
+                        {v.vendor.bankName && (
+                          <div>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Bank Details</div>
+                            <div style={{ fontSize: "0.76rem", color: "#0f172a", marginTop: 2 }}>
+                              {v.vendor.bankName} • A/C: {v.vendor.accountNumber ? `••••${v.vendor.accountNumber.slice(-4)}` : "—"} (IFSC: {v.vendor.ifsc || "—"})
+                            </div>
+                          </div>
+                        )}
+
+                        {v.vendor.documents && v.vendor.documents.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Submitted Documents</div>
+                            <div style={{ fontSize: "0.76rem", color: "#0284c7", marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {v.vendor.documents.map((doc, dIdx) => (
+                                <a key={dIdx} href={doc.url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline", color: "#0284c7" }}>
+                                  {doc.name || `Document ${dIdx+1}`}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {v.voiceNote && (
+                      <div style={{ padding: "8px 12px", background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 10 }}>
+                        <Mic size={15} style={{ color: "#d97706" }} />
+                        <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#0f172a" }}>Voice Audit Note:</span>
+                        <audio controls src={v.voiceNote} style={{ height: 28, flex: 1 }} />
+                      </div>
+                    )}
                   </div>
-
-                  {v.notInterestedReason && (
-                    <div style={{ fontSize: "0.76rem", color: "#b91c1c", background: "#fef2f2", padding: "6px 10px", borderRadius: 6 }}>
-                      <strong>Reason:</strong> {v.notInterestedReason}
-                    </div>
-                  )}
-
-                  {/* Vendor Approval & KYC Details */}
-                  {v.vendor && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, padding: "10px 12px", background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-                      <div>
-                        <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Pincode Admin Approval</div>
-                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: (v.vendor.approvalStatus || "").toLowerCase().includes("approved") ? "#15803d" : "#d97706", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                          <BadgeCheck size={14} />
-                          <span>{v.vendor.approvalStatus || "Pending Pincode Admin Approval"}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>KYC Status</div>
-                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: (v.vendor.kycStatus || "").toLowerCase().includes("verified") ? "#15803d" : "#0284c7", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                          <ShieldCheck size={14} />
-                          <span>{v.vendor.kycStatus || "Pending Verification"}</span>
-                        </div>
-                      </div>
-
-                      {v.vendor.bankName && (
-                        <div>
-                          <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Bank Details</div>
-                          <div style={{ fontSize: "0.76rem", color: "#0f172a", marginTop: 2 }}>
-                            {v.vendor.bankName} • A/C: {v.vendor.accountNumber ? `••••${v.vendor.accountNumber.slice(-4)}` : "—"} (IFSC: {v.vendor.ifsc || "—"})
-                          </div>
-                        </div>
-                      )}
-
-                      {v.vendor.documents && v.vendor.documents.length > 0 && (
-                        <div>
-                          <div style={{ fontSize: "0.68rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Submitted Documents</div>
-                          <div style={{ fontSize: "0.76rem", color: "#0284c7", marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            {v.vendor.documents.map((doc, dIdx) => (
-                              <a key={dIdx} href={doc.url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline", color: "#0284c7" }}>
-                                {doc.name || `Document ${dIdx+1}`}
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {v.voiceNote && (
-                    <div style={{ padding: "8px 12px", background: "#ffffff", borderRadius: 8, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 10 }}>
-                      <Mic size={15} style={{ color: "#d97706" }} />
-                      <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#0f172a" }}>Voice Audit Note:</span>
-                      <audio controls src={v.voiceNote} style={{ height: 28, flex: 1 }} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 4. Task Audit Details */}
@@ -436,56 +476,64 @@ function ReportDetailModal({ report, isDark, onClose }) {
               <span>Tasks Executed in Period ({report.tasks?.length || 0})</span>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {(report.tasks || []).map((t, tIdx) => (
-                <div
-                  key={t.id || tIdx}
-                  style={{
-                    padding: "12px 16px",
-                    background: "#ffffff",
-                    borderRadius: 10,
-                    border: "1px solid #e2e8f0",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    flexWrap: "wrap"
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span
-                        style={{
-                          fontSize: "0.7rem",
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 4,
-                          background: t.status === "Completed" ? "#d1fae5" : "#fef3c7",
-                          color: t.status === "Completed" ? "#047857" : "#b45309"
-                        }}
-                      >
-                        {t.status}
-                      </span>
-                      <strong style={{ fontSize: "0.86rem", color: "#0f172a" }}>{t.title}</strong>
+            {(!report.tasks || report.tasks.length === 0) ? (
+              <div style={{ padding: "18px", textAlign: "center", color: "#64748b", fontSize: "0.82rem", background: "#f8fafc", borderRadius: 10, border: "1px dashed #cbd5e1" }}>
+                No tasks assigned or recorded for this report period.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {report.tasks.map((t, tIdx) => (
+                  <div
+                    key={t.id || tIdx}
+                    style={{
+                      padding: "12px 16px",
+                      background: "#ffffff",
+                      borderRadius: 10,
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap"
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 220 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            background: t.status === "Completed" ? "#d1fae5" : "#fef3c7",
+                            color: t.status === "Completed" ? "#047857" : "#b45309"
+                          }}
+                        >
+                          {t.status}
+                        </span>
+                        <strong style={{ fontSize: "0.86rem", color: "#0f172a" }}>{t.title}</strong>
+                      </div>
+                      {t.description && (
+                        <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: 3 }}>
+                          {t.description}
+                        </div>
+                      )}
                     </div>
-                    {t.description && (
-                      <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: 3 }}>
-                        {t.description}
-                      </div>
-                    )}
-                  </div>
 
-                  <div style={{ fontSize: "0.76rem", color: "#64748b", textAlign: "right" }}>
-                    <div>Due: {t.dueDate || "—"}</div>
-                    {t.completionDetails && (
-                      <div style={{ color: "#059669", fontWeight: 600, marginTop: 2 }}>
-                        {t.completionDetails}
-                      </div>
-                    )}
+                    <div style={{ fontSize: "0.76rem", color: "#64748b", textAlign: "right" }}>
+                      <div>Due: {t.dueDate || "—"}</div>
+                      {t.completionDetails && (
+                        <div style={{ color: "#059669", fontWeight: 600, marginTop: 2 }}>
+                          {typeof t.completionDetails === 'string'
+                            ? t.completionDetails
+                            : (t.completionDetails?.resolutionDetails || t.completionDetails?.notes || (t.completionDetails?.workCompleted !== undefined ? (t.completionDetails.workCompleted ? 'Work Completed' : 'Incomplete') : JSON.stringify(t.completionDetails)))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
         </div>

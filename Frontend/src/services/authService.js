@@ -21,6 +21,20 @@ export const authService = {
     return await apiRequest('/auth/demo-admins');
   },
 
+  async updateProfile(profileData) {
+    return await apiRequest('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData)
+    });
+  },
+
+  async changePassword(passwordData) {
+    return await apiRequest('/auth/change-password', {
+      method: 'PUT',
+      body: JSON.stringify(passwordData)
+    });
+  },
+
   logout() {
     localStorage.removeItem('ams_token');
     localStorage.removeItem('ams_user');

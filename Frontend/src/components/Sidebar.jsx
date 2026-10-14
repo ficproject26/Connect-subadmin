@@ -98,6 +98,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
         title: 'Vendors',
         items: [
           { name: 'Vendors', path: '/state-admin/vendors', icon: Store },
+          { name: 'Vendor Requests', path: '/state-admin/vendors/requests', icon: UserCheck },
           { name: 'Vendor Subscription', path: '/state-admin/vendor-subscriptions', icon: Receipt },
           { name: 'Vendor Payment Status', path: '/state-admin/vendor-payments', icon: IndianRupee },
         ]
@@ -179,6 +180,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
         title: 'Vendors',
         items: [
           { name: 'Vendors', path: '/district-admin/vendors', icon: Store },
+          { name: 'Vendor Requests', path: '/district-admin/vendors/requests', icon: UserCheck },
           { name: 'Vendor Subscription', path: '/district-admin/vendor-subscriptions', icon: Receipt },
           { name: 'Vendor Payment Status', path: '/district-admin/vendor-payments', icon: IndianRupee },
         ]
@@ -257,6 +259,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
         title: 'Vendors',
         items: [
           { name: 'Vendors', path: '/divisional-admin/vendors', icon: Store },
+          { name: 'Vendor Requests', path: '/divisional-admin/vendors/requests', icon: UserCheck },
           { name: 'Vendor Subscription', path: '/divisional-admin/vendor-subscriptions', icon: Receipt },
           { name: 'Vendor Payment Status', path: '/divisional-admin/vendor-payments', icon: IndianRupee },
         ]
@@ -327,6 +330,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
         title: 'Vendors',
         items: [
           { name: 'Vendor List', path: '/pincode-admin/vendors', icon: Store },
+          { name: 'Vendor Requests', path: '/pincode-admin/vendors/requests', icon: UserCheck },
           { name: 'Vendor Subscription', path: '/pincode-admin/vendor-subscriptions', icon: Receipt },
           { name: 'Vendor Payments', path: '/pincode-admin/vendor-payments', icon: IndianRupee },
         ]

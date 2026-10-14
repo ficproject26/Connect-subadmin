@@ -4,7 +4,14 @@ const { db } = require('../config/db');
 const { generateToken, JWT_SECRET } = require('../utils/jwt');
 const { getMongoDb } = require('../config/mongo');
 const { getAssignedPermissions } = require('../utils/permissions');
-const { validateKycDocuments } = require('../utils/validation');
+const { validateKycDocuments, formatCapitalizedName, validateName } = require('../utils/validation');
+const {
+  isRoleAuthorizedForApp,
+  isAccountApproved,
+  isAccountBlockedOrSuspended,
+  AUTHORIZED_APP_ROLES,
+  normalizeRoleName: normalizeAppRole
+} = require('../config/appSecurity');
 
 const ROLE_LIMITS = {
   state_manager: 25,     // 25 managers per State
@@ -174,11 +181,15 @@ const buildUserProfile = async (user) => {
   return {
     id: user._id || user.id,
     _id: user._id || user.id,
+    subAdminId: user.subAdminId || user.id || user._id,
     name: user.name,
+    username: user.username || user.loginId || user.email,
     email: user.email,
     mobile,
     phone,
+    alternateMobile: user.alternateMobile || user.altPhone || null,
     role: user.role,
+    adminRole: user.adminRole || user.role,
     level: user.level || ROLE_LEVELS[user.role] || 1,
     permissions: user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0
       ? user.permissions
@@ -197,7 +208,22 @@ const buildUserProfile = async (user) => {
     dob: user.dob || null,
     gender: user.gender || null,
     address: user.address || null,
+    city: user.city || user.town || null,
     documents: user.documents || {},
+    bankName: user.bankName || (user.bankDetails && user.bankDetails.bankName) || null,
+    branchName: user.branchName || (user.bankDetails && user.bankDetails.branchName) || null,
+    accountHolderName: user.accountHolderName || (user.bankDetails && user.bankDetails.accountHolderName) || null,
+    accountNumber: (user.accountNumber || (user.bankDetails && user.bankDetails.accountNumber)) ? String(user.accountNumber || (user.bankDetails && user.bankDetails.accountNumber)) : null,
+    ifscCode: user.ifscCode || (user.bankDetails && user.bankDetails.ifscCode) || null,
+    aadharNumber: user.aadharNumber || user.aadhaarNumber || null,
+    panNumber: user.panNumber || null,
+    parentAdminId: user.parentAdminId || user.onboardedBy || null,
+    parentAdminName: user.parentAdminName || user.onboardedByName || null,
+    parentAdminRole: user.parentAdminRole || user.onboardedByRole || null,
+    onboardedByName: user.onboardedByName || user.parentAdminName || null,
+    onboardedByRole: user.onboardedByRole || user.parentAdminRole || null,
+    createdAt: user.createdAt || null,
+    updatedAt: user.updatedAt || null,
     avatar,
     avatarUrl: avatar,
     state: stateName,
@@ -236,9 +262,10 @@ const login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide email or mobile number, and password.' });
     }
 
-    let user = null;
     const phoneDigits = rawId.replace(/[^0-9]/g, '');
     const isPhone = phoneDigits.length >= 10;
+
+    let matchedUsers = [];
 
     // 1. Primary lookup: Check MongoDB Atlas users collection
     try {
@@ -261,12 +288,9 @@ const login = async (req, res) => {
           queryConditions.push({ mobile: rawId });
           queryConditions.push({ mobile: phoneDigits.slice(-10) });
         }
-        const matchedUsers = await mdb.collection("users").find({ $or: queryConditions }).toArray();
-        if (matchedUsers.length > 0) {
-          // If multiple accounts share an identifier (e.g. agent and admin, or customer and admin),
-          // prioritize authorized Admin accounts over non-admin accounts
-          const adminUser = matchedUsers.find(u => resolveAdminRole(u).isAdmin);
-          user = adminUser ? { ...adminUser } : { ...matchedUsers[0] };
+        const mMatches = await mdb.collection("users").find({ $or: queryConditions }).toArray();
+        if (mMatches && mMatches.length > 0) {
+          matchedUsers.push(...mMatches);
         }
       }
     } catch (mErr) {
@@ -274,9 +298,9 @@ const login = async (req, res) => {
     }
 
     // 2. Fallback lookup: Check local db.users (data/users.json)
-    if (!user) {
+    if (db.users) {
       const allUsers = Array.from(db.users);
-      const matches = allUsers.filter(u => 
+      const localMatches = allUsers.filter(u => 
         (u.email && u.email.toLowerCase() === loginId) ||
         (u.loginId && (u.loginId.toLowerCase() === loginId || u.loginId === rawId)) ||
         (u.registrationId && (u.registrationId.toLowerCase() === loginId || u.registrationId === rawId)) ||
@@ -285,35 +309,65 @@ const login = async (req, res) => {
         (u.id && String(u.id).toLowerCase() === loginId) ||
         (u._id && String(u._id).toLowerCase() === loginId)
       );
-      if (matches.length > 0) {
-        const adminUser = matches.find(u => resolveAdminRole(u).isAdmin);
-        user = adminUser ? { ...adminUser } : { ...matches[0] };
+      for (const lm of localMatches) {
+        if (!matchedUsers.some(u => String(u._id || u.id) === String(lm._id || lm.id))) {
+          matchedUsers.push(lm);
+        }
       }
     }
 
-    // 2b. Check db.agents if not found in db.users
-    if (!user && db.agents) {
-      const allAgents = Array.from(db.agents);
-      const matches = allAgents.filter(u =>
-        (u.email && u.email.toLowerCase() === loginId) ||
-        (u.loginId && (u.loginId.toLowerCase() === loginId || u.loginId === rawId)) ||
-        (u.registrationId && (u.registrationId.toLowerCase() === loginId || u.registrationId === rawId)) ||
-        (isPhone && u.mobile && u.mobile.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
-        (isPhone && u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
-        (u.id && String(u.id).toLowerCase() === loginId) ||
-        (u._id && String(u._id).toLowerCase() === loginId)
+    // Check db.agents and db.managers for multi-account awareness
+    if (db.agents) {
+      const agentMatches = Array.from(db.agents).filter(a =>
+        (a.email && a.email.toLowerCase() === loginId) ||
+        (isPhone && a.phone && a.phone.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10))
       );
-      if (matches.length > 0) {
-        user = { ...matches[0] };
+      for (const am of agentMatches) {
+        if (!matchedUsers.some(u => String(u._id || u.id) === String(am._id || am.id))) {
+          matchedUsers.push({ ...am, role: am.role || 'Agent' });
+        }
+      }
+    }
+    if (db.managers) {
+      const mgrMatches = Array.from(db.managers).filter(m =>
+        (m.email && m.email.toLowerCase() === loginId) ||
+        (isPhone && m.phone && m.phone.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10))
+      );
+      for (const mm of mgrMatches) {
+        if (!matchedUsers.some(u => String(u._id || u.id) === String(mm._id || mm.id))) {
+          matchedUsers.push({ ...mm, role: mm.role || 'Manager' });
+        }
       }
     }
 
+    if (matchedUsers.length === 0) {
+      console.warn(`[AUTH] Failed login: User identifier '${loginId}' not found.`);
+      return res.status(401).json({ success: false, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
+    }
+
+    // 3. Strict Application Context & Role Filtering:
+    // Filter matching accounts to find an account authorized for THIS application
+    const authorizedAdminAccount = matchedUsers.find(u => {
+      const adminInfo = resolveAdminRole(u);
+      return adminInfo.isAdmin && isRoleAuthorizedForApp(u);
+    });
+
+    // If an authorized admin account exists under this email/loginId
+    let user = authorizedAdminAccount;
+
+    // If NO authorized admin account exists under this identifier, but other roles (Manager, Agent, Vendor, Customer) do:
     if (!user) {
-      console.warn(`[AUTH] Failed login: User identifier '${loginId}' not found in database or local users.`);
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      const nonAdminAccount = matchedUsers[0];
+      const attemptedRole = nonAdminAccount?.role || nonAdminAccount?.adminRole || 'User';
+      console.warn(`[AUTH] Cross-Role Access Denied: User '${rawId}' has role '${attemptedRole}' which is not authorized for Sub-Admin portal.`);
+      return res.status(403).json({
+        success: false,
+        code: 'UNAUTHORIZED_APPLICATION_ROLE',
+        message: `Access denied: Accounts with role '${attemptedRole}' are not authorized to access the Sub-Admin Management system.`
+      });
     }
 
-    // 1. Authoritative Password Verification
+    // 4. Authoritative Password Verification
     let isMatch = false;
     const userHash = String(user.passwordHash || user.hash || user.hashedPassword || user.password || '').trim();
     if (userHash && (userHash.startsWith('$2a$') || userHash.startsWith('$2b$') || userHash.startsWith('$2y$'))) {
@@ -336,192 +390,111 @@ const login = async (req, res) => {
 
     if (!isMatch) {
       console.warn(`[AUTH] Failed login: Incorrect password for user '${user.email || loginId}'.`);
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
     }
 
-    // 2. Authoritative Role & Hierarchy Evaluation
+    // 5. Authoritative Role Resolution
     const roleInfo = resolveAdminRole(user);
-
-    // If caller is an authorized Admin
-    if (roleInfo.isAdmin) {
-      // Status Evaluation
-      let currentStatus = (user.status || 'active').toLowerCase().trim();
-      if (currentStatus === 'approved' || currentStatus === 'active') {
-        currentStatus = 'active';
-      }
-
-      if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
-        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${currentStatus}'.`);
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid credentials'
-        });
-      }
-
-      if (currentStatus === 'rejected') {
-        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' application was rejected.`);
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid credentials'
-        });
-      }
-
-      if (currentStatus !== 'active') {
-        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${user.status || 'inactive'}'.`);
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid credentials'
-        });
-      }
-
-      // Ensure active administrator is consistently marked active in database
-      if (user.isActive === false || user.status !== 'approved') {
-        user.isActive = true;
-        user.status = 'approved';
-        try {
-          const mdb = await getMongoDb();
-          if (mdb && user._id) {
-            await mdb.collection('users').updateOne(
-              { _id: user._id },
-              { $set: { status: 'approved', isActive: true, kycStatus: 'Verified', adminApprovalStatus: 'approved' } }
-            );
-          }
-        } catch (syncErr) {
-          console.warn('Admin status sync warning:', syncErr.message);
-        }
-      }
-
-      // Territory Synchronization & User Mapping
-      const finalState = user.state || user.assignedState || '';
-      const finalDistrict = user.district || user.assignedDistrict || '';
-      const finalDivision = user.division || user.assignedDivision || '';
-      const finalPincode = user.pincode || user.assignedPincode || '';
-
-      const mappedUser = {
-        ...user,
-        _id: user._id || user.id,
-        id: user._id || user.id,
-        role: roleInfo.role,
-        level: roleInfo.level,
-        status: 'active',
-        isActive: true,
-        state: finalState,
-        assignedState: finalState,
-        district: finalDistrict,
-        assignedDistrict: finalDistrict,
-        division: finalDivision,
-        assignedDivision: finalDivision,
-        pincode: finalPincode,
-        assignedPincode: finalPincode,
-        mobile: user.mobile || user.phone || '',
-        phone: user.phone || user.mobile || ''
-      };
-
-      const token = generateToken(mappedUser);
-      const userProfile = await buildUserProfile(mappedUser);
-
-      return res.json({
-        success: true,
-        requiresApproval: false,
-        message: 'Welcome ' + (mappedUser.name || 'Admin') + '. Logged in successfully.',
-        token,
-        user: userProfile
+    if (!roleInfo.isAdmin || !isRoleAuthorizedForApp(user)) {
+      return res.status(403).json({
+        success: false,
+        code: 'UNAUTHORIZED_APPLICATION_ROLE',
+        message: `Access denied: Accounts with role '${user.role}' are not authorized for this application.`
       });
     }
 
-    // Caller is a Manager or Agent
-    const rawUserRole = String(user.role || '').toLowerCase();
-    const isManager = rawUserRole.includes('manager') ||
-      ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(user.role);
-    const isAgent = rawUserRole.includes('agent') ||
-      ['state_agent', 'district_agent', 'division_agent', 'pincode_agent', 'state', 'district', 'division', 'pincode'].includes(user.role) ||
-      user.registrationFeePaid !== undefined || Boolean(user.territory);
+    // 6. Strict Account Status Gate (Suspended, Blocked, Revoked, Inactive, Rejected)
+    if (isAccountBlockedOrSuspended(user)) {
+      const currentStatus = String(user.status || 'inactive').toLowerCase();
+      console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${currentStatus}'.`);
+      return res.status(403).json({
+        success: false,
+        code: 'ACCOUNT_STATUS_REVOKED',
+        message: `Access denied: Your account has been suspended or deactivated (${currentStatus}). Please contact Super Admin support.`
+      });
+    }
 
-    if (isManager || isAgent) {
-      const rawStatus = (user.status || 'PENDING_SUB_ADMIN_APPROVAL').trim();
-      const currentStatusUpper = rawStatus.toUpperCase();
-      const adminApprovalStatus = (user.adminApprovalStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'approved' : currentStatusUpper === 'REJECTED' ? 'rejected' : 'pending')).toLowerCase().trim();
-      const kycStatus = (user.kycStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'Verified' : currentStatusUpper === 'REJECTED' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
+    // Territory Synchronization & User Mapping
+    const finalState = user.state || user.assignedState || '';
+    const finalDistrict = user.district || user.assignedDistrict || '';
+    const finalDivision = user.division || user.assignedDivision || '';
+    const finalPincode = user.pincode || user.assignedPincode || '';
 
-      const isFullyApproved = (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED') &&
-        adminApprovalStatus === 'approved' &&
-        (kycStatus === 'verified' || kycStatus === 'approved') &&
-        user.isActive === true;
+    const mappedUser = {
+      ...user,
+      _id: user._id || user.id,
+      id: user._id || user.id,
+      role: roleInfo.role,
+      level: roleInfo.level,
+      state: finalState,
+      assignedState: finalState,
+      district: finalDistrict,
+      assignedDistrict: finalDistrict,
+      division: finalDivision,
+      assignedDivision: finalDivision,
+      pincode: finalPincode,
+      assignedPincode: finalPincode,
+      mobile: user.mobile || user.phone || '',
+      phone: user.phone || user.mobile || ''
+    };
 
-      const finalState = user.state || user.assignedState || (user.territory && user.territory.state) || '';
-      const finalDistrict = user.district || user.assignedDistrict || (user.territory && user.territory.district) || '';
-      const finalDivision = user.division || user.assignedDivision || (user.territory && user.territory.division) || '';
-      const finalPincode = user.pincode || user.assignedPincode || (user.territory && user.territory.pincode) || '';
+    const userProfile = await buildUserProfile(mappedUser);
 
-      const mappedUser = {
-        ...user,
-        _id: user._id || user.id,
-        id: user._id || user.id,
-        role: user.role,
-        level: user.level || ROLE_LEVELS[user.role] || 4,
-        status: isFullyApproved ? 'active' : (user.status || 'PENDING_SUB_ADMIN_APPROVAL'),
-        isActive: isFullyApproved,
-        requiresApproval: !isFullyApproved,
-        isFullyApproved,
-        adminApprovalStatus: user.adminApprovalStatus || (isFullyApproved ? 'approved' : 'pending'),
-        kycStatus: user.kycStatus || (isFullyApproved ? 'Verified' : 'pending_verification'),
-        rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
-        pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
-        routingIssue: user.routingIssue || null,
-        state: finalState,
-        assignedState: finalState,
-        district: finalDistrict,
-        assignedDistrict: finalDistrict,
-        division: finalDivision,
-        assignedDivision: finalDivision,
-        pincode: finalPincode,
-        assignedPincode: finalPincode,
-        mobile: user.mobile || user.phone || '',
-        phone: user.phone || user.mobile || ''
-      };
+    // 7. Strict Approval Gate: Never auto-approve on login
+    const isApproved = isAccountApproved(user);
+    if (!isApproved) {
+      console.warn(`[AUTH] Approval Gate: User '${user.email || loginId}' status is '${user.status || 'pending'}'. Dashboard access denied.`);
+      
+      // Issue ONLY a restricted-scope pending token (never a dashboard-authorized token)
+      const pendingToken = generateToken({
+        _id: mappedUser._id,
+        id: mappedUser._id,
+        email: mappedUser.email,
+        role: mappedUser.role,
+        scope: 'pending_registration',
+        requiresApproval: true
+      });
 
-      const token = generateToken(mappedUser);
-      const userProfile = await buildUserProfile(mappedUser);
-
-      if (!isFullyApproved) {
-        return res.json({
-          success: true,
+      return res.status(200).json({
+        success: true,
+        requiresApproval: true,
+        isFullyApproved: false,
+        status: user.status || 'PENDING_SUB_ADMIN_APPROVAL',
+        adminApprovalStatus: user.adminApprovalStatus || 'pending',
+        kycStatus: user.kycStatus || 'pending_verification',
+        message: 'Account registration is awaiting administrative approval.',
+        token: pendingToken,
+        user: {
+          ...userProfile,
           requiresApproval: true,
-          isFullyApproved: false,
-          status: user.status || 'PENDING_SUB_ADMIN_APPROVAL',
-          adminApprovalStatus: user.adminApprovalStatus || (currentStatusUpper === 'PENDING_KYC_APPROVAL' ? 'approved' : 'pending'),
-          kycStatus: user.kycStatus || 'pending_verification',
-          rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
-          pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
-          routingIssue: user.routingIssue || null,
-          token,
-          user: {
-            ...userProfile,
-            requiresApproval: true,
-            isFullyApproved: false,
-            status: user.status || 'PENDING_SUB_ADMIN_APPROVAL',
-            adminApprovalStatus: user.adminApprovalStatus || (currentStatusUpper === 'PENDING_KYC_APPROVAL' ? 'approved' : 'pending'),
-            kycStatus: user.kycStatus || 'pending_verification',
-            rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
-            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
-            routingIssue: user.routingIssue || null
-          }
-        });
-      }
-
-      return res.json({
-        success: true,
-        requiresApproval: false,
-        message: 'Welcome ' + (mappedUser.name || 'User') + '. Logged in successfully.',
-        token,
-        user: userProfile
+          isFullyApproved: false
+        }
       });
     }
 
-    console.warn(`[AUTH] Access denied: User '${user.email || loginId}' has role '${user.role}' which is not permitted.`);
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid credentials'
+    // 8. Fully Approved & Active Administrator: Issue Dashboard Access Token
+    mappedUser.status = 'active';
+    mappedUser.isActive = true;
+    mappedUser.requiresApproval = false;
+    mappedUser.isFullyApproved = true;
+
+    const token = generateToken({
+      ...mappedUser,
+      scope: 'dashboard_access',
+      requiresApproval: false
+    });
+
+    return res.json({
+      success: true,
+      requiresApproval: false,
+      isFullyApproved: true,
+      message: 'Welcome ' + (mappedUser.name || 'Admin') + '. Logged in successfully.',
+      token,
+      user: {
+        ...userProfile,
+        requiresApproval: false,
+        isFullyApproved: true
+      }
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -565,61 +538,28 @@ const getMe = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Role check
+    // Role check: Strictly enforce application role authorization
     const roleInfo = resolveAdminRole(user);
-    if (!roleInfo.isAdmin) {
-      const rawUserRole = String(user.role || '').toLowerCase();
-      const isManager = rawUserRole.includes('manager') ||
-        ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(user.role);
-      const isAgent = rawUserRole.includes('agent') ||
-        ['state_agent', 'district_agent', 'division_agent', 'pincode_agent', 'state', 'district', 'division', 'pincode'].includes(user.role) ||
-        user.registrationFeePaid !== undefined || Boolean(user.territory);
-
-      if (isManager || isAgent) {
-        const rawStatus = (user.status || 'PENDING_SUB_ADMIN_APPROVAL').trim();
-        const currentStatusUpper = rawStatus.toUpperCase();
-        const adminApprovalStatus = (user.adminApprovalStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'approved' : currentStatusUpper === 'REJECTED' ? 'rejected' : 'pending')).toLowerCase().trim();
-        const kycStatus = (user.kycStatus || (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED' ? 'Verified' : currentStatusUpper === 'REJECTED' ? 'Rejected' : 'pending_verification')).toLowerCase().trim();
-
-        const isFullyApproved = (currentStatusUpper === 'ACTIVE' || currentStatusUpper === 'APPROVED') &&
-          adminApprovalStatus === 'approved' &&
-          (kycStatus === 'verified' || kycStatus === 'approved') &&
-          user.isActive === true;
-
-        const profile = await buildUserProfile(user);
-        return res.json({
-          success: true,
-          requiresApproval: !isFullyApproved,
-          isFullyApproved,
-          user: {
-            ...profile,
-            requiresApproval: !isFullyApproved,
-            isFullyApproved,
-            status: user.status || 'PENDING_SUB_ADMIN_APPROVAL',
-            adminApprovalStatus: user.adminApprovalStatus || (isFullyApproved ? 'approved' : 'pending'),
-            kycStatus: user.kycStatus || (isFullyApproved ? 'Verified' : 'pending_verification'),
-            rejectionReason: user.rejectionReason || user.kycRejectionReason || null,
-            pendingReason: user.pendingReason || user.kycPendingReason || user.adminNotes || null,
-            routingIssue: user.routingIssue || null
-          }
-        });
-      }
-
+    if (!roleInfo.isAdmin || !isRoleAuthorizedForApp(user)) {
       return res.status(403).json({
         success: false,
+        code: 'UNAUTHORIZED_APPLICATION_ROLE',
         message: 'Your account does not have permission to access this application.'
       });
     }
 
-    // Status check
-    const currentStatus = (user.status || 'active').toLowerCase().trim();
-    if (currentStatus === 'suspended' || currentStatus === 'revoked' || currentStatus === 'inactive' || currentStatus === 'blocked') {
+    // Status check (Suspended, Blocked, Revoked, Inactive, Rejected)
+    if (isAccountBlockedOrSuspended(user)) {
+      const currentStatus = (user.status || 'inactive').toLowerCase().trim();
       return res.status(403).json({
         success: false,
+        code: 'ACCOUNT_STATUS_REVOKED',
         status: currentStatus,
         message: 'Your account is currently ' + currentStatus.replace(/_/g, ' ') + '. Access is disabled.'
       });
     }
+
+    const isApproved = isAccountApproved(user);
 
     const finalState = user.state || user.assignedState || '';
     const finalDistrict = user.district || user.assignedDistrict || '';
@@ -632,8 +572,10 @@ const getMe = async (req, res) => {
       id: user._id || user.id,
       role: roleInfo.role,
       level: roleInfo.level,
-      status: 'active',
-      isActive: true,
+      status: isApproved ? 'active' : (user.status || 'PENDING_SUB_ADMIN_APPROVAL'),
+      isActive: isApproved,
+      requiresApproval: !isApproved,
+      isFullyApproved: isApproved,
       state: finalState,
       assignedState: finalState,
       district: finalDistrict,
@@ -647,7 +589,16 @@ const getMe = async (req, res) => {
     };
 
     const profile = await buildUserProfile(mappedUser);
-    return res.json({ success: true, user: profile });
+    return res.json({
+      success: true,
+      requiresApproval: !isApproved,
+      isFullyApproved: isApproved,
+      user: {
+        ...profile,
+        requiresApproval: !isApproved,
+        isFullyApproved: isApproved
+      }
+    });
   } catch (err) {
     console.error('Get profile error:', err);
     return res.status(500).json({ success: false, message: 'Failed to retrieve profile', error: err.message });
@@ -697,7 +648,7 @@ const register = async (req, res) => {
       avatarUrl
     } = req.body;
 
-    name = (name || fullName || '').trim();
+    name = formatCapitalizedName(name || fullName || '');
     mobile = (mobile || phone || '').trim();
 
     if (!stateId && (state || zone)) {
@@ -1262,90 +1213,6 @@ const uploadDocument = (req, res) => {
   }
 };
 
-const changePassword = async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ success: false, message: 'Both current and new password are required' });
-    }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
-    }
-
-    const userId = req.user.id || req.user._id;
-    let user = null;
-
-    try {
-      const mdb = await getMongoDb();
-      if (mdb) {
-        const { ObjectId } = require('mongodb');
-        let queryId = userId;
-        try {
-          if (typeof userId === 'string' && ObjectId.isValid(userId)) {
-            queryId = new ObjectId(userId);
-          }
-        } catch (e) {}
-        user = await mdb.collection('users').findOne({
-          $or: [{ _id: queryId }, { _id: String(userId) }, { id: String(userId) }]
-        });
-      }
-    } catch (mErr) {
-      console.warn('MongoDB changePassword lookup warning:', mErr.message);
-    }
-
-    if (!user) {
-      user = await db.users.findById(userId);
-    }
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    const userHash = user.passwordHash || user.password;
-    const isMatch = userHash ? (bcrypt.compareSync(currentPassword, userHash) || bcrypt.compareSync(currentPassword.trim(), userHash)) : false;
-    if (!isMatch) {
-      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
-    }
-
-    const passwordHash = bcrypt.hashSync(newPassword, 10);
-
-    // Update in MongoDB Atlas
-    try {
-      const mdb = await getMongoDb();
-      if (mdb && user._id) {
-        const { ObjectId } = require('mongodb');
-        let queryId = user._id;
-        try {
-          if (typeof user._id === 'string' && ObjectId.isValid(user._id)) {
-            queryId = new ObjectId(user._id);
-          }
-        } catch (e) {}
-        await mdb.collection('users').updateOne(
-          { $or: [{ _id: queryId }, { _id: String(user._id) }] },
-          {
-            $set: {
-              passwordHash,
-              password: passwordHash,
-              passwordChangedAt: new Date().toISOString()
-            }
-          }
-        );
-      }
-    } catch (updateErr) {
-      console.warn('MongoDB change password update warning:', updateErr.message);
-    }
-
-    // Also update in local db.users
-    try {
-      await db.users.findByIdAndUpdate(user._id || user.id, { passwordHash, password: passwordHash });
-    } catch (e) {}
-
-    res.json({ success: true, message: 'Password updated successfully' });
-  } catch (err) {
-    console.error('Change password error:', err);
-    res.status(500).json({ success: false, message: 'Failed to change password' });
-  }
-};
 
 const forgotPassword = async (req, res) => {
   try {
@@ -1505,6 +1372,249 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const changePassword = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized. Authentication required.' });
+    }
+
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!newPassword || !confirmPassword) {
+      return res.status(400).json({ success: false, message: 'New password and confirm password are required.' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Confirm Password must exactly match New Password.' });
+    }
+
+    // Password requirements:
+    // - Minimum 6 characters
+    // - At least one uppercase letter
+    // - At least one number
+    // - At least one special character
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      return res.status(400).json({ success: false, message: 'Password must contain at least one uppercase letter (A-Z).' });
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ success: false, message: 'Password must contain at least one number (0-9).' });
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+      return res.status(400).json({ success: false, message: 'Password must contain at least one special character (e.g. !@#$%^&*).' });
+    }
+
+    let user = null;
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        const { ObjectId } = require('mongodb');
+        try {
+          user = await mdb.collection('users').findOne({ _id: new ObjectId(userId) });
+        } catch (e) {
+          user = await mdb.collection('users').findOne({ _id: String(userId) });
+        }
+      }
+    } catch (mErr) {
+      console.warn('MongoDB changePassword lookup warning:', mErr.message);
+    }
+
+    if (!user) {
+      const allUsers = Array.from(db.users || []);
+      user = allUsers.find(u => String(u._id || u.id) === String(userId));
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found.' });
+    }
+
+    // If current password provided or required, verify it
+    const existingHash = user.passwordHash || user.password;
+    if (currentPassword && existingHash) {
+      let isCurrentValid = false;
+      if (existingHash.startsWith('$2a$') || existingHash.startsWith('$2b$') || existingHash.startsWith('$2y$')) {
+        isCurrentValid = bcrypt.compareSync(currentPassword, existingHash);
+      } else if (existingHash === currentPassword) {
+        isCurrentValid = true;
+      }
+      if (!isCurrentValid) {
+        return res.status(400).json({ success: false, message: 'Current password does not match our records.' });
+      }
+    }
+
+    const passwordHash = bcrypt.hashSync(newPassword, 10);
+    const now = new Date().toISOString();
+
+    // Update in MongoDB Atlas (never store plaintext)
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        const { ObjectId } = require('mongodb');
+        let queryId = user._id;
+        try {
+          if (typeof user._id === 'string' && ObjectId.isValid(user._id)) {
+            queryId = new ObjectId(user._id);
+          }
+        } catch (e) {}
+        await mdb.collection('users').updateOne(
+          { $or: [{ _id: queryId }, { _id: String(user._id) }, { email: user.email }] },
+          {
+            $set: {
+              passwordHash,
+              password: passwordHash,
+              passwordChangedAt: now,
+              updatedAt: now
+            }
+          }
+        );
+      }
+    } catch (updateErr) {
+      console.warn('MongoDB password change update warning:', updateErr.message);
+    }
+
+    // Update in local db.users
+    try {
+      await db.users.findByIdAndUpdate(user._id || user.id, {
+        passwordHash,
+        password: passwordHash,
+        passwordChangedAt: now,
+        updatedAt: now
+      });
+    } catch (e) {}
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully. Your account is secured with your new password.'
+    });
+  } catch (err) {
+    console.error('Change password error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to change password: ' + err.message });
+  }
+};
+
+const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized. Authentication required.' });
+    }
+
+    const { email, mobile, phone, alternateMobile, altPhone, address, city, preferredLanguage } = req.body;
+
+    let user = null;
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        const { ObjectId } = require('mongodb');
+        try {
+          user = await mdb.collection('users').findOne({ _id: new ObjectId(userId) });
+        } catch (e) {
+          user = await mdb.collection('users').findOne({ _id: String(userId) });
+        }
+      }
+    } catch (mErr) {
+      console.warn('MongoDB updateProfile lookup warning:', mErr.message);
+    }
+
+    if (!user) {
+      const allUsers = Array.from(db.users || []);
+      user = allUsers.find(u => String(u._id || u.id) === String(userId));
+    }
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found.' });
+    }
+
+    // Security Rule: Username, name, and unique ID are strictly READ-ONLY
+    if (req.body.name && req.body.name.trim() !== (user.name || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Official Name is read-only and cannot be changed.' });
+    }
+    if (req.body.username && req.body.username.trim() !== (user.username || user.loginId || user.email || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Username is read-only and cannot be changed.' });
+    }
+    if (req.body.subAdminId && String(req.body.subAdminId).trim() !== String(user.subAdminId || user.id || user._id).trim()) {
+      return res.status(400).json({ success: false, message: 'Sub-Admin ID is permanent and read-only.' });
+    }
+
+    const updates = {};
+    const now = new Date().toISOString();
+
+    if (email) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+      }
+      const allUsers = Array.from(db.users || []);
+      const conflict = allUsers.find(u => String(u._id || u.id) !== String(userId) && (u.email || '').toLowerCase() === cleanEmail);
+      if (conflict) {
+        return res.status(400).json({ success: false, message: 'This email address is already in use by another account.' });
+      }
+      updates.email = cleanEmail;
+    }
+
+    if (mobile || phone) {
+      const cleanPhone = String(mobile || phone).replace(/\D/g, '').slice(-10);
+      if (cleanPhone.length !== 10) {
+        return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits.' });
+      }
+      updates.mobile = cleanPhone;
+      updates.phone = cleanPhone;
+    }
+
+    if (alternateMobile !== undefined || altPhone !== undefined) {
+      const cleanAlt = String(alternateMobile || altPhone || '').trim();
+      updates.alternateMobile = cleanAlt;
+      updates.altPhone = cleanAlt;
+    }
+
+    if (address !== undefined) updates.address = String(address).trim();
+    if (city !== undefined) updates.city = String(city).trim();
+    if (preferredLanguage !== undefined) updates.preferredLanguage = String(preferredLanguage).trim();
+
+    updates.updatedAt = now;
+
+    // Update in MongoDB Atlas
+    try {
+      const mdb = await getMongoDb();
+      if (mdb) {
+        const { ObjectId } = require('mongodb');
+        let queryId = user._id;
+        try {
+          if (typeof user._id === 'string' && ObjectId.isValid(user._id)) {
+            queryId = new ObjectId(user._id);
+          }
+        } catch (e) {}
+        await mdb.collection('users').updateOne(
+          { $or: [{ _id: queryId }, { _id: String(user._id) }] },
+          { $set: updates }
+        );
+      }
+    } catch (mUpdateErr) {
+      console.warn('MongoDB profile update warning:', mUpdateErr.message);
+    }
+
+    // Update in local db.users
+    try {
+      await db.users.findByIdAndUpdate(user._id || user.id, updates);
+    } catch (e) {}
+
+    const updatedUser = { ...user, ...updates };
+    const profile = await buildUserProfile(updatedUser);
+
+    return res.json({
+      success: true,
+      message: 'Account details updated successfully.',
+      user: profile
+    });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update account details: ' + err.message });
+  }
+};
+
 module.exports = {
   login,
   getMe,
@@ -1517,6 +1627,7 @@ module.exports = {
   uploadAvatar,
   uploadDocument,
   changePassword,
+  updateProfile,
   forgotPassword,
   resetPassword,
   ROLE_LIMITS

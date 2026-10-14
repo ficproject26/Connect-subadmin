@@ -10,7 +10,7 @@ function generateToken(user) {
     email: user.email,
     role: user.role,
     level: user.level || (user.role === 'State Admin' ? 1 : user.role === 'District Admin' ? 2 : user.role === 'Divisional Admin' ? 3 : 4),
-    status: user.status || 'active',
+    status: user.status || (user.requiresApproval ? 'PENDING_SUB_ADMIN_APPROVAL' : 'active'),
     state: user.state,
     district: user.district,
     division: user.division,
@@ -19,7 +19,9 @@ function generateToken(user) {
     districtId: user.districtId,
     divisionId: user.divisionId,
     pincodeId: user.pincodeId,
-    regionId: user.regionId || user.stateId
+    regionId: user.regionId || user.stateId,
+    scope: user.scope || (user.requiresApproval ? 'pending_registration' : 'dashboard_access'),
+    requiresApproval: user.requiresApproval !== undefined ? Boolean(user.requiresApproval) : false
   };
 
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });

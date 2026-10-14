@@ -22,6 +22,14 @@ export const dataService = {
     method: 'PATCH',
     body: JSON.stringify({ remarks })
   }),
+  getAgentReports: (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    return apiRequest(`/reports/agents${qs ? `?${qs}` : ''}`);
+  },
 
   // Hierarchy & Geo
   getHierarchy: () => apiRequest('/admin/hierarchy'),
@@ -105,10 +113,21 @@ export const dataService = {
 
   // Customers & Membership
   getCustomers: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
     return apiRequest(`/customers${qs ? `?${qs}` : ''}`);
   },
-  getMembershipCards: () => apiRequest('/customers/membership-cards'),
+  getMembershipCards: (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    return apiRequest(`/customers/membership-cards${qs ? `?${qs}` : ''}`);
+  },
   upgradeMembership: (data) => apiRequest('/customers/upgrade-membership', {
     method: 'POST',
     body: JSON.stringify(data)
@@ -121,6 +140,14 @@ export const dataService = {
     const qs = new URLSearchParams(params).toString();
     return apiRequest(`/vendors${qs ? `?${qs}` : ''}`);
   },
+  getVendorRequests: (params = {}) => {
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
+    return apiRequest(`/vendors/requests${qs ? `?${qs}` : ''}`);
+  },
   getVendorById: (id) => apiRequest(`/vendors/${id}`),
   createVendor: (data) => apiRequest('/vendors', {
     method: 'POST',
@@ -128,6 +155,10 @@ export const dataService = {
   }),
   lookupPincode: (pincode) => apiRequest(`/vendors/lookup-pincode/${pincode}`),
   pincodeVerifyVendor: (id, data) => apiRequest(`/vendors/${id}/pincode-verify`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  keepPendingVendor: (id, data) => apiRequest(`/vendors/${id}/pending`, {
     method: 'POST',
     body: JSON.stringify(data)
   }),
@@ -157,9 +188,14 @@ export const dataService = {
 
   // Jobs & Technicians
   getJobs: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
+    const clean = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'All') clean[k] = v;
+    });
+    const qs = new URLSearchParams(clean).toString();
     return apiRequest(`/jobs${qs ? `?${qs}` : ''}`);
   },
+  getJobCategories: () => apiRequest('/jobs/categories'),
   getTechnicians: () => apiRequest('/jobs/technicians'),
   updateJobStatus: (id, data) => apiRequest(`/jobs/${id}`, {
     method: 'PATCH',
@@ -400,6 +436,16 @@ export const dataService = {
       throw err;
     }
   },
+
+  // Admin Profile & Security
+  updateAdminProfile: (data) => apiRequest('/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
+  changeAdminPassword: (data) => apiRequest('/auth/change-password', {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  }),
 
   // Real-Time Event Subscription Helpers
   subscribeRealtime: (entity, callback) => realtimeClient.subscribe(entity, callback)

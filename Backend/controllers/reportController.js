@@ -1,6 +1,12 @@
 const { db, filterByLocation } = require('../config/db');
 const { getScopeFilter } = require('../middleware/scopeMiddleware');
 const { getComprehensiveVendorDirectory } = require('../utils/vendorDirectory');
+const {
+  getHierarchicalScopedAgents,
+  getAgentTerritory,
+  normalizeLevel,
+  getAgentLevel
+} = require('./executiveController');
 
 function getDashboardSummary(req, res) {
   try {
@@ -865,6 +871,48 @@ const submitManagerReport = async (req, res) => {
   }
 };
 
+function isReportInTerritoryScope(rpt, user) {
+  if (!user || !rpt) return false;
+  const rawRole = (user.role || '').toLowerCase();
+  if (rawRole.includes('super admin') || rawRole === 'admin' || user.role === 'Super Admin') return true;
+
+  const userState = (user.state || user.scope?.stateName || '').toLowerCase();
+  const rptState = (rpt.state || '').toLowerCase();
+  const userDist = (user.district || user.scope?.districtName || '').toLowerCase();
+  const rptDist = (rpt.district || '').toLowerCase();
+  const userDiv = (user.division || user.scope?.divisionName || '').toLowerCase();
+  const rptDiv = (rpt.division || '').toLowerCase();
+  const userPin = String(user.pincode || user.pincodeCode || user.scope?.pincodeCode || '').trim();
+  const rptPin = String(rpt.pincode || '').trim();
+
+  // State Admin / State Manager
+  if (rawRole.includes('state')) {
+    if (!userState || userState === 'all india') return true;
+    return rptState === userState || (user.stateId && rpt.stateId === user.stateId);
+  }
+
+  // District Admin / District Manager
+  if (rawRole.includes('district')) {
+    if (!userDist) return true;
+    return rptDist === userDist || (user.districtId && rpt.districtId && String(rpt.districtId).toLowerCase().includes(userDist));
+  }
+
+  // Divisional Admin / Division Manager
+  if (rawRole.includes('division') || rawRole.includes('divisional')) {
+    if (!userDiv) return true;
+    return rptDiv === userDiv || (user.divisionId && rpt.divisionId === user.divisionId);
+  }
+
+  // Pincode Admin / Pincode Manager
+  if (rawRole.includes('pincode')) {
+    const isSelf = rpt.managerId === user._id || rpt.managerId === user.id;
+    const isPin = userPin && (rptPin === userPin || rpt.pincodeId === user.pincodeId);
+    return isPin || isSelf;
+  }
+
+  return false;
+}
+
 // Get hierarchical submitted reports
 const getSubmittedReports = async (req, res) => {
   try {
@@ -872,51 +920,8 @@ const getSubmittedReports = async (req, res) => {
     const allReports = Array.from(db.submittedReports || []);
     const { district, division, pincode, managerRole, period, search } = req.query;
 
-    const rawRole = (user?.role || '').toLowerCase();
-
     // 1. RBAC Hierarchy Filter (Strict Territory Cascading)
-    let filtered = allReports.filter(rpt => {
-      // Super Admin / Admin: unrestricted access to all submitted reports
-      if (rawRole.includes('super admin') || rawRole === 'admin' || user.role === 'Super Admin') return true;
-
-      const userState = (user.state || user.scope?.stateName || '').toLowerCase();
-      const rptState = (rpt.state || '').toLowerCase();
-      const userDist = (user.district || user.scope?.districtName || '').toLowerCase();
-      const rptDist = (rpt.district || '').toLowerCase();
-      const userDiv = (user.division || user.scope?.divisionName || '').toLowerCase();
-      const rptDiv = (rpt.division || '').toLowerCase();
-      const userPin = String(user.pincode || user.pincodeCode || user.scope?.pincodeCode || '').trim();
-      const rptPin = String(rpt.pincode || '').trim();
-
-      // State Admin / State Manager: sees all reports across all districts, divisions, pincodes in their state
-      if (rawRole.includes('state')) {
-        if (!userState || userState === 'all india') return true;
-        return rptState === userState || (user.stateId && rpt.stateId === user.stateId);
-      }
-
-      // District Admin / District Manager: sees all reports across all divisions and pincodes in their district
-      if (rawRole.includes('district')) {
-        if (!userDist) return true;
-        const matchDist = rptDist === userDist || (user.districtId && rpt.districtId && String(rpt.districtId).toLowerCase().includes(userDist));
-        return matchDist;
-      }
-
-      // Divisional Admin / Division Manager: sees all reports across all pincodes in their division
-      if (rawRole.includes('division') || rawRole.includes('divisional')) {
-        if (!userDiv) return true;
-        const matchDiv = rptDiv === userDiv || (user.divisionId && rpt.divisionId === user.divisionId);
-        return matchDiv;
-      }
-
-      // Pincode Admin / Pincode Manager: sees reports in their assigned pincode or self
-      if (rawRole.includes('pincode')) {
-        const isSelf = rpt.managerId === user._id || rpt.managerId === user.id;
-        const isPin = userPin && (rptPin === userPin || rpt.pincodeId === user.pincodeId);
-        return isPin || isSelf;
-      }
-
-      return false;
-    });
+    let filtered = allReports.filter(rpt => isReportInTerritoryScope(rpt, user));
 
     // 2. Query Filters
     if (district && district !== 'All') {
@@ -978,6 +983,11 @@ const getSubmittedReportById = async (req, res) => {
 
     if (!report) {
       return res.status(404).json({ success: false, message: 'Submitted report not found.' });
+    }
+
+    // Enforce territorial authorization check
+    if (!isReportInTerritoryScope(report, req.user)) {
+      return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to view reports outside your authorized territory.' });
     }
 
     // Enrich shop visits with live vendor approval & kyc info if applicable
@@ -1135,6 +1145,176 @@ const rejectManagerReport = async (req, res) => {
   }
 };
 
+/**
+ * Get Territory-Scoped Agent Reports for Business Reports
+ */
+const getAgentReports = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const allAgents = Array.from(db.agents || []);
+    const scopedAgents = getHierarchicalScopedAgents(allAgents, user);
+
+    const {
+      level,
+      status,
+      search,
+      state,
+      district,
+      division,
+      pincode,
+      startDate,
+      endDate
+    } = req.query;
+
+    const allVendors = Array.from(db.vendors || []);
+    const allVisits = Array.from(db.shopVisits || []);
+
+    let reports = scopedAgents.map((agent) => {
+      const aId = String(agent._id || agent.id || '');
+      const t = getAgentTerritory(agent);
+      const agentLevel = normalizeLevel(getAgentLevel(agent));
+
+      // Real vendor referrals
+      const referredVendors = allVendors.filter(v => {
+        const vAgentId = String(v.agentId || v.submittedByAgentId || v.referredByAgentId || '');
+        return vAgentId && (vAgentId === aId || vAgentId === String(agent.id) || vAgentId === String(agent._id));
+      });
+
+      const successfulOnboardings = referredVendors.filter(v => {
+        const s = String(v.status || v.approvalStatus || '').toLowerCase();
+        return s === 'approved' || s === 'active' || s.includes('approved');
+      });
+
+      // Field visits
+      const agentVisits = allVisits.filter(v => {
+        const vId = String(v.agentId || v.executiveId || v.userId || '');
+        return vId && (vId === aId || vId === String(agent.id) || vId === String(agent._id));
+      });
+
+      const totalReferrals = referredVendors.length || Number(agent.referralCount || agent.referrals || 0);
+      const totalOnboarded = successfulOnboardings.length || Number(agent.vendorsOnboarded || agent.onboarded || 0);
+      const totalVisits = agentVisits.length || Number(agent.shopVisitsCount || 0);
+
+      // Performance score calculation
+      let performanceScore = Math.min(100, Math.round(totalOnboarded * 25 + totalVisits * 5 + (totalReferrals > totalOnboarded ? 10 : 0)));
+      if (performanceScore === 0 && (agent.status === 'Active' || agent.status === 'approved')) {
+        performanceScore = 50; // default baseline for active agents
+      }
+
+      const regDate = agent.createdAt || agent.registrationDate || agent.joinedDate || agent.date || null;
+
+      return {
+        id: aId,
+        _id: aId,
+        agentId: agent.agentId || agent.agentCode || `AGT-${aId.slice(-6).toUpperCase()}`,
+        name: agent.name || agent.fullName || 'Unknown Agent',
+        mobile: agent.mobile || agent.phone || 'N/A',
+        email: agent.email || 'N/A',
+        level: agentLevel || 'pincode',
+        role: agent.role || agentLevel,
+        status: (agent.status && agent.status.toLowerCase() === 'approved') ? 'Active' : (agent.status || 'Active'),
+        state: t.state || agent.state || 'N/A',
+        district: t.district || agent.district || 'N/A',
+        division: t.division || agent.division || 'N/A',
+        pincode: t.pincode || agent.pincode || 'N/A',
+        registrationDate: regDate,
+        createdAt: regDate,
+        vendorReferrals: totalReferrals,
+        vendorsOnboarded: totalOnboarded,
+        fieldVisits: totalVisits,
+        performanceScore,
+        walletBalance: agent.walletBalance || 0,
+        referredVendorsList: referredVendors.map(v => ({
+          id: v._id || v.id,
+          businessName: v.businessName || v.name,
+          status: v.status || v.approvalStatus || 'Pending',
+          category: v.category || v.businessCategory || 'Retail',
+          createdAt: v.createdAt || v.date
+        }))
+      };
+    });
+
+    // Apply level filter
+    if (level && level !== 'All') {
+      const targetLvl = normalizeLevel(level);
+      reports = reports.filter(r => r.level === targetLvl);
+    }
+
+    // Apply status filter
+    if (status && status !== 'All') {
+      reports = reports.filter(r => r.status.toLowerCase() === status.toLowerCase());
+    }
+
+    // Apply territory filters
+    if (state && state.trim()) {
+      reports = reports.filter(r => (r.state || '').toLowerCase() === state.trim().toLowerCase());
+    }
+    if (district && district.trim()) {
+      reports = reports.filter(r => (r.district || '').toLowerCase() === district.trim().toLowerCase());
+    }
+    if (division && division.trim()) {
+      reports = reports.filter(r => (r.division || '').toLowerCase().includes(division.trim().toLowerCase()));
+    }
+    if (pincode && pincode.trim()) {
+      reports = reports.filter(r => String(r.pincode || '').trim() === pincode.trim());
+    }
+
+    // Apply date range filter
+    if (startDate) {
+      const start = new Date(startDate).getTime();
+      reports = reports.filter(r => !r.registrationDate || new Date(r.registrationDate).getTime() >= start);
+    }
+    if (endDate) {
+      const end = new Date(endDate).getTime() + (24 * 60 * 60 * 1000);
+      reports = reports.filter(r => !r.registrationDate || new Date(r.registrationDate).getTime() <= end);
+    }
+
+    // Apply search filter
+    if (search && search.trim()) {
+      const q = search.toLowerCase().trim();
+      reports = reports.filter(r =>
+        r.name.toLowerCase().includes(q) ||
+        r.agentId.toLowerCase().includes(q) ||
+        r.mobile.includes(q) ||
+        r.email.toLowerCase().includes(q) ||
+        r.pincode.includes(q) ||
+        r.district.toLowerCase().includes(q) ||
+        r.division.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort: newest registration first
+    reports.sort((a, b) => new Date(b.registrationDate || 0) - new Date(a.registrationDate || 0));
+
+    // Summary KPIs
+    const totalAgents = reports.length;
+    const activeAgents = reports.filter(r => r.status === 'Active').length;
+    const totalReferrals = reports.reduce((acc, r) => acc + (r.vendorReferrals || 0), 0);
+    const totalOnboarded = reports.reduce((acc, r) => acc + (r.vendorsOnboarded || 0), 0);
+    const avgScore = totalAgents > 0 ? Math.round(reports.reduce((acc, r) => acc + r.performanceScore, 0) / totalAgents) : 0;
+
+    return res.json({
+      success: true,
+      data: reports,
+      count: totalAgents,
+      summary: {
+        totalAgents,
+        activeAgents,
+        totalReferrals,
+        totalOnboarded,
+        avgScore
+      }
+    });
+  } catch (err) {
+    console.error('Get agent reports error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve agent reports', error: err.message });
+  }
+};
+
 module.exports = {
   getDashboardSummary,
   getBusinessReports,
@@ -1145,6 +1325,7 @@ module.exports = {
   getSubmittedReports,
   getSubmittedReportById,
   approveManagerReport,
-  rejectManagerReport
+  rejectManagerReport,
+  getAgentReports
 };
 

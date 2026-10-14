@@ -511,7 +511,7 @@ async function getAgents(req, res) {
         assignedArea = terr.state || '';
       } else if (normLevel === 'state' && terr.state) {
         jurisdiction = `${terr.state} State`;
-        assignedArea = 'Apex State Level';
+        assignedArea = terr.state ? `${terr.state} (Statewide)` : 'Statewide';
       } else {
         jurisdiction = terr.state || 'Assigned Zone';
         assignedArea = terr.district || '';
@@ -532,7 +532,7 @@ async function getAgents(req, res) {
         vendorOnboardings: a.vendorOnboardings ?? 0,
         walletBalance: a.walletBalance ?? 0,
         totalEarned: a.totalEarned ?? 0,
-        status: a.status || 'approved'
+        status: (a.status && a.status.toLowerCase() === 'approved') ? 'Active' : (a.status || 'Active')
       };
     });
 
@@ -1104,7 +1104,7 @@ async function getAgentRequests(req, res) {
         assignedArea = terr.state || '';
       } else if (normLevel === 'state' && terr.state) {
         jurisdiction = `${terr.state} State`;
-        assignedArea = 'Apex State Level';
+        assignedArea = terr.state ? `${terr.state} (Statewide)` : 'Statewide';
       } else {
         jurisdiction = terr.state || 'Assigned Zone';
         assignedArea = terr.district || '';
@@ -1147,11 +1147,17 @@ async function getAgentRequests(req, res) {
         address: formatAddressString(a.address, [terr.pincode, terr.division, terr.district, terr.state].filter(Boolean).join(', ') || 'N/A'),
         createdAt: a.createdAt || new Date().toISOString(),
         registrationDate: a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent',
-        status: a.status || 'pending',
+        status: (a.status && a.status.toLowerCase() === 'approved') ? 'Active' : (a.status || 'pending'),
         adminApprovalStatus: adminApproval || 'pending',
         kycStatus: a.kycStatus || 'pending_verification',
         rejectionReason: a.rejectionReason || null,
         pendingReason: a.pendingReason || a.adminNotes || null,
+        reviewerReason: a.pendingReason || a.adminNotes || a.rejectionReason || null,
+        adminPendingBy: a.adminPendingBy || null,
+        adminPendingById: a.adminPendingById || null,
+        adminPendingByRole: a.adminPendingByRole || a.adminPendingRole || null,
+        adminPendingAt: a.adminPendingAt || null,
+        reviewHistory: Array.isArray(a.reviewHistory) ? a.reviewHistory : [],
         workflowStage,
         canApprove,
         documents: a.documents || a.kycDocs || {}
@@ -1192,15 +1198,33 @@ async function approveAgent(req, res) {
 
     const now = new Date().toISOString();
     const terr = getAgentTerritory(agent);
+    const existingHistory = Array.isArray(agent.reviewHistory) ? agent.reviewHistory : [];
+    const reviewEntry = {
+      action: 'APPROVED',
+      status: 'Active',
+      reviewerId: req.user.id || req.user._id,
+      reviewerName: req.user.name || req.user.email,
+      reviewerRole: req.user.role,
+      reviewedAt: now,
+      timestamp: now
+    };
+    const updatedHistory = [...existingHistory, reviewEntry];
+
     const approveUpdates = {
-      status: 'pending_kyc',
+      status: 'Active',
+      overallRegistrationStatus: 'Active',
       adminApprovalStatus: 'approved',
-      kycStatus: 'pending_verification',
+      kycStatus: 'Verified',
+      isActive: true,
+      isApproved: true,
+      requiresApproval: false,
       adminApprovedBy: req.user.name || req.user.email,
       adminApprovedById: req.user.id || req.user._id,
       adminApprovedByRole: req.user.role,
       adminApprovedAt: now,
       rejectionReason: null,
+      pendingReason: null,
+      reviewHistory: updatedHistory,
       updatedAt: now
     };
     Object.assign(agent, approveUpdates);
@@ -1227,12 +1251,20 @@ async function approveAgent(req, res) {
           district: terr.district,
           division: terr.division,
           pincode: terr.pincode,
-          status: 'Pending',
-          kycStatus: 'Pending Verification',
+          status: 'Active',
+          kycStatus: 'Verified',
           submittedDate: (agent.createdAt || now).split('T')[0],
           documents: agent.documents || agent.kycDocs || {},
-          notes: `Agent registration territory-approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team.`,
+          notes: `Agent registration territory-approved and activated by ${req.user.role} "${req.user.name}".`,
           createdAt: now,
+          updatedAt: now
+        });
+      } else {
+        await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
+          status: 'Active',
+          kycStatus: 'Verified',
+          approvalStatus: 'approved',
+          notes: `Agent registration territory-approved and activated by ${req.user.role} "${req.user.name}".`,
           updatedAt: now
         });
       }
@@ -1243,16 +1275,24 @@ async function approveAgent(req, res) {
       const user = (await db.users.findById(agent._id || agent.id)) ||
         Array.from(db.users || []).find(u => String(u._id || u.id) === String(agent._id || agent.id) || (u.email && agent.email && u.email.toLowerCase() === agent.email.toLowerCase()));
       if (user) {
-        user.status = 'pending_kyc';
+        user.status = 'Active';
+        user.isActive = true;
+        user.isApproved = true;
         user.adminApprovalStatus = 'approved';
+        user.kycStatus = 'Verified';
         user.adminApprovedBy = req.user.name;
         user.adminApprovedAt = now;
+        user.reviewHistory = updatedHistory;
         user.updatedAt = now;
         await db.users.findByIdAndUpdate(user._id || user.id, {
-          status: 'pending_kyc',
+          status: 'Active',
+          isActive: true,
+          isApproved: true,
           adminApprovalStatus: 'approved',
+          kycStatus: 'Verified',
           adminApprovedBy: req.user.name,
           adminApprovedAt: now,
+          reviewHistory: updatedHistory,
           updatedAt: now
         });
       }
@@ -1452,15 +1492,30 @@ async function keepPendingAgent(req, res) {
     }
 
     const now = new Date().toISOString();
+    const existingHistory = Array.isArray(agent.reviewHistory) ? agent.reviewHistory : [];
+    const reviewEntry = {
+      action: 'PENDING',
+      status: 'pending',
+      reason: pendingReason,
+      reviewerId: req.user.id || req.user._id,
+      reviewerName: req.user.name || req.user.email,
+      reviewerRole: req.user.role,
+      reviewedAt: now,
+      timestamp: now
+    };
+    const updatedHistory = [...existingHistory, reviewEntry];
+
     const pendingUpdates = {
       status: 'pending',
       adminApprovalStatus: 'pending',
       pendingReason,
+      reviewerReason: pendingReason,
       adminNotes: pendingReason,
       adminPendingBy: req.user.name || req.user.email,
       adminPendingById: req.user.id || req.user._id,
       adminPendingByRole: req.user.role,
       adminPendingAt: now,
+      reviewHistory: updatedHistory,
       updatedAt: now
     };
     Object.assign(agent, pendingUpdates);
@@ -1487,13 +1542,21 @@ async function keepPendingAgent(req, res) {
         user.status = 'pending';
         user.adminApprovalStatus = 'pending';
         user.pendingReason = pendingReason;
+        user.reviewerReason = pendingReason;
         user.adminNotes = pendingReason;
+        user.adminPendingBy = req.user.name || req.user.email;
+        user.adminPendingAt = now;
+        user.reviewHistory = updatedHistory;
         user.updatedAt = now;
         await db.users.findByIdAndUpdate(user._id || user.id, {
           status: 'pending',
           adminApprovalStatus: 'pending',
           pendingReason,
+          reviewerReason: pendingReason,
           adminNotes: pendingReason,
+          adminPendingBy: req.user.name || req.user.email,
+          adminPendingAt: now,
+          reviewHistory: updatedHistory,
           updatedAt: now
         });
       }
@@ -1538,6 +1601,10 @@ module.exports = {
   rejectAgent,
   keepPendingAgent,
   isRelatedAdminForAgent,
-  canAdminViewAgent
+  canAdminViewAgent,
+  getHierarchicalScopedAgents,
+  getAgentTerritory,
+  normalizeLevel,
+  getAgentLevel
 };
 

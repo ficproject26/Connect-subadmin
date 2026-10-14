@@ -24,26 +24,62 @@ const maskGst = (gst) => {
   return `${stateCode}••••••••••${endCode}`;
 };
 
-// Helper to format role titles cleanly
+// Helper to format role titles cleanly and normalize legacy values
 function formatActorRole(role, fallbackType = 'Manager') {
-  if (!role) return fallbackType === 'Agent' ? 'Pincode Agent' : 'Pincode Manager';
-  const r = String(role).toLowerCase().replace(/_/g, ' ').trim();
+  if (!role) {
+    if (fallbackType === 'Agent') return 'Pincode Agent';
+    if (fallbackType === 'Admin') return 'Pincode Admin';
+    return 'Pincode Manager';
+  }
+  const r = String(role).toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+
+  // Explicit Manager roles
   if (r.includes('pincode') && r.includes('manager')) return 'Pincode Manager';
-  if (r.includes('divis') && r.includes('manager')) return 'Divisional Manager';
-  if (r.includes('dist') && r.includes('manager')) return 'District Manager';
+  if ((r.includes('divis') || r.includes('division')) && r.includes('manager')) return 'Divisional Manager';
+  if ((r.includes('dist') || r.includes('district')) && r.includes('manager')) return 'District Manager';
   if (r.includes('state') && r.includes('manager')) return 'State Manager';
-  if (r === 'manager') return 'Field Manager';
+  if (r === 'manager' || r === 'field manager') return 'Field Manager';
+
+  // Explicit Agent roles
   if (r.includes('pincode') && r.includes('agent')) return 'Pincode Agent';
-  if (r.includes('divis') && r.includes('agent')) return 'Divisional Agent';
-  if (r.includes('dist') && r.includes('agent')) return 'District Agent';
+  if ((r.includes('divis') || r.includes('division')) && r.includes('agent')) return 'Divisional Agent';
+  if ((r.includes('dist') || r.includes('district')) && r.includes('agent')) return 'District Agent';
   if (r.includes('state') && r.includes('agent')) return 'State Agent';
-  if (r.includes('agent')) return 'Pincode Agent';
+
+  // Explicit Admin roles
   if (r.includes('pincode') && r.includes('admin')) return 'Pincode Admin';
-  if (r.includes('divis') && r.includes('admin')) return 'Divisional Admin';
-  if (r.includes('dist') && r.includes('admin')) return 'District Admin';
+  if ((r.includes('divis') || r.includes('division')) && r.includes('admin')) return 'Divisional Admin';
+  if ((r.includes('dist') || r.includes('district')) && r.includes('admin')) return 'District Admin';
   if (r.includes('state') && r.includes('admin')) return 'State Admin';
   if (r.includes('super') && r.includes('admin')) return 'Super Admin';
-  return role;
+
+  // Shorthand / tier-only normalization (e.g. "pincode", "pin code", "PincodeAgent", "district", "division", "state")
+  if (r.includes('pincode') || r === 'pin' || r === 'pin code' || r.includes('pincodeagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'Pincode Manager';
+    if (fallbackType === 'Admin') return 'Pincode Admin';
+    return 'Pincode Agent';
+  }
+  if (r.includes('divis') || r.includes('division') || r.includes('divisionalagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'Divisional Manager';
+    if (fallbackType === 'Admin') return 'Divisional Admin';
+    return 'Divisional Agent';
+  }
+  if (r.includes('dist') || r.includes('district') || r.includes('districtagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'District Manager';
+    if (fallbackType === 'Admin') return 'District Admin';
+    return 'District Agent';
+  }
+  if (r.includes('state') || r.includes('stateagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'State Manager';
+    if (fallbackType === 'Admin') return 'State Admin';
+    return 'State Agent';
+  }
+
+  if (r.includes('agent')) return 'Pincode Agent';
+  if (r.includes('admin')) return 'Sub Admin';
+  if (r.includes('manager')) return 'Field Manager';
+
+  return fallbackType === 'Agent' ? 'Pincode Agent' : 'Field Manager';
 }
 
 // Pre-index collections for ultra-fast O(1) enrichment of vendors
@@ -209,7 +245,9 @@ function resolveOnboardedBy(vendor, ctx) {
   // 3. Direct creator fields on vendor object
   if (vendor.createdByRole || vendor.onboardedByRole) {
     const rawRole = vendor.createdByRole || vendor.onboardedByRole;
-    const roleTitle = formatActorRole(rawRole);
+    const isMgr = String(rawRole).toLowerCase().includes('manager') || String(vendor.createdById || vendor.onboardedById || '').startsWith('usr_mgr');
+    const isAdmin = String(rawRole).toLowerCase().includes('admin');
+    const roleTitle = formatActorRole(rawRole, isMgr ? 'Manager' : isAdmin ? 'Admin' : 'Agent');
     const name = vendor.createdByName || vendor.onboardedByName || vendor.addedBy?.name;
     if (name && name !== 'Unassigned') {
       return {
@@ -841,17 +879,26 @@ const pincodeAdminVerifyVendor = async (req, res) => {
       });
     }
 
-    if (!['Accept', 'Reject', 'accept', 'reject'].includes(action)) {
-      return res.status(400).json({ success: false, message: 'Action must be Accept or Reject' });
+    const normAction = String(action || '').toLowerCase().trim();
+    if (!['accept', 'approve', 'reject', 'pending'].includes(normAction)) {
+      return res.status(400).json({ success: false, message: 'Action must be Approve/Accept, Reject, or Pending' });
     }
 
-    const isReject = action.toLowerCase() === 'reject';
-    if (isReject && (!rejectionReason || !rejectionReason.trim())) {
+    const isReject = normAction === 'reject';
+    const isPending = normAction === 'pending';
+    const isApprove = normAction === 'accept' || normAction === 'approve';
+
+    const effectiveReason = (rejectionReason || req.body.pendingReason || req.body.reason || '').trim();
+
+    if (isReject && !effectiveReason) {
       return res.status(400).json({ success: false, message: 'Rejection reason is mandatory when rejecting vendor' });
+    }
+    if (isPending && !effectiveReason) {
+      return res.status(400).json({ success: false, message: 'Mandatory reason is required when keeping vendor request pending' });
     }
 
     // Prevent duplicate approvals
-    if (!isReject && (vendor.approvalStatus === 'PINCODE_APPROVED' || vendor.pincodeAdminApproval?.status === 'Approved')) {
+    if (isApprove && (vendor.approvalStatus === 'PINCODE_APPROVED' || vendor.pincodeAdminApproval?.status === 'Approved')) {
       return res.status(400).json({
         success: false,
         message: 'Vendor has already been approved by Pincode Admin and forwarded to the KYC Team.'
@@ -861,47 +908,88 @@ const pincodeAdminVerifyVendor = async (req, res) => {
     const decidedBy = `${req.user.name} (${req.user.role || 'Pincode Admin'})`;
     const decidedAt = new Date().toISOString();
 
-    const updates = isReject
-      ? {
+    let updates = {};
+    if (isReject) {
+      updates = {
+        status: 'Rejected',
+        approvalStatus: 'PINCODE_REJECTED',
+        kycStatus: 'Pincode Admin Rejected',
+        rejectionReason: effectiveReason,
+        reviewerReason: effectiveReason,
+        approvedById: req.user.id || req.user._id,
+        approvedByName: req.user.name,
+        approvedByRole: req.user.role || 'Pincode Admin',
+        approvedAt: decidedAt,
+        pincodeAdminApproval: {
           status: 'Rejected',
-          approvalStatus: 'PINCODE_REJECTED',
-          kycStatus: 'Pincode Admin Rejected',
-          rejectionReason: rejectionReason.trim(),
-          approvedById: req.user.id || req.user._id,
-          approvedByName: req.user.name,
-          approvedByRole: req.user.role || 'Pincode Admin',
-          approvedAt: decidedAt,
-          pincodeAdminApproval: {
-            status: 'Rejected',
-            decidedBy,
-            decidedAt,
-            rejectionReason: rejectionReason.trim(),
-            adminId: req.user.id || req.user._id,
-            adminName: req.user.name,
-            adminRole: req.user.role || 'Pincode Admin',
-            adminPhone: req.user.mobile || req.user.phone || ''
-          }
+          decidedBy,
+          decidedAt,
+          rejectionReason: effectiveReason,
+          adminId: req.user.id || req.user._id,
+          adminName: req.user.name,
+          adminRole: req.user.role || 'Pincode Admin',
+          adminPhone: req.user.mobile || req.user.phone || ''
         }
-      : {
-          status: 'Pending KYC Review',
-          approvalStatus: 'PINCODE_APPROVED',
-          kycStatus: 'KYC Pending',
+      };
+    } else if (isPending) {
+      updates = {
+        status: 'Pending Territory Approval',
+        approvalStatus: 'PINCODE_PENDING',
+        kycStatus: 'Pending Territory Review',
+        pendingReason: effectiveReason,
+        reviewerReason: effectiveReason,
+        adminPendingBy: req.user.name,
+        adminPendingById: req.user.id || req.user._id,
+        adminPendingByRole: req.user.role || 'Pincode Admin',
+        adminPendingAt: decidedAt,
+        pincodeAdminApproval: {
+          status: 'Pending',
+          decidedBy,
+          decidedAt,
           rejectionReason: null,
-          approvedById: req.user.id || req.user._id,
-          approvedByName: req.user.name,
-          approvedByRole: req.user.role || 'Pincode Admin',
-          approvedAt: decidedAt,
-          pincodeAdminApproval: {
-            status: 'Approved',
-            decidedBy,
-            decidedAt,
-            rejectionReason: null,
-            adminId: req.user.id || req.user._id,
-            adminName: req.user.name,
-            adminRole: req.user.role || 'Pincode Admin',
-            adminPhone: req.user.mobile || req.user.phone || ''
-          }
-        };
+          pendingReason: effectiveReason,
+          adminId: req.user.id || req.user._id,
+          adminName: req.user.name,
+          adminRole: req.user.role || 'Pincode Admin',
+          adminPhone: req.user.mobile || req.user.phone || ''
+        }
+      };
+    } else {
+      updates = {
+        status: 'Pending KYC Review',
+        approvalStatus: 'PINCODE_APPROVED',
+        kycStatus: 'KYC Pending',
+        rejectionReason: null,
+        pendingReason: null,
+        reviewerReason: null,
+        approvedById: req.user.id || req.user._id,
+        approvedByName: req.user.name,
+        approvedByRole: req.user.role || 'Pincode Admin',
+        approvedAt: decidedAt,
+        pincodeAdminApproval: {
+          status: 'Approved',
+          decidedBy,
+          decidedAt,
+          rejectionReason: null,
+          adminId: req.user.id || req.user._id,
+          adminName: req.user.name,
+          adminRole: req.user.role || 'Pincode Admin',
+          adminPhone: req.user.mobile || req.user.phone || ''
+        }
+      };
+    }
+
+    // Preserve and append reviewHistory
+    const reviewHistory = Array.isArray(vendor.reviewHistory) ? [...vendor.reviewHistory] : [];
+    reviewHistory.push({
+      action: isReject ? 'REJECTED' : isPending ? 'PENDING' : 'APPROVED',
+      reason: effectiveReason || (isApprove ? 'Approved by Pincode Admin' : ''),
+      reviewedBy: req.user.name,
+      reviewedById: req.user.id || req.user._id,
+      reviewerRole: req.user.role || 'Pincode Admin',
+      timestamp: decidedAt
+    });
+    updates.reviewHistory = reviewHistory;
 
     const updated = await db.vendors.findByIdAndUpdate(id, updates);
     const populated = await populateVendorLocations(updated);
@@ -1189,13 +1277,201 @@ const kycVerifyVendor = async (req, res) => {
   }
 };
 
+// Resolve vendor onboarding source
+function resolveVendorSource(v) {
+  const regSource = String(v.registrationSource || '').toLowerCase();
+  const createdVia = String(v.createdVia || '').toLowerCase();
+  const addedByRole = String(v.addedBy?.role || '').toLowerCase();
+
+  if (regSource === 'agent' || v.agentId || v.referredBy || v.onboardingAgentId || addedByRole.includes('agent')) {
+    return {
+      type: 'Agent',
+      label: 'Agent Referral',
+      agentId: v.agentId || v.referredBy || v.onboardingAgentId,
+      agentName: v.agentName || v.referredByName || v.onboardingAgent?.name || 'Field Agent'
+    };
+  }
+  if (regSource === 'manager' || createdVia === 'manager' || v.managerId || v.onboardingManagerId || addedByRole.includes('manager')) {
+    return {
+      type: 'Manager',
+      label: 'Manager Onboarding',
+      managerId: v.managerId || v.onboardingManagerId,
+      managerName: v.managerName || v.onboardingManager?.name || 'Field Manager'
+    };
+  }
+  return {
+    type: 'Direct Registration',
+    label: 'Direct Registration',
+    directSource: v.source || 'Website / Self-Onboarding'
+  };
+}
+
+function checkAdminApprovalAuthority(user, vendor) {
+  if (!user || !vendor) return false;
+  const role = String(user.role || '').toLowerCase().trim();
+  const adminRole = String(user.adminRole || '').toLowerCase().trim();
+
+  // Super Admin can approve
+  if (role.includes('super admin') || role === 'admin' || adminRole === 'super-admin' || user.state === 'All India') {
+    return true;
+  }
+  // Pincode Admin is the designated approval authority under current business workflow
+  if (role.includes('pincode') || adminRole === 'pincode-admin') {
+    const userPin = String(user.pincode || user.assignedPincode || '').trim();
+    const vPin = String(vendor.pincode || '').trim();
+    return Boolean(userPin && vPin && userPin === vPin);
+  }
+  return false;
+}
+
+// Consolidated Vendor Requests (consolidating Agent, Manager, Direct registrations)
+const getVendorRequests = async (req, res) => {
+  try {
+    const user = req.user;
+    const allVendors = Array.from(db.vendors || []);
+    const lookupCtx = buildVendorLookupContext();
+
+    // 1. Scoping according to user jurisdiction
+    const scoped = filterByLocation(allVendors, user);
+
+    // 2. Query filters
+    const { status, source, state, district, division, pincode, search } = req.query;
+    let filtered = scoped;
+
+    if (status && status !== 'All') {
+      const sLow = status.toLowerCase();
+      filtered = filtered.filter(v => {
+        const vSt = (v.approvalStatus || v.status || '').toLowerCase();
+        if (sLow === 'pending') {
+          return vSt.includes('pending') || vSt.includes('review') || !vSt || vSt === 'submitted';
+        }
+        if (sLow === 'approved') {
+          return vSt.includes('approved') || vSt.includes('verified') || vSt === 'active';
+        }
+        if (sLow === 'rejected') {
+          return vSt.includes('rejected');
+        }
+        return vSt === sLow;
+      });
+    }
+
+    if (state && state !== 'All') {
+      filtered = filtered.filter(v => (v.state || '').toLowerCase() === state.toLowerCase());
+    }
+    if (district && district !== 'All') {
+      filtered = filtered.filter(v => (v.district || '').toLowerCase() === district.toLowerCase());
+    }
+    if (division && division !== 'All') {
+      const targetDiv = String(division).toLowerCase().replace(/\s+division$/i, '').trim();
+      filtered = filtered.filter(v => String(v.division || '').toLowerCase().replace(/\s+division$/i, '').trim() === targetDiv);
+    }
+    if (pincode && pincode !== 'All') {
+      filtered = filtered.filter(v => String(v.pincode || '').trim() === String(pincode).trim());
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filtered = filtered.filter(v =>
+        (v.businessName && v.businessName.toLowerCase().includes(q)) ||
+        (v.name && v.name.toLowerCase().includes(q)) ||
+        (v.ownerName && v.ownerName.toLowerCase().includes(q)) ||
+        (v.contactPerson && v.contactPerson.toLowerCase().includes(q)) ||
+        (v.phone && v.phone.includes(q)) ||
+        (v.pincode && v.pincode.includes(q)) ||
+        (v.district && v.district.toLowerCase().includes(q))
+      );
+    }
+
+    // 3. Format requests and consolidate sources
+    const deduplicated = [];
+    const seenIds = new Set();
+
+    filtered.forEach(v => {
+      const vId = String(v.id || v._id);
+      if (seenIds.has(vId)) return;
+      seenIds.add(vId);
+
+      const pop = populateVendorLocations(v, lookupCtx);
+      const srcInfo = resolveVendorSource(pop);
+      const canApprove = checkAdminApprovalAuthority(user, pop);
+
+      const reqDate = pop.createdAt || pop.registeredAt || pop.date || null;
+      const formattedDate = reqDate ? new Date(reqDate).toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
+      }) : '—';
+
+      const lastReview = pop.approvedAt || pop.adminPendingAt || pop.updatedAt || null;
+      const formattedReviewDate = lastReview ? new Date(lastReview).toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
+      }) : '—';
+
+      deduplicated.push({
+        id: vId,
+        _id: vId,
+        canonicalId: vId,
+        createdAt: reqDate,
+        requestDateTime: formattedDate,
+        vendorName: pop.contactPerson || pop.ownerName || pop.name || 'Vendor Owner',
+        businessName: pop.businessName || pop.name || 'Store / Enterprise',
+        category: pop.category || pop.businessType || 'Retail & Services',
+        registrationSource: srcInfo.type,
+        sourceLabel: srcInfo.label,
+        sourceDetails: srcInfo,
+        state: pop.state || 'Tamil Nadu',
+        district: pop.district || '—',
+        division: pop.division || '—',
+        pincode: pop.pincode || '—',
+        approvalStatus: pop.approvalStatus || pop.status || 'Pending Pincode Admin Approval',
+        status: pop.status || 'Under Review',
+        approvedByAdminName: pop.approvedByName || (pop.pincodeAdminApproval?.adminName) || null,
+        approvedByAdminRole: pop.approvedByRole || (pop.pincodeAdminApproval?.adminRole) || null,
+        lastReviewDate: formattedReviewDate,
+        reviewerReason: pop.reviewerReason || pop.pendingReason || pop.rejectionReason || null,
+        reviewHistory: Array.isArray(pop.reviewHistory) ? pop.reviewHistory : [],
+        canApprove,
+        phone: pop.phone || pop.mobile,
+        email: pop.email
+      });
+    });
+
+    let finalRequests = deduplicated;
+    if (source && source !== 'All') {
+      finalRequests = finalRequests.filter(r => r.registrationSource.toLowerCase() === source.toLowerCase());
+    }
+
+    // Sort newest first
+    finalRequests.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    return res.json({
+      success: true,
+      count: finalRequests.length,
+      total: finalRequests.length,
+      requests: finalRequests,
+      data: finalRequests
+    });
+  } catch (error) {
+    console.error('Failed to get vendor requests:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch vendor requests', error: error.message });
+  }
+};
+
+const keepPendingVendor = async (req, res) => {
+  req.body.action = 'pending';
+  return pincodeAdminVerifyVendor(req, res);
+};
+
 module.exports = {
   getVendors,
   getVendorById,
+  getVendorRequests,
   createVendor,
   updateVendor,
   updateVendorStatus,
   lookupPincode,
   pincodeAdminVerifyVendor,
-  kycVerifyVendor
+  keepPendingVendor,
+  kycVerifyVendor,
+  resolveVendorSource,
+  checkAdminApprovalAuthority,
+  formatActorRole
 };

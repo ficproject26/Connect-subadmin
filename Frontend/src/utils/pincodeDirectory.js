@@ -63,24 +63,60 @@ export function resolvePincodeHierarchy(pincode) {
  * Formats raw database roles into human-readable canonical titles.
  */
 export function formatActorRole(role, fallbackType = 'Manager') {
-  if (!role) return fallbackType === 'Agent' ? 'Pincode Agent' : 'Pincode Manager';
-  const r = String(role).toLowerCase().replace(/_/g, ' ').trim();
+  if (!role) {
+    if (fallbackType === 'Agent') return 'Pincode Agent';
+    if (fallbackType === 'Admin') return 'Pincode Admin';
+    return 'Pincode Manager';
+  }
+  const r = String(role).toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+
+  // Explicit Manager roles
   if (r.includes('pincode') && r.includes('manager')) return 'Pincode Manager';
-  if (r.includes('divis') && r.includes('manager')) return 'Divisional Manager';
-  if (r.includes('dist') && r.includes('manager')) return 'District Manager';
+  if ((r.includes('divis') || r.includes('division')) && r.includes('manager')) return 'Divisional Manager';
+  if ((r.includes('dist') || r.includes('district')) && r.includes('manager')) return 'District Manager';
   if (r.includes('state') && r.includes('manager')) return 'State Manager';
-  if (r === 'manager') return 'Field Manager';
+  if (r === 'manager' || r === 'field manager') return 'Field Manager';
+
+  // Explicit Agent roles
   if (r.includes('pincode') && r.includes('agent')) return 'Pincode Agent';
-  if (r.includes('divis') && r.includes('agent')) return 'Divisional Agent';
-  if (r.includes('dist') && r.includes('agent')) return 'District Agent';
+  if ((r.includes('divis') || r.includes('division')) && r.includes('agent')) return 'Divisional Agent';
+  if ((r.includes('dist') || r.includes('district')) && r.includes('agent')) return 'District Agent';
   if (r.includes('state') && r.includes('agent')) return 'State Agent';
-  if (r.includes('agent')) return 'Pincode Agent';
+
+  // Explicit Admin roles
   if (r.includes('pincode') && r.includes('admin')) return 'Pincode Admin';
-  if (r.includes('divis') && r.includes('admin')) return 'Divisional Admin';
-  if (r.includes('dist') && r.includes('admin')) return 'District Admin';
+  if ((r.includes('divis') || r.includes('division')) && r.includes('admin')) return 'Divisional Admin';
+  if ((r.includes('dist') || r.includes('district')) && r.includes('admin')) return 'District Admin';
   if (r.includes('state') && r.includes('admin')) return 'State Admin';
   if (r.includes('super') && r.includes('admin')) return 'Super Admin';
-  return role;
+
+  // Shorthand / tier-only normalization (e.g. "pincode", "pin code", "PincodeAgent", "district", "division", "state")
+  if (r.includes('pincode') || r === 'pin' || r === 'pin code' || r.includes('pincodeagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'Pincode Manager';
+    if (fallbackType === 'Admin') return 'Pincode Admin';
+    return 'Pincode Agent';
+  }
+  if (r.includes('divis') || r.includes('division') || r.includes('divisionalagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'Divisional Manager';
+    if (fallbackType === 'Admin') return 'Divisional Admin';
+    return 'Divisional Agent';
+  }
+  if (r.includes('dist') || r.includes('district') || r.includes('districtagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'District Manager';
+    if (fallbackType === 'Admin') return 'District Admin';
+    return 'District Agent';
+  }
+  if (r.includes('state') || r.includes('stateagent')) {
+    if (fallbackType === 'Manager' || r.includes('mgr')) return 'State Manager';
+    if (fallbackType === 'Admin') return 'State Admin';
+    return 'State Agent';
+  }
+
+  if (r.includes('agent')) return 'Pincode Agent';
+  if (r.includes('admin')) return 'Sub Admin';
+  if (r.includes('manager')) return 'Field Manager';
+
+  return fallbackType === 'Agent' ? 'Pincode Agent' : 'Field Manager';
 }
 
 /**
@@ -114,7 +150,9 @@ export function resolveVendorAddedBy(vendor) {
   // 1. Explicit onboarding / creation role and name from API / canonical DB
   if (vendor.onboardedByName || vendor.createdByName || vendor.onboardedByRole || vendor.createdByRole) {
     const rawRole = vendor.onboardedByRole || vendor.createdByRole || vendor.addedBy?.role;
-    const cleanRole = formatActorRole(rawRole);
+    const isMgr = String(rawRole).toLowerCase().includes('manager') || String(vendor.onboardedById || vendor.createdById || '').startsWith('usr_mgr');
+    const isAdmin = String(rawRole).toLowerCase().includes('admin');
+    const cleanRole = formatActorRole(rawRole, isMgr ? 'Manager' : isAdmin ? 'Admin' : 'Agent');
     const name = vendor.onboardedByName || vendor.createdByName || vendor.addedBy?.name;
     if (name && name !== 'Unassigned' && name !== 'Not Available') {
       return {
@@ -130,8 +168,9 @@ export function resolveVendorAddedBy(vendor) {
 
   // 2. Direct addedBy property on vendor object
   if (vendor.addedBy && vendor.addedBy.name && vendor.addedBy.name !== 'Unassigned') {
-    let cleanRole = formatActorRole(vendor.addedBy.role);
-    // Safety check: if role says Admin but actor ID is a manager ID
+    const isMgr = String(vendor.addedBy.role || '').toLowerCase().includes('manager') || String(vendor.addedBy.id || '').startsWith('usr_mgr');
+    const isAdmin = String(vendor.addedBy.role || '').toLowerCase().includes('admin');
+    let cleanRole = formatActorRole(vendor.addedBy.role, isMgr ? 'Manager' : isAdmin ? 'Admin' : 'Agent');
     if (cleanRole.includes('Admin') && String(vendor.addedBy.id || '').startsWith('usr_mgr')) {
       cleanRole = 'Pincode Manager';
     }
@@ -147,7 +186,9 @@ export function resolveVendorAddedBy(vendor) {
 
   // 3. onboardedByInfo property
   if (vendor.onboardedByInfo && vendor.onboardedByInfo.name && vendor.onboardedByInfo.name !== 'Unassigned') {
-    let cleanRole = formatActorRole(vendor.onboardedByInfo.role);
+    const isMgr = String(vendor.onboardedByInfo.role || '').toLowerCase().includes('manager') || String(vendor.onboardedByInfo.id || '').startsWith('usr_mgr');
+    const isAdmin = String(vendor.onboardedByInfo.role || '').toLowerCase().includes('admin');
+    let cleanRole = formatActorRole(vendor.onboardedByInfo.role, isMgr ? 'Manager' : isAdmin ? 'Admin' : 'Agent');
     if (cleanRole.includes('Admin') && String(vendor.onboardedByInfo.id || '').startsWith('usr_mgr')) {
       cleanRole = 'Pincode Manager';
     }

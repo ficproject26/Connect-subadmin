@@ -275,7 +275,25 @@ async function getCustomers(req, res) {
     let scoped = filterByLocation(withMetrics, req.user);
 
     // Apply query filters
-    const { search, tier, status, pincode, page, limit } = req.query;
+    const { search, tier, status, state, district, division, pincode, page, limit } = req.query;
+
+    // Apply territory filters
+    if (state && state.trim() && state !== 'All') {
+      scoped = scoped.filter(c => (c.state || '').toLowerCase() === state.trim().toLowerCase());
+    }
+    if (district && district.trim() && district !== 'All') {
+      scoped = scoped.filter(c => (c.district || '').toLowerCase() === district.trim().toLowerCase());
+    }
+    if (division && division.trim() && division !== 'All') {
+      scoped = scoped.filter(c => 
+        (c.division || '').toLowerCase().includes(division.trim().toLowerCase()) ||
+        division.trim().toLowerCase().includes((c.division || '').toLowerCase())
+      );
+    }
+    if (pincode && pincode.trim() && pincode !== 'All') {
+      scoped = scoped.filter(c => String(c.pincode || '').trim() === pincode.trim());
+    }
+
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
       scoped = scoped.filter(c => 
@@ -307,9 +325,19 @@ async function getCustomers(req, res) {
     if (status) {
       scoped = scoped.filter(c => (c.status || 'Active').toLowerCase() === status.toLowerCase());
     }
-    if (pincode && req.user.role !== 'Pincode Admin') {
-      scoped = scoped.filter(c => c.pincode === pincode);
-    }
+
+    // Sort customer registrations by creation/registration timestamp in descending order (newest first).
+    // Stable secondary sort by ID when timestamps are equal.
+    scoped.sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.registrationDate || a.date || 0).getTime();
+      const timeB = new Date(b.createdAt || b.registrationDate || b.date || 0).getTime();
+      if (timeB !== timeA) {
+        return timeB - timeA;
+      }
+      const idA = String(a._id || a.id || '');
+      const idB = String(b._id || b.id || '');
+      return idB.localeCompare(idA);
+    });
 
     const total = scoped.length;
     let pagedCustomers = scoped;
@@ -485,7 +513,55 @@ async function getMembershipCards(req, res) {
     const combinedList = [...allCards, ...customersWithoutCard];
 
     // Enforce territorial access control
-    const scopedCards = filterByLocation(combinedList, req.user);
+    let scopedCards = filterByLocation(combinedList, req.user);
+
+    // Apply query filters
+    const { search, tier, status, state, district, division, pincode } = req.query;
+
+    if (state && state.trim() && state !== 'All') {
+      scopedCards = scopedCards.filter(c => (c.state || '').toLowerCase() === state.trim().toLowerCase());
+    }
+    if (district && district.trim() && district !== 'All') {
+      scopedCards = scopedCards.filter(c => (c.district || '').toLowerCase() === district.trim().toLowerCase());
+    }
+    if (division && division.trim() && division !== 'All') {
+      scopedCards = scopedCards.filter(c =>
+        (c.division || '').toLowerCase().includes(division.trim().toLowerCase()) ||
+        division.trim().toLowerCase().includes((c.division || '').toLowerCase())
+      );
+    }
+    if (pincode && pincode.trim() && pincode !== 'All') {
+      scopedCards = scopedCards.filter(c => String(c.pincode || '').trim() === pincode.trim());
+    }
+
+    if (tier && tier.trim() && tier !== 'All') {
+      scopedCards = scopedCards.filter(c => (c.tier || '').toLowerCase() === tier.trim().toLowerCase());
+    }
+    if (status && status.trim() && status !== 'All') {
+      scopedCards = scopedCards.filter(c => (c.status || '').toLowerCase() === status.trim().toLowerCase());
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      scopedCards = scopedCards.filter(c =>
+        (c.customerName && c.customerName.toLowerCase().includes(q)) ||
+        (c.customerMobile && c.customerMobile.includes(q)) ||
+        (c.customerEmail && c.customerEmail.toLowerCase().includes(q)) ||
+        (c.cardNumber && c.cardNumber.toLowerCase().includes(q)) ||
+        (c.pincode && c.pincode.includes(q)) ||
+        (c.district && c.district.toLowerCase().includes(q)) ||
+        (c.division && c.division.toLowerCase().includes(q))
+      );
+    }
+
+    // Sort newest first, stable secondary sort by ID
+    scopedCards.sort((a, b) => {
+      const timeA = new Date(a.issueDate || a.createdAt || a.paymentDate || 0).getTime();
+      const timeB = new Date(b.issueDate || b.createdAt || b.paymentDate || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      const idA = String(a._id || a.id || '');
+      const idB = String(b._id || b.id || '');
+      return idB.localeCompare(idA);
+    });
 
     // Tier counts strictly for scoped territory
     const activeScopedCards = scopedCards.filter(c => c.tier !== 'No Card');

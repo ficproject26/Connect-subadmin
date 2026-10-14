@@ -3,10 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
-import { ResumeModal } from '../../components/ResumeModal';
 import { JobApplicationDetailsModal } from '../../components/JobApplicationDetailsModal';
 import { useTheme } from '../../context/ThemeContext';
-import { FileText, MapPin, Building2, Briefcase, UserCheck, Award, XCircle, Code2, Wrench } from 'lucide-react';
+import { MapPin, Building2, Briefcase, UserCheck, Award, XCircle, Code2, Wrench } from 'lucide-react';
 
 export function DistrictJobs() {
   const { user } = useAuth();
@@ -14,7 +13,6 @@ export function DistrictJobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState(null);
-  const [showResumeModal, setShowResumeModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -117,29 +115,6 @@ export function DistrictJobs() {
             {row.district || user?.district || '-'} / {row.division || '-' }
           </div>
         </div>
-      )
-    },
-    {
-      header: 'Resume',
-      className: 'whitespace-nowrap min-w-[130px]',
-      render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedApplication(row);
-            setShowResumeModal(true);
-          }}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold ${
-            isDark
-              ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-          } border transition shadow-sm cursor-pointer`}
-          title="View Candidate Application Resume"
-        >
-          <FileText className="w-3.5 h-3.5 text-blue-500" />
-          <span>View Resume</span>
-        </button>
       )
     },
     {
@@ -271,17 +246,6 @@ export function DistrictJobs() {
         application={selectedApplication}
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
-        onViewResume={(app) => {
-          setSelectedApplication(app);
-          setShowDetailsModal(false);
-          setShowResumeModal(true);
-        }}
-      />
-
-      <ResumeModal
-        application={selectedApplication}
-        isOpen={showResumeModal}
-        onClose={() => setShowResumeModal(false)}
       />
     </div>
   );

@@ -11,9 +11,8 @@ export function RoleBasedRoute({ allowedRoles = [] }) {
   if (!user) return <Navigate to="/login" replace />;
 
   if (allowedRoles.length > 0 && !isRoleAllowed(user.role, allowedRoles)) {
-    // Strictly prevent cross-role dashboard/module access and redirect to assigned role dashboard
-    const targetDashboard = getRoleDashboardPath(user.role);
-    return <Navigate to={targetDashboard} replace />;
+    // Strictly prevent cross-role dashboard/module access and redirect to access-denied
+    return <Navigate to="/access-denied" replace />;
   }
 
   return <Outlet />;

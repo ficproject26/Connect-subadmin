@@ -8,6 +8,7 @@ router.use(authMiddleware);
 router.use(locationMiddleware);
 
 router.get('/', jobController.getJobs);
+router.get('/categories', jobController.getJobCategories);
 router.get('/technicians', jobController.getTechnicians);
 router.patch('/:id', jobController.updateJobStatus);
 

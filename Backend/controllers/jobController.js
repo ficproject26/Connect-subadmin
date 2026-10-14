@@ -135,7 +135,7 @@ function normalizeJob(item, pinMap, vendorDir) {
     divisionId: item.divisionId || vendorDivisionId || null,
     pincodeId: item.pincodeId || vendorPincodeId || null,
     jobType: item.jobType || (jobTitle.toLowerCase().includes('senior') ? 'Full-Time' : 'Regular'),
-    category: (jobTitle.toLowerCase().includes('developer') || jobTitle.toLowerCase().includes('engineer')) ? 'IT' : 'Operations',
+    category: item.category || item.jobCategory || item.subcategory || item.product_details || ((jobTitle.toLowerCase().includes('developer') || jobTitle.toLowerCase().includes('engineer')) ? 'IT Domain' : 'Non-IT'),
     status: item.status || 'applied',
     postedDate: formatJobDate(createdDateStr),
     applicationDate: formatJobDate(createdDateStr),
@@ -193,8 +193,24 @@ function getJobs(req, res) {
     // 4. Territory scoping at backend level based on logged-in user's territory (Part 11, 12)
     let scoped = normalizedJobs.filter(j => isEntityInAdminTerritory(j, territory));
 
-    const { search, status } = req.query;
+    const { search, status, category } = req.query;
     let filtered = scoped;
+
+    if (category && category !== 'All' && category !== 'all') {
+      const catQuery = category.trim().toLowerCase();
+      filtered = filtered.filter(j => {
+        const jCat = String(j.category || '').toLowerCase();
+        const jTitle = String(j.title || j.jobTitle || '').toLowerCase();
+        const jSkills = Array.isArray(j.skills) ? j.skills.join(' ').toLowerCase() : '';
+        if (catQuery === 'it domain' || catQuery === 'it') {
+          return jCat.includes('it') || ['developer', 'software', 'engineer', 'frontend', 'backend', 'full stack', 'ui', 'ux', 'mern'].some(k => jTitle.includes(k) || jCat.includes(k));
+        }
+        if (catQuery === 'non-it' || catQuery === 'non it') {
+          return jCat.includes('non') || (!['developer', 'software', 'engineer', 'frontend', 'backend', 'full stack', 'ui', 'ux', 'mern'].some(k => jTitle.includes(k) || jCat.includes(k)));
+        }
+        return jCat.includes(catQuery) || jTitle.includes(catQuery) || jSkills.includes(catQuery) || catQuery.includes(jCat) || catQuery.includes(jTitle);
+      });
+    }
 
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
@@ -302,8 +318,43 @@ async function updateJobStatus(req, res) {
   }
 }
 
+// Populate categories exclusively from the categories configured by Main Admin in Category Management
+function getJobCategories(req, res) {
+  try {
+    const allCats = Array.from(db.categories || []);
+    const categoryNames = new Set();
+
+    allCats.forEach(c => {
+      const cName = String(c.name || '').trim();
+      const pName = String(c.parentName || '').trim();
+      const isJobType = cName.toLowerCase() === 'jobs' || pName.toLowerCase() === 'jobs' || String(c.type || '').toLowerCase() === 'job';
+      if (isJobType) {
+        if (c.subcategory) categoryNames.add(c.subcategory);
+        if (c.level === 'child' && c.slug) {
+          const cleaned = c.slug.replace(/-\d+$/, '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          if (cleaned) categoryNames.add(cleaned);
+        }
+        if (cName && cName.toLowerCase() !== 'jobs') {
+          categoryNames.add(cName);
+        }
+      }
+    });
+
+    const categories = Array.from(categoryNames).sort();
+    return res.json({
+      success: true,
+      categories,
+      count: categories.length
+    });
+  } catch (error) {
+    console.error('Failed to get job categories:', error);
+    return res.status(500).json({ success: false, message: 'Failed to get job categories', error: error.message });
+  }
+}
+
 module.exports = {
   getJobs,
+  getJobCategories,
   getTechnicians,
   updateJobStatus
 };

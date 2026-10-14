@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { db } = require('../config/db');
 const { getMongoDb } = require('../config/mongo');
-const { validateBankAndAddress, validateKycDocuments } = require('../utils/validation');
+const { validateBankAndAddress, validateKycDocuments, formatCapitalizedName, validateName } = require('../utils/validation');
 
 // Format human-readable role labels
 const formatRoleTitle = (role) => {
@@ -85,6 +85,84 @@ const getRelatedAdminRole = (managerRole) => {
     case 'pincode_manager': return 'Pincode Admin';
     default: return null;
   }
+};
+
+// Helper: Find manager across in-memory db.users, db.managers, and MongoDB Atlas collections
+const findManagerRecord = async (id) => {
+  if (!id) return null;
+  const idStr = String(id).trim();
+
+  // 1. Check in-memory db.users
+  const allUsers = Array.from(db.users || []);
+  let mgr = allUsers.find(u =>
+    String(u._id || u.id || '').trim() === idStr ||
+    String(u.userId || '').trim() === idStr ||
+    String(u.requestId || '').trim() === idStr
+  );
+  if (mgr) return mgr;
+
+  // 2. Check in-memory db.managers
+  if (db.managers) {
+    const allMgrs = Array.from(db.managers || []);
+    mgr = allMgrs.find(u =>
+      String(u._id || u.id || '').trim() === idStr ||
+      String(u.userId || '').trim() === idStr ||
+      String(u.requestId || '').trim() === idStr
+    );
+    if (mgr) return mgr;
+  }
+
+  // 3. Check MongoDB Atlas managerrequests & users
+  try {
+    const mongoDb = await getMongoDb();
+    if (mongoDb) {
+      const { ObjectId } = require('mongodb');
+      const orClauses = [{ userId: idStr }, { requestId: idStr }, { email: idStr.toLowerCase() }];
+      if (ObjectId.isValid(idStr)) {
+        orClauses.unshift({ _id: new ObjectId(idStr) });
+      }
+
+      const mReq = await mongoDb.collection('managerrequests').findOne({ $or: orClauses });
+      if (mReq) {
+        const levelMap = {
+          'state': 'state_manager',
+          'district': 'district_manager',
+          'division': 'division_manager',
+          'divisional': 'division_manager',
+          'pincode': 'pincode_manager',
+          '1': 'state_manager',
+          '2': 'district_manager',
+          '3': 'division_manager',
+          '4': 'pincode_manager'
+        };
+        const derivedRole = levelMap[String(mReq.level || '').toLowerCase()] || mReq.role || 'pincode_manager';
+        return {
+          ...mReq,
+          _id: mReq._id,
+          id: mReq.userId || String(mReq._id),
+          userId: mReq.userId || String(mReq._id),
+          role: derivedRole,
+          level: mReq.level || derivedRole.replace('_manager', ''),
+          state: mReq.assignedState || mReq.state || '',
+          district: mReq.assignedDistrict || mReq.district || '',
+          division: mReq.assignedDivision || mReq.division || '',
+          pincode: mReq.assignedPincode || mReq.pincode || '',
+          assignedState: mReq.assignedState || mReq.state || '',
+          assignedDistrict: mReq.assignedDistrict || mReq.district || '',
+          assignedDivision: mReq.assignedDivision || mReq.division || '',
+          assignedPincode: mReq.assignedPincode || mReq.pincode || '',
+          status: (mReq.status || 'Pending').toLowerCase()
+        };
+      }
+
+      const uDoc = await mongoDb.collection('users').findOne({ $or: orClauses });
+      if (uDoc) return uDoc;
+    }
+  } catch (err) {
+    console.warn('findManagerRecord Atlas lookup warning:', err.message);
+  }
+
+  return null;
 };
 
 // Check if an Administrator has jurisdiction to VIEW / OVERSEE a Field Manager
@@ -208,10 +286,10 @@ const populateManager = async (m, relation, user) => {
   const status = m.status || 'active';
   const adminApprovalStatus = m.adminApprovalStatus || (status === 'active' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending');
 
-  const resolvedState = state?.name || m.state || null;
-  const resolvedDistrict = district?.name || m.district || null;
-  const resolvedDivision = division?.name || m.division || null;
-  const resolvedPincode = pincode?.code || m.pincode || null;
+  const resolvedState = state?.name || m.state || m.assignedState || null;
+  const resolvedDistrict = district?.name || m.district || m.assignedDistrict || null;
+  const resolvedDivision = division?.name || m.division || m.assignedDivision || null;
+  const resolvedPincode = pincode?.code || m.pincode || m.assignedPincode || null;
 
   const targetAdminRole = getRelatedAdminRole(m.role);
   let resolvedTargetAdminName = m.targetAdminName || null;
@@ -257,6 +335,13 @@ const populateManager = async (m, relation, user) => {
     canApprove,
     kycStatus: m.kycStatus || (status === 'active' ? 'Verified' : 'pending_verification'),
     rejectionReason: m.rejectionReason || null,
+    pendingReason: m.pendingReason || m.adminPendingReason || m.reviewerReason || null,
+    reviewerReason: m.pendingReason || m.adminPendingReason || m.rejectionReason || null,
+    adminPendingBy: m.adminPendingBy || null,
+    adminPendingById: m.adminPendingById || null,
+    adminPendingByRole: m.adminPendingByRole || m.adminPendingRole || null,
+    adminPendingAt: m.adminPendingAt || null,
+    reviewHistory: Array.isArray(m.reviewHistory) ? m.reviewHistory : [],
     adminApprovedBy: m.adminApprovedBy || null,
     adminApprovedAt: m.adminApprovedAt || null,
     adminRejectedBy: m.adminRejectedBy || null,
@@ -269,6 +354,7 @@ const populateManager = async (m, relation, user) => {
     street: m.street || m.streetName || m.doorStreet || null,
     area: m.area || m.locality || null,
     village: m.village || m.town || m.city || null,
+    division: resolvedDivision || m.division || m.assignedDivision || null,
     taluk: m.taluk || resolvedDivision || m.division || m.assignedDivision || null,
     district: resolvedDistrict || m.district || m.assignedDistrict || null,
     state: resolvedState || m.state || m.assignedState || 'Tamil Nadu',
@@ -639,13 +725,81 @@ const getManagerRequests = async (req, res) => {
       }
     });
 
-    const allCandidateManagers = Array.from(combinedManagersMap.values());
+    // Load from MongoDB Atlas managerrequests collection (public manager portal registrations)
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const atlasRequests = await mongoDb.collection('managerrequests').find({}).toArray();
+        for (const reqDoc of atlasRequests) {
+          const levelMap = {
+            'state': 'state_manager',
+            'district': 'district_manager',
+            'division': 'division_manager',
+            'divisional': 'division_manager',
+            'pincode': 'pincode_manager',
+            '1': 'state_manager',
+            '2': 'district_manager',
+            '3': 'division_manager',
+            '4': 'pincode_manager'
+          };
+          const derivedRole = levelMap[String(reqDoc.level || '').toLowerCase()] || reqDoc.role || 'pincode_manager';
+          const idKey = String(reqDoc._id || reqDoc.userId || reqDoc.id || reqDoc.email || '').trim().toLowerCase();
+          const emailKey = reqDoc.email ? String(reqDoc.email).trim().toLowerCase() : null;
+          const userKey = reqDoc.userId ? String(reqDoc.userId).trim().toLowerCase() : null;
+
+          const existing = combinedManagersMap.get(idKey) || (emailKey ? combinedManagersMap.get(emailKey) : null) || (userKey ? combinedManagersMap.get(userKey) : null);
+          const normStatus = (reqDoc.status || 'Pending').toLowerCase();
+
+          const mappedRequest = {
+            ...(existing || {}),
+            _id: reqDoc._id,
+            id: reqDoc.userId || String(reqDoc._id),
+            userId: reqDoc.userId || String(reqDoc._id),
+            requestId: reqDoc.requestId || `REQ-${String(reqDoc._id).slice(-6).toUpperCase()}`,
+            name: reqDoc.name || existing?.name || 'Manager Applicant',
+            email: reqDoc.email || existing?.email || '',
+            phone: reqDoc.phone || reqDoc.altPhone || existing?.phone || '',
+            mobile: reqDoc.phone || reqDoc.altPhone || existing?.mobile || '',
+            role: derivedRole,
+            level: reqDoc.level || existing?.level || derivedRole.replace('_manager', ''),
+            state: reqDoc.assignedState || reqDoc.state || existing?.state || '',
+            district: reqDoc.assignedDistrict || reqDoc.district || existing?.district || '',
+            division: reqDoc.assignedDivision || reqDoc.division || existing?.division || '',
+            pincode: reqDoc.assignedPincode || reqDoc.pincode || existing?.pincode || '',
+            assignedState: reqDoc.assignedState || reqDoc.state || existing?.assignedState || '',
+            assignedDistrict: reqDoc.assignedDistrict || reqDoc.district || existing?.assignedDistrict || '',
+            assignedDivision: reqDoc.assignedDivision || reqDoc.division || existing?.assignedDivision || '',
+            assignedPincode: reqDoc.assignedPincode || reqDoc.pincode || existing?.assignedPincode || '',
+            address: reqDoc.address || existing?.address || '',
+            status: normStatus,
+            approvalStage: reqDoc.approvalStage || 'pending',
+            documents: reqDoc.documents || existing?.documents || {},
+            createdAt: reqDoc.createdAt || existing?.createdAt,
+            updatedAt: reqDoc.updatedAt || existing?.updatedAt
+          };
+
+          if (idKey) combinedManagersMap.set(idKey, mappedRequest);
+          if (emailKey) combinedManagersMap.set(emailKey, mappedRequest);
+          if (userKey) combinedManagersMap.set(userKey, mappedRequest);
+        }
+      }
+    } catch (mAtlasErr) {
+      console.warn('[Sub-Admin] Error loading managerrequests from Atlas:', mAtlasErr.message);
+    }
+
+    const allCandidateManagers = Array.from(new Set(combinedManagersMap.values()));
     const rawRole = user.role || '';
     const roleLower = rawRole.toLowerCase().replace(/_/g, ' ');
 
     let scopedRequests = allCandidateManagers;
     if (roleLower.includes('admin')) {
-      scopedRequests = scopedRequests.filter(u => canAdminManage(user, u));
+      // Strict Role Separation & 1-to-1 Tier Routing for Registration Requests:
+      // State Manager -> State Admin
+      // District Manager -> District Admin
+      // Divisional Manager -> Divisional Admin
+      // Pincode Manager -> Pincode Admin
+      // Super Admin -> All
+      scopedRequests = scopedRequests.filter(u => isDesignatedTerritorialAdmin(user, u));
     } else {
       scopedRequests = [];
     }
@@ -763,8 +917,7 @@ const getManagerRequests = async (req, res) => {
 const getManagerById = async (req, res) => {
   try {
     const { id } = req.params;
-    const allUsers = Array.from(db.users);
-    const manager = allUsers.find(u => String(u._id || u.id) === String(id));
+    const manager = await findManagerRecord(id);
 
     if (!manager) {
       return res.status(404).json({ success: false, message: 'Manager not found' });
@@ -788,8 +941,7 @@ const getManagerById = async (req, res) => {
 const approveManager = async (req, res) => {
   try {
     const { id } = req.params;
-    const allUsers = Array.from(db.users);
-    const manager = allUsers.find(u => String(u._id || u.id) === String(id));
+    const manager = await findManagerRecord(id);
 
     if (!manager) {
       return res.status(404).json({ success: false, message: 'Manager not found' });
@@ -839,9 +991,18 @@ const approveManager = async (req, res) => {
     try {
       const mongoDb = await getMongoDb();
       if (mongoDb) {
-        const mgrIdStr = String(manager._id || manager.id);
+        const { ObjectId } = require('mongodb');
+        const mgrIdStr = String(manager._id || manager.id || manager.userId || '');
+        const orClauses = [
+          { userId: mgrIdStr },
+          { email: (manager.email || '').toLowerCase().trim() }
+        ];
+        if (manager.requestId) orClauses.push({ requestId: manager.requestId });
+        if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
+        if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
+
         await mongoDb.collection('managerrequests').updateMany(
-          { $or: [{ userId: mgrIdStr }, { email: (manager.email || '').toLowerCase().trim() }] },
+          { $or: orClauses },
           {
             $set: {
               status: 'Pending',
@@ -935,8 +1096,7 @@ const rejectManager = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const allUsers = Array.from(db.users);
-    const manager = allUsers.find(u => String(u._id || u.id) === String(id));
+    const manager = await findManagerRecord(id);
 
     if (!manager) {
       return res.status(404).json({ success: false, message: 'Manager not found' });
@@ -988,9 +1148,18 @@ const rejectManager = async (req, res) => {
     try {
       const mongoDb = await getMongoDb();
       if (mongoDb) {
-        const mgrIdStr = String(manager._id || manager.id);
+        const { ObjectId } = require('mongodb');
+        const mgrIdStr = String(manager._id || manager.id || manager.userId || '');
+        const orClauses = [
+          { userId: mgrIdStr },
+          { email: (manager.email || '').toLowerCase().trim() }
+        ];
+        if (manager.requestId) orClauses.push({ requestId: manager.requestId });
+        if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
+        if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
+
         await mongoDb.collection('managerrequests').updateMany(
-          { $or: [{ userId: mgrIdStr }, { email: (manager.email || '').toLowerCase().trim() }] },
+          { $or: orClauses },
           {
             $set: {
               status: 'Rejected',
@@ -1081,8 +1250,7 @@ const keepPendingManager = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const allUsers = Array.from(db.users);
-    const manager = allUsers.find(u => String(u._id || u.id) === String(id));
+    const manager = await findManagerRecord(id);
 
     if (!manager) {
       return res.status(404).json({ success: false, message: 'Manager not found' });
@@ -1103,16 +1271,31 @@ const keepPendingManager = async (req, res) => {
     }
 
     const now = new Date().toISOString();
+    const existingHistory = Array.isArray(manager.reviewHistory) ? manager.reviewHistory : [];
+    const reviewEntry = {
+      action: 'PENDING',
+      status: 'pending',
+      reason: pendingReason,
+      reviewerId: req.user.id || req.user._id,
+      reviewerName: req.user.name || req.user.email,
+      reviewerRole: req.user.role,
+      reviewedAt: now,
+      timestamp: now
+    };
+    const updatedHistory = [...existingHistory, reviewEntry];
+
     const pendingUpdates = {
       status: 'PENDING_SUB_ADMIN_APPROVAL',
       adminApprovalStatus: 'pending',
       adminPendingReason: pendingReason,
       pendingReason,
+      reviewerReason: pendingReason,
       adminNotes: pendingReason,
       adminPendingBy: req.user.name || req.user.email,
       adminPendingById: req.user.id || req.user._id,
       adminPendingByRole: req.user.role,
       adminPendingAt: now,
+      reviewHistory: updatedHistory,
       updatedAt: now
     };
     Object.assign(manager, pendingUpdates);
@@ -1120,6 +1303,47 @@ const keepPendingManager = async (req, res) => {
     await db.users.findByIdAndUpdate(manager._id || manager.id, pendingUpdates);
     if (db.managers) {
       await db.managers.findByIdAndUpdate(manager._id || manager.id, pendingUpdates).catch(() => {});
+    }
+
+    // Sync pending reason & review history to MongoDB Atlas managerrequests for Main Admin
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const { ObjectId } = require('mongodb');
+        const mgrIdStr = String(manager._id || manager.id || manager.userId || '');
+        const orClauses = [
+          { userId: mgrIdStr },
+          { email: (manager.email || '').toLowerCase().trim() }
+        ];
+        if (manager.requestId) orClauses.push({ requestId: manager.requestId });
+        if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
+        if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
+
+        await mongoDb.collection('managerrequests').updateMany(
+          { $or: orClauses },
+          {
+            $set: {
+              status: 'Pending',
+              approvalStage: 'subadmin_pending',
+              overallRegistrationStatus: 'PENDING_SUB_ADMIN_APPROVAL',
+              subAdminApprovalStatus: 'pending',
+              pendingReason,
+              adminNotes: pendingReason,
+              reviewerReason: pendingReason,
+              reviewedBy: req.user.id || req.user._id,
+              requestingAdminName: req.user.name || req.user.email,
+              requestingAdminRole: req.user.role,
+              reviewedAt: new Date(),
+              updatedAt: now
+            },
+            $push: {
+              reviewHistory: reviewEntry
+            }
+          }
+        );
+      }
+    } catch (mReqErr) {
+      console.error('[Sub-Admin] Error syncing managerrequests on keepPending:', mReqErr.message);
     }
 
     if (db.kycRecords) {
@@ -1194,7 +1418,7 @@ const addManager = async (req, res) => {
       loginId
     } = req.body;
 
-    const mgrName = (name || fullName || '').trim();
+    const mgrName = formatCapitalizedName(name || fullName || '');
     const mgrEmail = (email || '').trim().toLowerCase();
     const mgrMobile = (mobile || phone || '').trim();
     const adminRoleLower = (req.user.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();

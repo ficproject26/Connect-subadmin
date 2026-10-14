@@ -55,13 +55,53 @@ function formatActorRole(role = '', fallbackType = 'Manager') {
   return role;
 }
 
+// Resolves actual administrative tier and jurisdiction boundary
+function getAdminJurisdiction(admin) {
+  if (!admin) return { tier: 'none', isSuper: false };
+  const role = String(admin.role || admin.adminRole || '').toLowerCase().trim();
+  const state = String(admin.state || admin.assignedState || '').trim();
+  const district = String(admin.district || admin.assignedDistrict || '').trim();
+  const division = String(admin.division || admin.assignedDivision || '').trim();
+  const pincode = String(admin.pincode || admin.assignedPincode || '').trim();
+
+  const isSuper = (role.includes('super') && role.includes('admin')) ||
+                  (role === 'admin' && (!state || state.toLowerCase() === 'all india'));
+
+  if (isSuper) {
+    return { tier: 'super', isSuper: true, state, district, division, pincode };
+  }
+
+  const isPincodeAdmin = role.includes('pincode');
+  const isDivisionAdmin = role.includes('division') || role.includes('divisional');
+  const isDistrictAdmin = role.includes('district');
+  const isStateAdmin = role.includes('state') || Boolean(state);
+
+  let tier = 'state';
+  if (isPincodeAdmin) tier = 'pincode';
+  else if (isDivisionAdmin) tier = 'division';
+  else if (isDistrictAdmin) tier = 'district';
+  else if (isStateAdmin) tier = 'state';
+
+  return { tier, isSuper: false, state, district, division, pincode };
+}
+
+// Check if a manager is eligible (active, not rejected/suspended)
+function isManagerEligible(m) {
+  if (!m) return false;
+  const status = String(m.status || '').toLowerCase().trim();
+  if (status && status !== 'active' && status !== 'approved') return false;
+  const approval = String(m.approvalStatus || m.adminApprovalStatus || '').toLowerCase().trim();
+  if (approval === 'rejected' || approval === 'suspended') return false;
+  if (m.isSuspended || m.suspended) return false;
+  return true;
+}
+
 // Check if a manager is within an admin's hierarchy scope
 function isManagerInScope(admin, manager) {
-  const ar = (admin.role || '').toLowerCase();
+  const juris = getAdminJurisdiction(admin);
+  if (juris.isSuper) return true;
+
   const mn = manager;
-
-  if (ar.includes('super') || ar === 'admin') return true;
-
   const mState = (mn.state || mn.assignedState || '').trim();
   const mDistrict = (mn.district || mn.assignedDistrict || '').trim();
   const mDivision = (mn.division || mn.assignedDivision || '').trim();
@@ -71,27 +111,102 @@ function isManagerInScope(admin, manager) {
   const mDivisionId = String(mn.divisionId || mn.assignedDivisionId || '').trim();
   const mPincodeId = String(mn.pincodeId || mn.assignedPincodeId || '').trim();
 
-  // State Admin: manager must be in same state
-  if (ar.includes('state') && !ar.includes('district') && !ar.includes('division') && !ar.includes('pincode')) {
-    return (admin.state && mState.toLowerCase() === String(admin.state).trim().toLowerCase()) ||
+  // State Admin: manager must be in same state (strictly no cross-state)
+  if (juris.tier === 'state') {
+    return (juris.state && mState.toLowerCase() === juris.state.toLowerCase()) ||
            (admin.stateId && String(mStateId) === String(admin.stateId).trim());
   }
   // District Admin: manager must be in same district
-  if (ar.includes('district')) {
-    return (admin.district && mDistrict.toLowerCase() === String(admin.district).trim().toLowerCase()) ||
+  if (juris.tier === 'district') {
+    return (juris.district && mDistrict.toLowerCase() === juris.district.toLowerCase()) ||
            (admin.districtId && String(mDistrictId) === String(admin.districtId).trim());
   }
   // Division Admin: manager must be in same division
-  if (ar.includes('division') || ar.includes('divisional')) {
-    return (admin.division && mDivision.toLowerCase() === String(admin.division).trim().toLowerCase()) ||
+  if (juris.tier === 'division') {
+    return (juris.division && mDivision.toLowerCase() === juris.division.toLowerCase()) ||
            (admin.divisionId && String(mDivisionId) === String(admin.divisionId).trim());
   }
   // Pincode Admin: manager must be in same pincode
-  if (ar.includes('pincode')) {
-    return (admin.pincode && String(mPincode) === String(admin.pincode).trim()) ||
+  if (juris.tier === 'pincode') {
+    return (juris.pincode && String(mPincode) === juris.pincode) ||
            (admin.pincodeId && String(mPincodeId) === String(admin.pincodeId).trim());
   }
   return false;
+}
+
+// Check if manager belongs to a specific selected territory
+function doesManagerBelongToTerritory(mgr, { state, district, division, pincode }) {
+  const mRole = String(mgr.role || '').toLowerCase();
+  const mState = (mgr.state || mgr.assignedState || '').trim();
+  const mDistrict = (mgr.district || mgr.assignedDistrict || '').trim();
+  const mDivision = (mgr.division || mgr.assignedDivision || '').trim();
+  const mPincode = String(mgr.pincode || mgr.assignedPincode || '').trim();
+
+  // State level: State must always match (strictly no cross-state!)
+  if (state && mState && mState.toLowerCase() !== state.trim().toLowerCase()) {
+    return false;
+  }
+
+  // 1. If Pincode is specified:
+  if (pincode && String(pincode).trim()) {
+    const pin = String(pincode).trim();
+    if (mRole.includes('pincode')) {
+      return mPincode === pin;
+    }
+    if (mRole.includes('divis')) {
+      return division ? mDivision.toLowerCase() === division.trim().toLowerCase() : true;
+    }
+    if (mRole.includes('dist')) {
+      return district ? mDistrict.toLowerCase() === district.trim().toLowerCase() : true;
+    }
+    if (mRole.includes('state')) {
+      return state ? mState.toLowerCase() === state.trim().toLowerCase() : true;
+    }
+    return false;
+  }
+
+  // 2. If Division is specified (no pincode):
+  if (division && String(division).trim()) {
+    const div = String(division).trim().toLowerCase();
+    if (mRole.includes('pincode')) {
+      return mDivision.toLowerCase() === div;
+    }
+    if (mRole.includes('divis')) {
+      return mDivision.toLowerCase() === div;
+    }
+    if (mRole.includes('dist')) {
+      return district ? mDistrict.toLowerCase() === district.trim().toLowerCase() : true;
+    }
+    if (mRole.includes('state')) {
+      return state ? mState.toLowerCase() === state.trim().toLowerCase() : true;
+    }
+    return false;
+  }
+
+  // 3. If District is specified (no division, no pincode):
+  if (district && String(district).trim()) {
+    const dist = String(district).trim().toLowerCase();
+    if (mRole.includes('pincode')) {
+      return mDistrict.toLowerCase() === dist;
+    }
+    if (mRole.includes('divis')) {
+      return mDistrict.toLowerCase() === dist;
+    }
+    if (mRole.includes('dist')) {
+      return mDistrict.toLowerCase() === dist;
+    }
+    if (mRole.includes('state')) {
+      return state ? mState.toLowerCase() === state.trim().toLowerCase() : true;
+    }
+    return false;
+  }
+
+  // 4. If only State is specified:
+  if (state && String(state).trim()) {
+    return mState.toLowerCase() === state.trim().toLowerCase();
+  }
+
+  return true;
 }
 
 // ─── QC ISSUE ENDPOINTS ───────────────────────────────────────────────────────
@@ -250,138 +365,178 @@ const createTask = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Task title and assigned manager are required.' });
     }
 
-    // Verify manager exists and is in scope
+    const adminJuris = getAdminJurisdiction(user);
+
+    // ── 1. VALIDATE ADMIN JURISDICTION BOUNDARIES ──────────────────────────────
+    const normState = String(state || '').trim();
+    const normDistrict = String(district || '').trim();
+    const normDivision = String(division || '').trim();
+    const normPincode = String(pincode || '').trim();
+
+    if (adminJuris.tier === 'state') {
+      if (!normState || normState.toLowerCase() !== adminJuris.state.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized: Selected State '${normState || 'None'}' is outside your authorized State jurisdiction '${adminJuris.state}'.`
+        });
+      }
+    } else if (adminJuris.tier === 'district') {
+      if (!normState || normState.toLowerCase() !== adminJuris.state.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized: Selected State '${normState || 'None'}' is outside your authorized State jurisdiction '${adminJuris.state}'.`
+        });
+      }
+      if (!normDistrict || normDistrict.toLowerCase() !== adminJuris.district.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized: Selected District '${normDistrict || 'None'}' is outside your authorized District jurisdiction '${adminJuris.district}'.`
+        });
+      }
+    } else if (adminJuris.tier === 'division') {
+      if (!normState || normState.toLowerCase() !== adminJuris.state.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized: Selected State '${normState || 'None'}' is outside your authorized State jurisdiction '${adminJuris.state}'.`
+        });
+      }
+      if (normDistrict && normDistrict.toLowerCase() !== adminJuris.district.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized: Selected District '${normDistrict || 'None'}' is outside your authorized District jurisdiction '${adminJuris.district}'.`
+        });
+      }
+      if (!normDivision || normDivision.toLowerCase() !== adminJuris.division.toLowerCase()) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized: Selected Division '${normDivision || 'None'}' is outside your authorized Division jurisdiction '${adminJuris.division}'.`
+        });
+      }
+    } else if (adminJuris.tier === 'pincode') {
+      if (!normPincode || normPincode !== String(adminJuris.pincode).trim()) {
+        return res.status(403).json({
+          success: false,
+          message: `Unauthorized: Selected Pincode '${normPincode || 'None'}' is outside your authorized Pincode jurisdiction '${adminJuris.pincode}'.`
+        });
+      }
+    }
+
+    // ── 2. VALIDATE PARENT-CHILD TERRITORY HIERARCHY ───────────────────────────
+    let stateDoc = null;
+    let districtDoc = null;
+    let divisionDoc = null;
+    let pincodeDoc = null;
+
+    if (normState) {
+      stateDoc = Array.from(db.states || []).find(s => (s.name || '').toLowerCase() === normState.toLowerCase());
+      if (!stateDoc) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory validation failed: State '${normState}' does not exist in Location Master data.`
+        });
+      }
+    }
+
+    if (normDistrict) {
+      districtDoc = Array.from(db.districts || []).find(d => {
+        const matchesName = (d.name || '').toLowerCase() === normDistrict.toLowerCase();
+        if (!matchesName) return false;
+        if (stateDoc) {
+          const matchStateId = d.stateId && String(d.stateId) === String(stateDoc._id || stateDoc.id);
+          const matchStateName = (d.state || '').toLowerCase() === normState.toLowerCase();
+          return matchStateId || matchStateName;
+        }
+        return true;
+      });
+      if (!districtDoc) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory hierarchy mismatch: District '${normDistrict}' does not belong to State '${normState}'.`
+        });
+      }
+    }
+
+    if (normDivision) {
+      divisionDoc = Array.from(db.divisions || []).find(v => {
+        const matchesName = (v.name || '').toLowerCase() === normDivision.toLowerCase();
+        if (!matchesName) return false;
+        if (districtDoc) {
+          const matchDistId = v.districtId && String(v.districtId) === String(districtDoc._id || districtDoc.id);
+          const matchDistName = (v.district || '').toLowerCase() === normDistrict.toLowerCase();
+          return matchDistId || matchDistName;
+        }
+        return true;
+      });
+      if (!divisionDoc) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory hierarchy mismatch: Division '${normDivision}' does not belong to District '${normDistrict}'.`
+        });
+      }
+    }
+
+    if (normPincode) {
+      pincodeDoc = Array.from(db.pincodes || []).find(p => {
+        const matchesPin = String(p.code || p.pincode).trim() === normPincode;
+        if (!matchesPin) return false;
+        if (divisionDoc) {
+          const matchDivId = p.divisionId && String(p.divisionId) === String(divisionDoc._id || divisionDoc.id);
+          const matchDivName = (p.division || '').toLowerCase() === normDivision.toLowerCase();
+          return matchDivId || matchDivName;
+        }
+        return true;
+      });
+      if (!pincodeDoc) {
+        return res.status(400).json({
+          success: false,
+          message: `Territory hierarchy mismatch: Pincode '${normPincode}' does not belong to Division '${normDivision}'.`
+        });
+      }
+    }
+
+    // ── 3. VALIDATE MANAGER EXISTENCE & ELIGIBILITY ────────────────────────────
     const allUsers = Array.from(db.users || []);
-    const manager = allUsers.find(u => String(u._id || u.id) === String(assignedManagerId));
+    const directMgrs = Array.from(db.managers || []);
+    const manager = allUsers.find(u => String(u._id || u.id) === String(assignedManagerId)) ||
+                    directMgrs.find(m => String(m._id || m.id) === String(assignedManagerId));
+
     if (!manager) {
       return res.status(404).json({ success: false, message: 'Assigned manager not found.' });
     }
-    if (!isManagerInScope(user, manager)) {
-      return res.status(403).json({ success: false, message: 'Manager is outside your authorized hierarchy.' });
+
+    if (!isManagerEligible(manager)) {
+      return res.status(400).json({
+        success: false,
+        message: `Selected manager ${manager.name || 'Manager'} is not active or eligible (status: ${manager.status || 'unknown'}).`
+      });
     }
 
-    // Determine Manager's real assigned territory
+    if (!isManagerInScope(user, manager)) {
+      return res.status(403).json({ success: false, message: 'Manager is outside your authorized jurisdiction.' });
+    }
+
+    // ── 4. VALIDATE MANAGER'S TERRITORY MATCH ──────────────────────────────────
+    if (!doesManagerBelongToTerritory(manager, { state: normState, district: normDistrict, division: normDivision, pincode: normPincode })) {
+      return res.status(400).json({
+        success: false,
+        message: `Territory validation failed: Selected manager ${manager.name || 'Manager'} (${formatActorRole(manager.role, 'Manager')}) does not belong to the selected territory.`
+      });
+    }
+
+    // Determine task territory and stable IDs
     const mgrRole = String(manager.role || '').toLowerCase().replace(/_/g, ' ').trim();
     const mgrRoleTitle = formatActorRole(manager.role, 'Manager');
-    const mgrState = String(manager.state || manager.assignedState || '').trim();
-    const mgrDistrict = String(manager.district || manager.assignedDistrict || '').trim();
-    const mgrDivision = String(manager.division || manager.assignedDivision || '').trim();
-    const mgrPincode = String(manager.pincode || manager.assignedPincode || '').trim();
-    let mgrStateId = manager.stateId || manager.assignedStateId || null;
-    let mgrDistrictId = manager.districtId || manager.assignedDistrictId || null;
-    let mgrDivisionId = manager.divisionId || manager.assignedDivisionId || null;
-    let mgrPincodeId = manager.pincodeId || manager.assignedPincodeId || null;
 
-    let taskState = mgrState;
-    let taskDistrict = mgrDistrict;
-    let taskDivision = mgrDivision;
-    let taskPincode = mgrPincode;
-    let taskStateId = mgrStateId;
-    let taskDistrictId = mgrDistrictId;
-    let taskDivisionId = mgrDivisionId;
-    let taskPincodeId = mgrPincodeId;
+    const taskState = normState || manager.state || manager.assignedState || '';
+    const taskDistrict = normDistrict || manager.district || manager.assignedDistrict || '';
+    const taskDivision = normDivision || manager.division || manager.assignedDivision || '';
+    const taskPincode = normPincode || manager.pincode || manager.assignedPincode || '';
 
-    // Strict validation based on manager's authorized scope
-    if (mgrRole.includes('pincode')) {
-      // 1. PINCODE MANAGER: authorized strictly for their assigned pincode
-      if (pincode && String(pincode).trim() !== mgrPincode) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively for Pincode ${mgrPincode}. Submitted pincode '${pincode}' is not authorized.`
-        });
-      }
-      if (division && mgrDivision && String(division).trim().toLowerCase() !== mgrDivision.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively under Division '${mgrDivision}'.`
-        });
-      }
-      if (district && mgrDistrict && String(district).trim().toLowerCase() !== mgrDistrict.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively under District '${mgrDistrict}'.`
-        });
-      }
-      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected Pincode Manager (${manager.name}) is authorized exclusively under State '${mgrState}'.`
-        });
-      }
-      taskState = mgrState;
-      taskDistrict = mgrDistrict;
-      taskDivision = mgrDivision;
-      taskPincode = mgrPincode;
-    } else if (mgrRole.includes('divis')) {
-      // 2. DIVISIONAL MANAGER: authorized for assigned division
-      if (division && mgrDivision && String(division).trim().toLowerCase() !== mgrDivision.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected Divisional Manager (${manager.name}) is authorized exclusively for Division '${mgrDivision}'.`
-        });
-      }
-      if (district && mgrDistrict && String(district).trim().toLowerCase() !== mgrDistrict.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected Divisional Manager (${manager.name}) is authorized exclusively under District '${mgrDistrict}'.`
-        });
-      }
-      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected Divisional Manager (${manager.name}) is authorized exclusively under State '${mgrState}'.`
-        });
-      }
-      if (pincode && String(pincode).trim()) {
-        const pinDoc = Array.from(db.pincodes || []).find(p => String(p.code || p.pincode).trim() === String(pincode).trim());
-        if (pinDoc && pinDoc.division && pinDoc.division.toLowerCase() !== mgrDivision.toLowerCase()) {
-          return res.status(400).json({
-            success: false,
-            message: `Territory validation failed: Pincode '${pincode}' belongs to Division '${pinDoc.division}', outside Manager's authorized Division '${mgrDivision}'.`
-          });
-        }
-        taskPincode = String(pincode).trim();
-        taskPincodeId = pinDoc ? (pinDoc._id || pinDoc.id) : null;
-      } else {
-        taskPincode = '';
-        taskPincodeId = null;
-      }
-      taskState = mgrState;
-      taskDistrict = mgrDistrict;
-      taskDivision = mgrDivision;
-    } else if (mgrRole.includes('dist')) {
-      // 3. DISTRICT MANAGER: authorized for assigned district
-      if (district && mgrDistrict && String(district).trim().toLowerCase() !== mgrDistrict.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected District Manager (${manager.name}) is authorized exclusively for District '${mgrDistrict}'.`
-        });
-      }
-      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected District Manager (${manager.name}) is authorized exclusively under State '${mgrState}'.`
-        });
-      }
-      taskState = mgrState;
-      taskDistrict = mgrDistrict;
-      taskDivision = division ? String(division).trim() : (mgrDivision || '');
-      taskPincode = pincode ? String(pincode).trim() : '';
-    } else if (mgrRole.includes('state')) {
-      // 4. STATE MANAGER: authorized for assigned state
-      if (state && mgrState && String(state).trim().toLowerCase() !== mgrState.toLowerCase()) {
-        return res.status(400).json({
-          success: false,
-          message: `Territory validation failed: Selected State Manager (${manager.name}) is authorized exclusively for State '${mgrState}'.`
-        });
-      }
-      taskState = mgrState;
-      taskDistrict = district ? String(district).trim() : '';
-      taskDivision = division ? String(division).trim() : '';
-      taskPincode = pincode ? String(pincode).trim() : '';
-    }
+    let taskStateId = stateDoc ? (stateDoc._id || stateDoc.id) : (manager.stateId || manager.assignedStateId || null);
+    let taskDistrictId = districtDoc ? (districtDoc._id || districtDoc.id) : (manager.districtId || manager.assignedDistrictId || null);
+    let taskDivisionId = divisionDoc ? (divisionDoc._id || divisionDoc.id) : (manager.divisionId || manager.assignedDivisionId || null);
+    let taskPincodeId = pincodeDoc ? (pincodeDoc._id || pincodeDoc.id) : (manager.pincodeId || manager.assignedPincodeId || null);
 
-    // Lookup stable IDs from collections if missing
     if (taskState && !taskStateId && db.states) {
       const st = Array.from(db.states).find(s => s.name?.toLowerCase() === taskState.toLowerCase());
       if (st) taskStateId = st._id || st.id;
@@ -898,7 +1053,7 @@ const reviewSuspendRequest = async (req, res) => {
   }
 };
 
-// GET /api/qc-tasks/managers — Returns managers scoped to admin's hierarchy
+// GET /api/qc-tasks/managers — Returns managers scoped to admin's hierarchy & optionally filtered by territory query
 const getManagersForScope = async (req, res) => {
   try {
     const user = req.user;
@@ -906,17 +1061,45 @@ const getManagersForScope = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Only Admins can retrieve scoped managers.' });
     }
 
-    const allUsers = Array.from(db.users || []);
-    const managers = allUsers.filter(u => {
+    const adminJuris = getAdminJurisdiction(user);
+    const { state, district, division, pincode } = req.query;
+
+    // Collect all managers from both users and managers collections (deduplicating by ID)
+    const userMgrs = Array.from(db.users || []).filter(u => {
       const r = (u.role || '').toLowerCase();
       return r.includes('manager');
     });
+    const directMgrs = Array.from(db.managers || []);
 
-    const scoped = managers.filter(m => isManagerInScope(user, m));
+    const seenIds = new Set();
+    const allManagers = [];
+    for (const m of [...userMgrs, ...directMgrs]) {
+      const mId = String(m._id || m.id || '');
+      if (mId && !seenIds.has(mId)) {
+        seenIds.add(mId);
+        allManagers.push(m);
+      }
+    }
+
+    // 1. Filter by eligibility: active/approved only, not suspended or rejected
+    const eligibleManagers = allManagers.filter(isManagerEligible);
+
+    // 2. Filter by authenticated admin's jurisdiction scope
+    const scopedManagers = eligibleManagers.filter(m => isManagerInScope(user, m));
+
+    // 3. Filter by requested territory query params if provided
+    const targetTerritory = {
+      state: state || (adminJuris.tier !== 'super' ? adminJuris.state : ''),
+      district: district || (['district', 'division', 'pincode'].includes(adminJuris.tier) ? adminJuris.district : ''),
+      division: division || (['division', 'pincode'].includes(adminJuris.tier) ? adminJuris.division : ''),
+      pincode: pincode || (adminJuris.tier === 'pincode' ? adminJuris.pincode : '')
+    };
+
+    const finalManagers = scopedManagers.filter(m => doesManagerBelongToTerritory(m, targetTerritory));
 
     return res.json({
       success: true,
-      data: scoped.map(m => {
+      data: finalManagers.map(m => {
         const stateName = (m.state || m.assignedState || '').trim();
         const districtName = (m.district || m.assignedDistrict || '').trim();
         const divisionName = (m.division || m.assignedDivision || '').trim();
@@ -931,6 +1114,7 @@ const getManagersForScope = async (req, res) => {
 
         return {
           id: m._id || m.id,
+          _id: m._id || m.id,
           name: m.name || m.username,
           role: m.role,
           roleTitle,
@@ -944,10 +1128,11 @@ const getManagersForScope = async (req, res) => {
           division: divisionName,
           divisionId,
           pincode: pincodeCode,
-          pincodeId
+          pincodeId,
+          status: m.status || 'active'
         };
       }),
-      count: scoped.length
+      count: finalManagers.length
     });
   } catch (err) {
     console.error('getManagersForScope error:', err);
@@ -1137,5 +1322,9 @@ module.exports = {
   getManagersForScope,
   reviewTaskResolution,
   reviewIssueResolution,
-  formatActorRole
+  formatActorRole,
+  getAdminJurisdiction,
+  isManagerEligible,
+  doesManagerBelongToTerritory,
+  isManagerInScope
 };

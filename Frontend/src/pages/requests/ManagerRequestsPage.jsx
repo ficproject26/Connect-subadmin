@@ -27,7 +27,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   XCircle,
-  Home
+  Home,
+  Loader2
 } from 'lucide-react';
 
 export function ManagerRequestsPage() {
@@ -57,6 +58,15 @@ export function ManagerRequestsPage() {
   const [quickPendingTarget, setQuickPendingTarget] = useState(null);
   const [quickPendingReason, setQuickPendingReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState(null);
+  const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: string }
+
+  const showNotification = (type, message) => {
+    setNotification({ type, message });
+    setTimeout(() => {
+      setNotification(prev => (prev && prev.message === message ? null : prev));
+    }, 4500);
+  };
 
   // Sync locked territory
   useEffect(() => {
@@ -119,23 +129,24 @@ export function ManagerRequestsPage() {
     loadRequests();
   }, [loadRequests]);
 
-  // Handle Quick Approve
+  // Handle Quick Approve - Directly executes without browser window.confirm
   const handleQuickApprove = async (mgr) => {
-    if (!window.confirm(`Are you sure you want to approve registration for "${mgr.name}"? This will forward their profile to the KYC team review queue.`)) {
-      return;
-    }
-    setActionLoading(true);
+    const targetId = mgr.id || mgr._id;
+    if (!targetId || approvingId === targetId) return;
+
+    setApprovingId(targetId);
     try {
-      const res = await dataService.approveManager(mgr.id || mgr._id);
+      const res = await dataService.approveManager(targetId);
       if (res.success) {
+        showNotification('success', `Registration for "${mgr.name}" approved successfully! Forwarded to KYC team review queue.`);
         await loadRequests();
       } else {
-        alert(res.message || 'Failed to approve manager request');
+        showNotification('error', res.message || 'Failed to approve manager request');
       }
     } catch (err) {
-      alert(err.message || 'Error occurred while approving manager request');
+      showNotification('error', err.message || 'Error occurred while approving manager request');
     } finally {
-      setActionLoading(false);
+      setApprovingId(null);
     }
   };
 
@@ -143,7 +154,7 @@ export function ManagerRequestsPage() {
   const handleQuickRejectSubmit = async () => {
     if (!quickRejectTarget) return;
     if (!quickRejectReason.trim()) {
-      alert('Please enter a rejection reason.');
+      showNotification('error', 'Please enter a rejection reason.');
       return;
     }
     setActionLoading(true);
@@ -152,14 +163,15 @@ export function ManagerRequestsPage() {
         reason: quickRejectReason.trim()
       });
       if (res.success) {
+        showNotification('success', `Registration for "${quickRejectTarget.name}" rejected.`);
         setQuickRejectTarget(null);
         setQuickRejectReason('');
         await loadRequests();
       } else {
-        alert(res.message || 'Failed to reject manager request');
+        showNotification('error', res.message || 'Failed to reject manager request');
       }
     } catch (err) {
-      alert(err.message || 'Error occurred while rejecting manager request');
+      showNotification('error', err.message || 'Error occurred while rejecting manager request');
     } finally {
       setActionLoading(false);
     }
@@ -169,7 +181,7 @@ export function ManagerRequestsPage() {
   const handleQuickPendingSubmit = async () => {
     if (!quickPendingTarget) return;
     if (!quickPendingReason.trim()) {
-      alert('Please enter a pending reason or administrative note.');
+      showNotification('error', 'Please enter a pending reason or administrative note.');
       return;
     }
     setActionLoading(true);
@@ -178,14 +190,15 @@ export function ManagerRequestsPage() {
         reason: quickPendingReason.trim()
       });
       if (res.success) {
+        showNotification('success', `Registration for "${quickPendingTarget.name}" kept pending. Note recorded.`);
         setQuickPendingTarget(null);
         setQuickPendingReason('');
         await loadRequests();
       } else {
-        alert(res.message || 'Failed to update manager request');
+        showNotification('error', res.message || 'Failed to update manager request');
       }
     } catch (err) {
-      alert(err.message || 'Error occurred while updating manager request');
+      showNotification('error', err.message || 'Error occurred while updating manager request');
     } finally {
       setActionLoading(false);
     }
@@ -430,15 +443,27 @@ export function ManagerRequestsPage() {
       header: 'Reviewer Reason',
       key: 'rejectionReason',
       render: (row) => {
-        const reason = row.rejectionReason || row.pendingReason;
+        const reason = row.pendingReason || row.adminPendingReason || row.reviewerReason || row.rejectionReason || row.adminNotes;
         if (!reason) {
           return <span className="text-xs text-slate-400 italic">—</span>;
         }
-        const isRej = !!row.rejectionReason;
+        const isRej = !!row.rejectionReason && (row.status || '').toLowerCase() === 'rejected';
+        const reviewer = row.adminPendingBy || row.adminRejectedBy || row.reviewerName;
+        const role = row.adminPendingByRole || row.adminRejectedByRole || row.reviewerRole;
+        const time = row.adminPendingAt || row.adminRejectedAt || row.reviewedAt;
+
         return (
-          <div className={`text-xs max-w-[170px] truncate font-medium ${isRej ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} title={reason}>
-            <span className="font-bold">{isRej ? 'Rejected: ' : 'Pending: '}</span>
-            {reason}
+          <div className="space-y-0.5 max-w-[210px]">
+            <div className={`text-xs font-semibold ${isRej ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} title={reason}>
+              <span className="font-bold">{isRej ? 'Rejected: ' : 'Pending: '}</span>
+              {reason}
+            </div>
+            {reviewer && (
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                By {reviewer} {role ? `(${role})` : ''}
+                {time ? ` · ${new Date(time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : ''}
+              </div>
+            )}
           </div>
         );
       }
@@ -450,6 +475,7 @@ export function ManagerRequestsPage() {
         const s = (row.status || '').toLowerCase();
         const isPending = s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
         const canApprove = row.canApprove !== false;
+        const isApprovingThis = approvingId === (row.id || row._id);
 
         return (
           <div className="flex items-center gap-1.5 justify-end">
@@ -459,11 +485,15 @@ export function ManagerRequestsPage() {
                 <button
                   type="button"
                   onClick={() => handleQuickApprove(row)}
-                  disabled={actionLoading}
-                  className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
-                  title="Approve Request"
+                  disabled={actionLoading || isApprovingThis}
+                  className="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer disabled:opacity-50"
+                  title="Approve Request (Execute directly)"
                 >
-                  <Check className="w-3.5 h-3.5" />
+                  {isApprovingThis ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -471,8 +501,8 @@ export function ManagerRequestsPage() {
                     setQuickPendingTarget(row);
                     setQuickPendingReason('');
                   }}
-                  disabled={actionLoading}
-                  className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition cursor-pointer"
+                  disabled={actionLoading || isApprovingThis}
+                  className="p-1.5 rounded-lg text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition cursor-pointer disabled:opacity-50"
                   title="Keep Request Pending"
                 >
                   <Clock className="w-3.5 h-3.5" />
@@ -483,8 +513,8 @@ export function ManagerRequestsPage() {
                     setQuickRejectTarget(row);
                     setQuickRejectReason('');
                   }}
-                  disabled={actionLoading}
-                  className="p-1.5 rounded-lg text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 dark:bg-red-950/50 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition cursor-pointer"
+                  disabled={actionLoading || isApprovingThis}
+                  className="p-1.5 rounded-lg text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 dark:bg-red-950/50 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 transition cursor-pointer disabled:opacity-50"
                   title="Reject Request"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -539,14 +569,51 @@ export function ManagerRequestsPage() {
         </div>
       </div>
 
+      {/* In-app Toast Notification */}
+      {notification && (
+        <div className={`p-4 rounded-xl flex items-center justify-between text-sm font-semibold transition-all shadow-sm ${
+          notification.type === 'success'
+            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800'
+            : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-950/60 dark:text-red-200 dark:border-red-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {notification.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            ) : (
+              <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+            )}
+            <span>{notification.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNotification(null)}
+            className="text-xs px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 opacity-70 hover:opacity-100 transition"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Territory Filter */}
       <TerritoryHierarchyFilter
         selectedState={selectedFilterState}
-        onStateChange={(st) => setSelectedFilterState(st)}
+        onStateChange={(st) => {
+          setSelectedFilterState(st);
+          if (!locking.districtLocked) setSelectedFilterDistrict('');
+          if (!locking.divisionLocked) setSelectedFilterDivision('');
+          if (!locking.pincodeLocked) setSelectedFilterPincode('');
+        }}
         selectedDistrict={selectedFilterDistrict}
-        onDistrictChange={(dt) => setSelectedFilterDistrict(dt)}
+        onDistrictChange={(dt) => {
+          setSelectedFilterDistrict(dt);
+          if (!locking.divisionLocked) setSelectedFilterDivision('');
+          if (!locking.pincodeLocked) setSelectedFilterPincode('');
+        }}
         selectedDivision={selectedFilterDivision}
-        onDivisionChange={(dv) => setSelectedFilterDivision(dv)}
+        onDivisionChange={(dv) => {
+          setSelectedFilterDivision(dv);
+          if (!locking.pincodeLocked) setSelectedFilterPincode('');
+        }}
         selectedPincode={selectedFilterPincode}
         onPincodeChange={(pin) => setSelectedFilterPincode(pin)}
         onClear={() => {

@@ -10,6 +10,9 @@ router.use(authMiddleware);
 // List vendors
 router.get('/', vendorController.getVendors);
 
+// Vendor Requests (consolidated onboarding requests across Agent, Manager, Direct)
+router.get('/requests', vendorController.getVendorRequests);
+
 // Vendor Subscriptions (must be before /:id)
 router.get('/subscriptions', vendorSubscriptionController.getVendorSubscriptions);
 router.post('/subscriptions/:id/record-payment', vendorSubscriptionController.recordSubscriptionPayment);
@@ -22,6 +25,9 @@ router.get('/lookup-pincode/:pincode', vendorController.lookupPincode);
 
 // Vendor by ID
 router.get('/:id', vendorController.getVendorById);
+
+// Keep vendor request pending
+router.post('/:id/pending', vendorController.keepPendingVendor);
 
 // Update vendor profile
 router.put('/:id', vendorController.updateVendor);

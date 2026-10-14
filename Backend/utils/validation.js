@@ -128,7 +128,44 @@ function validateKycDocuments(data = {}) {
   return null;
 }
 
+/**
+ * Name Validation and Capitalization Helper
+ * Capitalizes the first letter of each component while preserving spaces, hyphens, and apostrophes.
+ * E.g., 'ravi kumar' -> 'Ravi Kumar', 'dhanush-tamilarasan' -> 'Dhanush-Tamilarasan', "o'connor" -> "O'Connor".
+ * Does NOT alter email, usernames, passwords, or IDs.
+ */
+function formatCapitalizedName(name) {
+  if (!name || typeof name !== 'string') return name;
+  const trimmed = name.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return trimmed;
+  return trimmed.replace(/\b([a-z])/g, char => char.toUpperCase());
+}
+
+function validateName(name) {
+  if (!name || typeof name !== 'string') return 'Name is required.';
+  const trimmed = name.trim();
+  if (trimmed.length < 2) return 'Name must be at least 2 characters long.';
+  if (!/^[\p{L}\s'-]+$/u.test(trimmed)) {
+    return 'Name contains invalid characters. Only letters, spaces, hyphens, and apostrophes are allowed.';
+  }
+  return null;
+}
+
+function getPasswordValidationState(password) {
+  const p = String(password || '');
+  return {
+    minLength: p.length >= 6,
+    hasUpper: /[A-Z]/.test(p),
+    hasNumber: /[0-9]/.test(p),
+    hasSpecial: /[!@#$%^&*(),.?":{}|<>]/.test(p),
+    isValid: p.length >= 6 && /[A-Z]/.test(p) && /[0-9]/.test(p) && /[!@#$%^&*(),.?":{}|<>]/.test(p)
+  };
+}
+
 module.exports = {
   validateBankAndAddress,
-  validateKycDocuments
+  validateKycDocuments,
+  formatCapitalizedName,
+  validateName,
+  getPasswordValidationState
 };

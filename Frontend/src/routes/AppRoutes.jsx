@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getRoleDashboardPath } from '../utils/permissions';
+import { getRoleDashboardPath, isRoleAllowed } from '../utils/permissions';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RoleBasedRoute } from './RoleBasedRoute';
 import { DashboardLayout } from '../layouts/DashboardLayout';
@@ -9,6 +9,7 @@ import { DashboardLayout } from '../layouts/DashboardLayout';
 // Auth Pages
 import { Login } from '../pages/auth/Login';
 import { RegistrationStatus } from '../pages/auth/RegistrationStatus';
+import { AccessDenied } from '../pages/common/AccessDenied';
 
 // State Admin Pages
 import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
@@ -122,21 +123,16 @@ import { PincodeQueries } from '../pages/pincode-admin/Queries';
 import { PincodeProfile } from '../pages/pincode-admin/Profile';
 import { PincodeSettings } from '../pages/pincode-admin/Settings';
 
-// Manager Pages
-import { ManagerDashboard } from '../pages/manager/Dashboard';
-
 // Onboarding Request Pages
 import { ManagerRequestsPage } from '../pages/requests/ManagerRequestsPage';
 import { AgentRequestsPage } from '../pages/requests/AgentRequestsPage';
+import { VendorRequestsPage } from '../pages/requests/VendorRequestsPage';
 
 // Common Notifications Page
 import NotificationsPage from '../pages/common/Notifications';
 
 function RootRedirect() {
   const { user, isAuthenticated, loading } = useAuth();
-  // Wait for auth initialization to complete before deciding where to redirect.
-  // Without this guard, the component renders during the token/profile fetch
-  // and incorrectly sees isAuthenticated=false, causing a /login redirect loop.
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-indigo-400 font-mono text-sm">
@@ -148,21 +144,19 @@ function RootRedirect() {
     );
   }
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
-  const isManagerOrAgent = user?.role && (
-    user.role.toLowerCase().includes('manager') ||
-    user.role.toLowerCase().includes('agent')
-  );
-  const statusUpper = String(user?.status || '').toUpperCase();
-  const adminApprovalStatus = String(user?.adminApprovalStatus || '').toLowerCase();
-  const kycStatus = String(user?.kycStatus || '').toLowerCase();
 
-  const isFullyApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
-    adminApprovalStatus === 'approved' &&
-    (kycStatus === 'verified' || kycStatus === 'approved') &&
+  const authorizedRoles = ['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin', 'Super Admin'];
+  if (!isRoleAllowed(user.role, authorizedRoles)) {
+    return <Navigate to="/access-denied" replace />;
+  }
+
+  const statusUpper = String(user?.status || '').toUpperCase();
+  const isApproved = (statusUpper === 'ACTIVE' || statusUpper === 'APPROVED') &&
+    String(user?.adminApprovalStatus || 'approved').toLowerCase() === 'approved' &&
     user?.isActive !== false &&
     !user?.requiresApproval;
 
-  if ((isManagerOrAgent && !isFullyApproved) || user?.requiresApproval || (statusUpper !== 'ACTIVE' && statusUpper !== 'APPROVED')) {
+  if (!isApproved) {
     return <Navigate to="/registration-status" replace />;
   }
   return <Navigate to={getRoleDashboardPath(user.role)} replace />;
@@ -175,6 +169,7 @@ export function AppRoutes() {
       {/* /login: already-authenticated users are redirected to their dashboard inside Login.jsx */}
       <Route path="/login" element={<Login />} />
       <Route path="/registration-status" element={<RegistrationStatus />} />
+      <Route path="/access-denied" element={<AccessDenied />} />
 
       {/* /dashboard: canonical route for Super Admin and Admin roles */}
       <Route element={<ProtectedRoute />}>
@@ -206,6 +201,7 @@ export function AppRoutes() {
             <Route path="/state-admin/customers" element={<StateCustomers />} />
             <Route path="/state-admin/membership-cards" element={<StateMembershipCards />} />
             <Route path="/state-admin/vendors" element={<StateVendors />} />
+            <Route path="/state-admin/vendors/requests" element={<VendorRequestsPage />} />
             <Route path="/state-admin/vendor-subscriptions" element={<StateVendorSubscriptions />} />
             <Route path="/state-admin/vendor-payments" element={<StateVendorPayments />} />
             <Route path="/state-admin/orders" element={<StateOrders />} />
@@ -252,6 +248,7 @@ export function AppRoutes() {
             <Route path="/district-admin/customers" element={<DistrictCustomers />} />
             <Route path="/district-admin/membership-cards" element={<DistrictMembershipCards />} />
             <Route path="/district-admin/vendors" element={<DistrictVendors />} />
+            <Route path="/district-admin/vendors/requests" element={<VendorRequestsPage />} />
             <Route path="/district-admin/vendor-subscriptions" element={<DistrictVendorSubscriptions />} />
             <Route path="/district-admin/vendor-payments" element={<DistrictVendorPayments />} />
             <Route path="/district-admin/orders" element={<DistrictOrders />} />
@@ -305,6 +302,7 @@ export function AppRoutes() {
             <Route path="/divisional-admin/customers" element={<DivisionalCustomers />} />
             <Route path="/divisional-admin/membership-cards" element={<DivisionalMembershipCards />} />
             <Route path="/divisional-admin/vendors" element={<DivisionalVendors />} />
+            <Route path="/divisional-admin/vendors/requests" element={<VendorRequestsPage />} />
             <Route path="/divisional-admin/vendor-subscriptions" element={<DivisionalVendorSubscriptions />} />
             <Route path="/divisional-admin/vendor-payments" element={<DivisionalVendorPayments />} />
             <Route path="/divisional-admin/orders" element={<DivisionalOrders />} />
@@ -336,6 +334,7 @@ export function AppRoutes() {
             <Route path="/pincode-admin/customers" element={<PincodeCustomers />} />
             <Route path="/pincode-admin/membership-cards" element={<PincodeMembershipCards />} />
             <Route path="/pincode-admin/vendors" element={<PincodeVendors />} />
+            <Route path="/pincode-admin/vendors/requests" element={<VendorRequestsPage />} />
             <Route path="/pincode-admin/vendor-subscriptions" element={<PincodeVendorSubscriptions />} />
             <Route path="/pincode-admin/vendor-details" element={<Navigate to="/pincode-admin/vendor-subscriptions" replace />} />
             <Route path="/pincode-admin/vendor-payments" element={<PincodeVendorPayments />} />
@@ -364,10 +363,11 @@ export function AppRoutes() {
             <Route path="/pincode-admin/settings" element={<PincodeSettings />} />
           </Route>
 
-          {/* Manager Routes */}
-          <Route element={<RoleBasedRoute allowedRoles={['Manager', 'state_manager', 'district_manager', 'division_manager', 'pincode_manager']} />}>
-            <Route path="/manager/dashboard" element={<ManagerDashboard />} />
-          </Route>
+          {/* Common Admin Vendor Requests Route */}
+          <Route path="/vendor-requests" element={<VendorRequestsPage />} />
+
+          {/* Disallow Manager dashboard in Sub-Admin portal */}
+          <Route path="/manager/*" element={<Navigate to="/access-denied" replace />} />
 
         </Route>
       </Route>
