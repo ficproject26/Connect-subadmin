@@ -24,8 +24,28 @@ import {
   Clock,
   AlertCircle,
   FileCheck2,
-  ArrowRight
+  ArrowRight,
+  ShieldAlert,
+  Info
 } from 'lucide-react';
+
+function formatTimestamp(ts) {
+  if (!ts) return 'Not Available';
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return String(ts);
+    return d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (e) {
+    return String(ts);
+  }
+}
 
 export function VendorDetailsModal({ isOpen, onClose, vendor, onVendorUpdated }) {
   const { user } = useAuth();
@@ -52,27 +72,63 @@ export function VendorDetailsModal({ isOpen, onClose, vendor, onVendorUpdated })
     pincodeAgent: resolved.pincodeAgent
   };
 
+  // Dynamic Onboarding Agent details
+  const addedBy = resolveVendorAddedBy(vendor);
+  const onboardingAgent = vendor.onboardingAgent || {};
+  const agentName = onboardingAgent.name || addedBy.name || 'Not Available';
+  const agentId = onboardingAgent.id || onboardingAgent._id || addedBy.id || '-';
+  const agentPhone = onboardingAgent.phone || addedBy.phone || 'Not Available';
+  const agentEmail = onboardingAgent.email || addedBy.email || 'Not Available';
+  const agentRole = onboardingAgent.tier || onboardingAgent.role || addedBy.role || 'Pincode Agent';
+  const submittedAt = onboardingAgent.submittedAt || vendor.submissionDate || vendor.submittedAt || vendor.createdAt;
+
+  // Dynamic Responsible Admin details (determined by vendor's actual pincode)
+  const respAdmin = vendor.responsibleAdmin || {};
+  const assignmentInfo = vendor.responsibleAdminAssignment || {};
+  const adminName = respAdmin.name || assignedTeam.pincodeAdmin?.name || 'Unassigned';
+  const adminId = respAdmin.id || respAdmin._id || assignedTeam.pincodeAdmin?.id || '-';
+  const adminPhone = respAdmin.phone || assignedTeam.pincodeAdmin?.phone || 'Not Available';
+  const adminEmail = respAdmin.email || assignedTeam.pincodeAdmin?.email || 'Not Available';
+  const adminRole = respAdmin.role || assignedTeam.pincodeAdmin?.role || 'Pincode Admin';
+  const adminState = respAdmin.state || state || '-';
+  const adminDistrict = respAdmin.district || district || '-';
+  const adminDivision = respAdmin.division || division || '-';
+  const adminPincode = respAdmin.pincode || pincode || '-';
+  const isAssignmentPending = assignmentInfo.status === 'PENDING_ADMIN_ASSIGNMENT' || adminName === 'Unassigned';
+
   const pincodeApproval = vendor.pincodeAdminApproval || {
-    status: vendor.kycStatus === 'Pending Pincode Admin Approval' ? 'Pending' : (vendor.kycStatus?.includes('Approved') || vendor.kycStatus === 'Verified') ? 'Approved' : 'Pending',
+    status: (vendor.kycStatus === 'Pending Pincode Admin Approval' || vendor.status === 'PENDING_PINCODE_APPROVAL' || vendor.status === 'SUBMITTED') ? 'Pending' : (vendor.kycStatus?.includes('Approved') || vendor.kycStatus === 'Verified' || vendor.status === 'PINCODE_APPROVED' || vendor.status === 'KYC_PENDING' || vendor.status === 'ACTIVE') ? 'Approved' : (vendor.status === 'PINCODE_REJECTED' ? 'Rejected' : 'Pending'),
     decidedBy: null,
     decidedAt: null,
     rejectionReason: null
   };
 
   const kycApproval = vendor.kycTeamApproval || {
-    status: (vendor.kycStatus === 'KYC Approved' || vendor.kycStatus === 'Verified') ? 'Approved' : (vendor.kycStatus === 'KYC Rejected' ? 'Rejected' : 'Pending'),
+    status: (vendor.kycStatus === 'KYC Approved' || vendor.kycStatus === 'Verified' || vendor.status === 'ACTIVE' || vendor.status === 'KYC_APPROVED') ? 'Approved' : (vendor.kycStatus === 'KYC Rejected' || vendor.status === 'KYC_REJECTED' ? 'Rejected' : 'Pending'),
     decidedBy: null,
     decidedAt: null,
     rejectionReason: null
   };
 
-  // Only Pincode Admin has permission for Stage 1 Verification actions
-  const isPincodeAdmin = user?.role === 'Pincode Admin' || (typeof window !== 'undefined' && window.location.pathname.includes('/pincode-admin'));
-  const isKYCTeam = user?.role === 'KYC Team' || user?.role === 'Super Admin';
-  const addedBy = resolveVendorAddedBy(vendor);
+  // Authorization checks
+  const userPincodes = [
+    user?.pincode,
+    ...(Array.isArray(user?.pincodes) ? user.pincodes : []),
+    ...(Array.isArray(user?.assignedPincodes) ? user.assignedPincodes : [])
+  ].filter(Boolean).map(String);
 
-  const canPincodeVerify = (user?.role === 'Pincode Admin') && (vendor.kycStatus === 'Pending Pincode Admin Approval' || pincodeApproval.status === 'Pending');
-  const canKYCVerify = isKYCTeam && (vendor.kycStatus === 'KYC Pending' || vendor.kycStatus === 'Pincode Admin Approved' || (pincodeApproval.status === 'Approved' && kycApproval.status === 'Pending'));
+  const isAssignedPincodeAdmin = (user?.role === 'Pincode Admin' || (typeof window !== 'undefined' && window.location.pathname.includes('/pincode-admin'))) && (
+    userPincodes.length === 0 || userPincodes.includes(String(vendor.pincode || ''))
+  );
+
+  const isKYCTeam = user?.role === 'KYC Team' || user?.role === 'Super Admin';
+
+  const canPincodeVerify = (user?.role === 'Super Admin' || isAssignedPincodeAdmin) && 
+    (pincodeApproval.status === 'Pending' || vendor.kycStatus === 'Pending Pincode Admin Approval' || vendor.status === 'PENDING_PINCODE_APPROVAL' || vendor.status === 'SUBMITTED');
+
+  const canKYCVerify = isKYCTeam && 
+    (pincodeApproval.status === 'Approved' || vendor.status === 'PINCODE_APPROVED' || vendor.status === 'KYC_PENDING') &&
+    (kycApproval.status === 'Pending' || vendor.kycStatus === 'KYC Pending' || vendor.status === 'KYC_PENDING');
 
   // Handler for Pincode Admin Accept
   const handlePincodeAccept = async () => {
@@ -241,161 +297,132 @@ export function VendorDetailsModal({ isOpen, onClose, vendor, onVendorUpdated })
             </div>
           </div>
 
-          {/* 2. Onboarded By (Admin, Manager, or Agent who registered this vendor) */}
-          <div className={`p-3.5 rounded-2xl border ${
+          {/* 2. Onboarding & Approval Details Section */}
+          <div className={`p-4 rounded-2xl border ${
             isDark ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200/80 shadow-xs'
-          }`}>
-            <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-100 dark:border-slate-800">
+          } space-y-3`}>
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  Added / Onboarded By
-                </span>
+                <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Onboarding & Approval Details
+                  </h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Jurisdiction assignment and onboarding agent traceability
+                  </p>
+                </div>
               </div>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                addedBy.role?.includes('Admin')
-                  ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800'
-                  : addedBy.role?.includes('Manager')
+                isAssignmentPending
                   ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800'
-                  : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800'
+                  : 'text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800'
               }`}>
-                {addedBy.role}
+                {isAssignmentPending ? 'Pending Admin Assignment' : `Assigned: ${respAdmin.assignedLevel || 'Pincode'} Hierarchy`}
               </span>
             </div>
 
-            <div className={`p-3 rounded-xl border ${
-              addedBy.role?.includes('Admin')
-                ? 'bg-indigo-50/40 dark:bg-indigo-950/20 border-indigo-200/70 dark:border-indigo-900/40'
-                : addedBy.role?.includes('Manager')
-                ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-900/40'
-                : 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/70 dark:border-emerald-900/40'
-            }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border ${
-                    addedBy.role?.includes('Admin')
-                      ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                      : addedBy.role?.includes('Manager')
-                      ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                      : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                  }`}>
-                    {addedBy.role?.includes('Admin') ? (
-                      <UserCog className="w-5 h-5" />
-                    ) : addedBy.role?.includes('Manager') ? (
-                      <Building2 className="w-5 h-5" />
-                    ) : (
-                      <UserCheck className="w-5 h-5" />
-                    )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              {/* Onboarding Agent Details */}
+              <div className="p-3 rounded-xl bg-emerald-50/30 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/40 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-2">
+                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Onboarding Agent
+                    </span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100/80 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      {agentRole}
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 truncate">
-                      <span className="truncate">{addedBy.name}</span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${
-                        addedBy.role?.includes('Admin')
-                          ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950'
-                          : addedBy.role?.includes('Manager')
-                          ? 'text-amber-600 bg-amber-50 dark:bg-amber-950'
-                          : 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950'
-                      }`}>
-                        {addedBy.role}
-                      </span>
+
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span className="truncate">{agentName}</span>
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-3 mt-1">
-                      <span className="flex items-center gap-1 font-medium">
-                        <Phone className="w-3 h-3 text-slate-400" />
-                        {addedBy.phone || 'Not Available'}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-slate-400" />
-                        {addedBy.email || 'Not Available'}
-                      </span>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      <span>Agent ID:</span>
+                      <strong className="font-mono text-slate-700 dark:text-slate-300">{agentId}</strong>
                     </div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
+                      <Phone className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="font-semibold">{agentPhone}</span>
+                    </div>
+                    {agentEmail && agentEmail !== 'Not Available' && (
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{agentEmail}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex sm:flex-col items-start sm:items-end justify-between border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200/60 dark:border-slate-800 shrink-0">
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-                    Added Date
+                <div className="mt-2.5 pt-2 border-t border-emerald-200/60 dark:border-emerald-900/30 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    Submitted:
+                  </span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    {formatTimestamp(submittedAt)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Responsible Admin Details */}
+              <div className={`p-3 rounded-xl border flex flex-col justify-between ${
+                isAssignmentPending
+                  ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-900/40'
+                  : 'bg-indigo-50/30 dark:bg-indigo-950/20 border-indigo-200/70 dark:border-indigo-900/40'
+              }`}>
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-2">
+                    <span className="text-[11px] font-bold text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
+                      <UserCog className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      Responsible Admin
+                    </span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100/80 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      {adminRole}
+                    </span>
                   </div>
-                  <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    {addedBy.addedAt || 'Not Available'}
+
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span className="truncate">{adminName}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      <span>Admin ID:</span>
+                      <strong className="font-mono text-slate-700 dark:text-slate-300">{adminId}</strong>
+                    </div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
+                      <Phone className="w-3 h-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <span className="font-semibold">{adminPhone}</span>
+                    </div>
+                    {adminEmail && adminEmail !== 'Not Available' && (
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">{adminEmail}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-2.5 pt-2 border-t border-indigo-200/60 dark:border-indigo-900/30">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center justify-between">
+                      <span>Jurisdiction:</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                        {adminDistrict}, {adminDivision}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span>Assigned PIN:</span>
+                      <strong className="font-mono text-indigo-600 dark:text-indigo-400">{adminPincode}</strong>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-
-          {/* 2b. Assigned Team (Pincode Admin, Pincode Manager, Pincode Agent) for non-pincode admin views */}
-          {!isPincodeAdmin && (
-            <div className={`p-3.5 rounded-2xl border ${
-              isDark ? 'bg-slate-900/40 border-slate-800/80' : 'bg-white border-slate-200/80 shadow-xs'
-            }`}>
-              <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                  <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                    Assigned Team (Pincode: {pincode})
-                  </span>
-                </div>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
-                  Auto-Mapped
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                {/* Pincode Admin */}
-                <div className="p-2.5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 mb-1">
-                    <UserCog className="w-3.5 h-3.5" />
-                    <span>Pincode Admin</span>
-                  </div>
-                  <div className="font-bold text-slate-900 dark:text-white truncate">
-                    {assignedTeam.pincodeAdmin?.name || 'Unassigned'}
-                  </div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                    {assignedTeam.pincodeAdmin?.phone || '-'}
-                  </div>
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                    {assignedTeam.pincodeAdmin?.email || '-'}
-                  </div>
-                </div>
-
-                {/* Pincode Manager */}
-                <div className="p-2.5 rounded-xl bg-amber-50/40 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/50">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 mb-1">
-                    <Building2 className="w-3.5 h-3.5" />
-                    <span>Pincode Manager</span>
-                  </div>
-                  <div className="font-bold text-slate-900 dark:text-white truncate">
-                    {assignedTeam.pincodeManager?.name || 'Unassigned'}
-                  </div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                    {assignedTeam.pincodeManager?.phone || '-'}
-                  </div>
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                    {assignedTeam.pincodeManager?.email || '-'}
-                  </div>
-                </div>
-
-                {/* Pincode Agent */}
-                <div className="p-2.5 rounded-xl bg-emerald-50/40 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/50">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mb-1">
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span>Pincode Agent</span>
-                  </div>
-                  <div className="font-bold text-slate-900 dark:text-white truncate">
-                    {assignedTeam.pincodeAgent?.name || 'Unassigned'}
-                  </div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                    {assignedTeam.pincodeAgent?.phone || '-'}
-                  </div>
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                    {assignedTeam.pincodeAgent?.email || '-'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 3. Two-Stage KYC Approval Progress Tracker */}
           <div className={`p-3.5 rounded-2xl border ${
@@ -464,6 +491,16 @@ export function VendorDetailsModal({ isOpen, onClose, vendor, onVendorUpdated })
                       <XCircle className="w-3.5 h-3.5" />
                       <span>Reject Vendor</span>
                     </button>
+                  </div>
+                )}
+
+                {/* Sub-Admin Non-Bypass Note */}
+                {!canPincodeVerify && pincodeApproval.status === 'Pending' && (
+                  <div className="mt-2.5 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 text-[10px] text-amber-800 dark:text-amber-300 flex items-start gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <span>
+                      Awaiting verification by the authorized Pincode Admin ({adminName}). Sub-Admins can track progress but cannot bypass Pincode Admin approval.
+                    </span>
                   </div>
                 )}
               </div>

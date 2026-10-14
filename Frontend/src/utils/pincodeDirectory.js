@@ -99,6 +99,18 @@ export function resolveVendorAddedBy(vendor) {
     };
   }
 
+  // 0. Dedicated onboardingAgent object
+  if (vendor.onboardingAgent && (vendor.onboardingAgent.name || vendor.onboardingAgent.id)) {
+    return {
+      id: vendor.onboardingAgent.id || vendor.onboardingAgent._id || '-',
+      name: vendor.onboardingAgent.name || 'Not Available',
+      role: formatActorRole(vendor.onboardingAgent.tier || vendor.onboardingAgent.role, 'Agent'),
+      phone: vendor.onboardingAgent.phone || vendor.onboardingAgent.mobile || 'Not Available',
+      email: vendor.onboardingAgent.email || 'Not Available',
+      addedAt: vendor.onboardingAgent.submittedAt || vendor.submissionDate || (vendor.createdAt ? vendor.createdAt.split('T')[0] : '-')
+    };
+  }
+
   // 1. Explicit onboarding / creation role and name from API / canonical DB
   if (vendor.onboardedByName || vendor.createdByName || vendor.onboardedByRole || vendor.createdByRole) {
     const rawRole = vendor.onboardedByRole || vendor.createdByRole || vendor.addedBy?.role;

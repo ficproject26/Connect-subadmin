@@ -1,5 +1,6 @@
 const { db, filterByLocation } = require('../config/db');
 const { resolvePincodeHierarchy } = require('../utils/pincodeMapping');
+const { resolveResponsibleAdmin, isUserAuthorizedForVendor } = require('../utils/adminResolver');
 const { getScopeFilter, isVendorInScope } = require('../middleware/scopeMiddleware');
 const notificationService = require('../services/notificationService');
 const bcrypt = require('bcryptjs');
@@ -329,6 +330,26 @@ const populateVendorLocations = (vendor, ctx = null) => {
   const kycStatus = resolveVendorKycStatus(vendor, context);
   const approvalStatus = vendor.approvalStatus || ((vendor.status === 'Active' || vendor.status === 'Approved') ? 'Approved' : 'Pending');
 
+  const responsibleAdminInfo = resolveResponsibleAdmin({
+    pincode: pincodeCode,
+    division: divisionName,
+    district: districtName,
+    state: stateName
+  });
+
+  const onboardingAgent = vendor.onboardingAgent || {
+    id: addedBy.id,
+    name: addedBy.name,
+    phone: addedBy.phone,
+    mobile: addedBy.phone,
+    email: addedBy.email,
+    role: addedBy.role,
+    tier: addedBy.role,
+    addedAt: addedBy.addedAt || vendor.createdAt || '-'
+  };
+
+  const responsibleAdmin = vendor.responsibleAdmin || responsibleAdminInfo.admin;
+
   const normalized = {
     ...vendor,
     id: vendor._id || vendor.id,
@@ -358,8 +379,11 @@ const populateVendorLocations = (vendor, ctx = null) => {
     kycStatus,
     approvalStatus,
     addedBy,
+    onboardingAgent,
+    responsibleAdmin,
+    responsibleAdminAssignment: responsibleAdminInfo,
     onboardedBy: addedBy.id,
-    onboardedByInfo: addedBy,
+    onboardedByInfo: onboardingAgent,
     onboardedById: addedBy.id,
     onboardedByName: addedBy.name,
     onboardedByRole: addedBy.role,
@@ -809,6 +833,14 @@ const pincodeAdminVerifyVendor = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Vendor not found' });
     }
 
+    // Server-side permission check: Only authorized admin responsible for this PIN code / jurisdiction can approve/reject
+    if (!isUserAuthorizedForVendor(req.user, vendor)) {
+      return res.status(403).json({
+        success: false,
+        message: `Forbidden: You are not authorized to verify vendors for pincode ${vendor.pincode || 'this jurisdiction'}. Only the assigned administrator responsible for this PIN code can approve or reject.`
+      });
+    }
+
     if (!['Accept', 'Reject', 'accept', 'reject'].includes(action)) {
       return res.status(400).json({ success: false, message: 'Action must be Accept or Reject' });
     }
@@ -818,42 +850,130 @@ const pincodeAdminVerifyVendor = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Rejection reason is mandatory when rejecting vendor' });
     }
 
+    // Prevent duplicate approvals
+    if (!isReject && (vendor.approvalStatus === 'PINCODE_APPROVED' || vendor.pincodeAdminApproval?.status === 'Approved')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vendor has already been approved by Pincode Admin and forwarded to the KYC Team.'
+      });
+    }
+
     const decidedBy = `${req.user.name} (${req.user.role || 'Pincode Admin'})`;
     const decidedAt = new Date().toISOString();
 
     const updates = isReject
       ? {
           status: 'Rejected',
-          approvalStatus: 'Pincode Admin Rejected',
+          approvalStatus: 'PINCODE_REJECTED',
           kycStatus: 'Pincode Admin Rejected',
+          rejectionReason: rejectionReason.trim(),
           approvedById: req.user.id || req.user._id,
           approvedByName: req.user.name,
           approvedByRole: req.user.role || 'Pincode Admin',
           approvedAt: decidedAt,
-          pincodeAdminApproval: { status: 'Rejected', decidedBy, decidedAt, rejectionReason: rejectionReason.trim() }
+          pincodeAdminApproval: {
+            status: 'Rejected',
+            decidedBy,
+            decidedAt,
+            rejectionReason: rejectionReason.trim(),
+            adminId: req.user.id || req.user._id,
+            adminName: req.user.name,
+            adminRole: req.user.role || 'Pincode Admin',
+            adminPhone: req.user.mobile || req.user.phone || ''
+          }
         }
       : {
           status: 'Pending KYC Review',
-          approvalStatus: 'Pincode Admin Approved',
+          approvalStatus: 'PINCODE_APPROVED',
           kycStatus: 'KYC Pending',
+          rejectionReason: null,
           approvedById: req.user.id || req.user._id,
           approvedByName: req.user.name,
           approvedByRole: req.user.role || 'Pincode Admin',
           approvedAt: decidedAt,
-          pincodeAdminApproval: { status: 'Approved', decidedBy, decidedAt, rejectionReason: null }
+          pincodeAdminApproval: {
+            status: 'Approved',
+            decidedBy,
+            decidedAt,
+            rejectionReason: null,
+            adminId: req.user.id || req.user._id,
+            adminName: req.user.name,
+            adminRole: req.user.role || 'Pincode Admin',
+            adminPhone: req.user.mobile || req.user.phone || ''
+          }
         };
 
     const updated = await db.vendors.findByIdAndUpdate(id, updates);
+    const populated = await populateVendorLocations(updated);
 
-    // Sync KYC records
-    const kycRecord = (db.kycRecords || []).find(k => k.id === `KYC-${id}` || k.vendorId === id);
+    // Atomically create or update KYC task entry to prevent duplicate queue submissions
+    const kycRecord = (db.kycRecords || []).find(k => k.id === `KYC-${id}` || String(k.vendorId) === String(id));
     if (kycRecord) {
       await db.kycRecords.findByIdAndUpdate(kycRecord._id || kycRecord.id, {
-        status: updates.kycStatus,
+        status: isReject ? 'Rejected' : 'Pending',
+        kycStatus: isReject ? 'Pincode Admin Rejected' : 'KYC Pending',
+        approvalStatus: updates.approvalStatus,
         verifiedBy: decidedBy,
         verifiedDate: decidedAt.split('T')[0],
+        rejectionReason: isReject ? rejectionReason.trim() : null,
+        pincodeAdminApproval: updates.pincodeAdminApproval,
         notes: isReject ? `Rejected by Pincode Admin: ${rejectionReason.trim()}` : 'Approved by Pincode Admin. Forwarded to KYC Team.'
       });
+    } else if (!isReject) {
+      await db.kycRecords.insertOne({
+        _id: `KYC-${id}`,
+        id: `KYC-${id}`,
+        type: 'Vendor',
+        vendorId: id,
+        name: populated.name || populated.businessName,
+        businessName: populated.businessName || populated.name,
+        vendorName: populated.contactPerson || populated.ownerName || 'Vendor Owner',
+        category: populated.category || 'Services',
+        phone: populated.phone || populated.mobile,
+        email: populated.email,
+        state: populated.state,
+        district: populated.district,
+        division: populated.division,
+        pincode: populated.pincode,
+        stateId: populated.stateId,
+        districtId: populated.districtId,
+        divisionId: populated.divisionId,
+        pincodeId: populated.pincodeId,
+        status: 'Pending',
+        kycStatus: 'KYC Pending',
+        approvalStatus: 'PINCODE_APPROVED',
+        submittedDate: (vendor.createdAt || decidedAt).split('T')[0],
+        pincodeAdminApproval: updates.pincodeAdminApproval,
+        onboardingAgent: populated.onboardingAgent || populated.addedBy,
+        responsibleAdmin: populated.responsibleAdmin,
+        documents: vendor.documents || {},
+        notes: `Approved by Pincode Admin (${decidedBy}). Forwarded to KYC Team.`,
+        createdAt: decidedAt,
+        updatedAt: decidedAt
+      });
+    }
+
+    // Sync to MongoDB users collection for Vendor Portal login state
+    try {
+      const { getMongoDb } = require('../config/mongo');
+      const mongoDb = await getMongoDb();
+      if (mongoDb && vendor.email) {
+        await mongoDb.collection('users').updateOne(
+          { email: String(vendor.email).toLowerCase().trim() },
+          {
+            $set: {
+              status: updates.status,
+              approvalStatus: updates.approvalStatus,
+              kycStatus: updates.kycStatus,
+              pincodeAdminApproval: updates.pincodeAdminApproval,
+              rejectionReason: isReject ? rejectionReason.trim() : null,
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
+    } catch (syncErr) {
+      console.warn('Sync vendor status to users collection warning:', syncErr.message);
     }
 
     // Audit log
@@ -866,8 +986,6 @@ const pincodeAdminVerifyVendor = async (req, res) => {
       details: isReject ? `Pincode Admin rejected vendor: ${rejectionReason.trim()}` : `Pincode Admin approved vendor. Forwarded for KYC audit.`,
       ip: req.ip || '127.0.0.1'
     });
-
-    const populated = await populateVendorLocations(updated);
 
     // Dispatch real-time notification
     try {
@@ -896,72 +1014,151 @@ const pincodeAdminVerifyVendor = async (req, res) => {
 const kycVerifyVendor = async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, rejectionReason } = req.body;
+    const { action, rejectionReason, reason } = req.body;
 
     const vendor = await db.vendors.findById(id);
     if (!vendor) {
       return res.status(404).json({ success: false, message: 'Vendor not found' });
     }
 
-    if (!['Approve', 'Reject', 'approve', 'reject'].includes(action)) {
-      return res.status(400).json({ success: false, message: 'Action must be Approve or Reject' });
+    const normAction = String(action || '').toLowerCase().trim();
+    if (!['approve', 'reject', 'additional_info', 'additional_information_required'].includes(normAction)) {
+      return res.status(400).json({ success: false, message: 'Action must be Approve, Reject, or Additional_Info' });
     }
 
-    const isReject = action.toLowerCase() === 'reject';
+    const isReject = normAction === 'reject';
+    const isAdditionalInfo = normAction === 'additional_info' || normAction === 'additional_information_required';
+    const isApprove = normAction === 'approve';
+
     if (isReject && (!rejectionReason || !rejectionReason.trim())) {
       return res.status(400).json({ success: false, message: 'Rejection reason is mandatory when rejecting KYC' });
+    }
+    if (isAdditionalInfo && (!reason && !rejectionReason)) {
+      return res.status(400).json({ success: false, message: 'A reason or note explaining requested corrections is mandatory' });
+    }
+
+    // Critical rule: Vendor MUST have Pincode Admin approval before KYC stage can be approved
+    const hasPincodeApproval = vendor.approvalStatus === 'PINCODE_APPROVED' ||
+      vendor.approvalStatus === 'Pincode Admin Approved' ||
+      vendor.pincodeAdminApproval?.status === 'Approved' ||
+      vendor.status === 'Pending KYC Review';
+
+    if (isApprove && !hasPincodeApproval) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot approve KYC: Vendor must first be approved by the responsible Pincode Admin (Stage 1 approval pending).'
+      });
     }
 
     const decidedBy = `${req.user.name} (${req.user.role || 'KYC Team'})`;
     const decidedAt = new Date().toISOString();
+    const effectiveReason = (rejectionReason || reason || '').trim();
 
-    const updates = isReject
-      ? {
-          status: 'KYC Rejected',
-          approvalStatus: 'KYC Rejected',
-          kycStatus: 'KYC Rejected',
-          kycVerifiedById: req.user.id || req.user._id,
-          kycVerifiedByName: req.user.name,
-          kycVerifiedByRole: req.user.role || 'KYC Team',
-          kycVerifiedAt: decidedAt,
-          kycTeamApproval: { status: 'Rejected', decidedBy, decidedAt, rejectionReason: rejectionReason.trim() }
-        }
-      : {
-          status: 'Active',
-          approvalStatus: 'KYC Approved',
-          kycStatus: 'KYC Approved',
-          kycVerifiedById: req.user.id || req.user._id,
-          kycVerifiedByName: req.user.name,
-          kycVerifiedByRole: req.user.role || 'KYC Team',
-          kycVerifiedAt: decidedAt,
-          kycTeamApproval: { status: 'Approved', decidedBy, decidedAt, rejectionReason: null }
-        };
+    const isPaymentRequired = vendor.requiresSubscriptionPayment === true || vendor.requiresPayment === true;
+
+    let updates = {};
+    if (isApprove) {
+      updates = {
+        status: isPaymentRequired ? 'Payment Pending' : 'Active',
+        approvalStatus: 'KYC_APPROVED',
+        kycStatus: 'KYC Approved',
+        isActive: !isPaymentRequired,
+        isApproved: !isPaymentRequired,
+        rejectionReason: null,
+        kycVerifiedById: req.user.id || req.user._id,
+        kycVerifiedByName: req.user.name,
+        kycVerifiedByRole: req.user.role || 'KYC Team',
+        kycVerifiedAt: decidedAt,
+        kycTeamApproval: { status: 'Approved', decidedBy, decidedAt, rejectionReason: null }
+      };
+    } else if (isReject) {
+      updates = {
+        status: 'Rejected',
+        approvalStatus: 'KYC_REJECTED',
+        kycStatus: 'KYC Rejected',
+        isActive: false,
+        isApproved: false,
+        rejectionReason: effectiveReason,
+        kycVerifiedById: req.user.id || req.user._id,
+        kycVerifiedByName: req.user.name,
+        kycVerifiedByRole: req.user.role || 'KYC Team',
+        kycVerifiedAt: decidedAt,
+        kycTeamApproval: { status: 'Rejected', decidedBy, decidedAt, rejectionReason: effectiveReason }
+      };
+    } else {
+      // Additional info required
+      updates = {
+        status: 'Additional Info Required',
+        approvalStatus: 'ADDITIONAL_INFORMATION_REQUIRED',
+        kycStatus: 'Additional Information Required',
+        isActive: false,
+        isApproved: false,
+        pendingReason: effectiveReason,
+        kycVerifiedById: req.user.id || req.user._id,
+        kycVerifiedByName: req.user.name,
+        kycVerifiedByRole: req.user.role || 'KYC Team',
+        kycVerifiedAt: decidedAt,
+        kycTeamApproval: { status: 'Additional Info Required', decidedBy, decidedAt, notes: effectiveReason }
+      };
+    }
 
     const updated = await db.vendors.findByIdAndUpdate(id, updates);
+    const populated = await populateVendorLocations(updated);
 
     // Sync KYC records
-    const kycRecord = (db.kycRecords || []).find(k => k.id === `KYC-${id}` || k.vendorId === id);
+    const kycRecord = (db.kycRecords || []).find(k => k.id === `KYC-${id}` || String(k.vendorId) === String(id));
     if (kycRecord) {
       await db.kycRecords.findByIdAndUpdate(kycRecord._id || kycRecord.id, {
-        status: updates.kycStatus,
+        status: isApprove ? 'Verified' : isReject ? 'Rejected' : 'Pending',
+        kycStatus: updates.kycStatus,
+        approvalStatus: updates.approvalStatus,
         verifiedBy: decidedBy,
         verifiedDate: decidedAt.split('T')[0],
-        notes: isReject ? `KYC Rejected: ${rejectionReason.trim()}` : 'KYC Clearance Completed. Merchant certified.'
+        rejectionReason: isReject ? effectiveReason : null,
+        pendingReason: isAdditionalInfo ? effectiveReason : null,
+        notes: isApprove ? 'KYC Clearance Completed. Merchant certified.' : isReject ? `KYC Rejected: ${effectiveReason}` : `Additional info required: ${effectiveReason}`
       });
+    }
+
+    // Sync to MongoDB users collection for Vendor Portal dashboard access
+    try {
+      const { getMongoDb } = require('../config/mongo');
+      const mongoDb = await getMongoDb();
+      if (mongoDb && vendor.email) {
+        await mongoDb.collection('users').updateOne(
+          { email: String(vendor.email).toLowerCase().trim() },
+          {
+            $set: {
+              status: updates.status,
+              approvalStatus: updates.approvalStatus,
+              kycStatus: isApprove ? 'Verified' : updates.kycStatus,
+              isActive: updates.isActive,
+              isApproved: updates.isApproved,
+              rejectionReason: isReject ? effectiveReason : null,
+              kycTeamApproval: updates.kycTeamApproval,
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
+    } catch (syncErr) {
+      console.warn('Sync KYC status to users collection warning:', syncErr.message);
     }
 
     // Audit log
     await db.auditLogs.insertOne({
-      action: isReject ? 'VENDOR_KYC_REJECTED' : 'VENDOR_KYC_APPROVED',
+      action: isApprove ? 'VENDOR_KYC_APPROVED' : isReject ? 'VENDOR_KYC_REJECTED' : 'VENDOR_KYC_ADDITIONAL_INFO',
       recordId: id,
       userId: req.user?.id || req.user?._id,
       userName: req.user?.name || 'Admin',
-      userRole: req.user?.role || 'Admin',
-      details: isReject ? `KYC rejected: ${rejectionReason.trim()}` : `Vendor KYC approved. Status is now Active.`,
+      userRole: req.user?.role || 'KYC Team',
+      details: isApprove
+        ? `Vendor KYC approved by ${decidedBy}. Status is now ${updates.status}.`
+        : isReject
+        ? `KYC rejected: ${effectiveReason}`
+        : `KYC additional information requested: ${effectiveReason}`,
       ip: req.ip || '127.0.0.1'
     });
-
-    const populated = await populateVendorLocations(updated);
 
     // Dispatch real-time notification
     try {
@@ -970,7 +1167,7 @@ const kycVerifyVendor = async (req, res) => {
         oldStatus: vendor.kycStatus || vendor.status,
         newStatus: updates.status,
         user: req.user,
-        notes: isReject ? `KYC Rejected: ${rejectionReason.trim()}` : 'KYC Approved & Vendor Activated'
+        notes: isApprove ? 'KYC Approved & Vendor Certified' : isReject ? `KYC Rejected: ${effectiveReason}` : `Additional Info Requested: ${effectiveReason}`
       });
     } catch (notifErr) {
       console.error('Failed to trigger KYC notification:', notifErr.message);
@@ -978,7 +1175,11 @@ const kycVerifyVendor = async (req, res) => {
 
     return res.json({
       success: true,
-      message: isReject ? 'Vendor KYC rejected' : 'Vendor KYC approved successfully',
+      message: isApprove
+        ? `Vendor KYC approved successfully${isPaymentRequired ? ' (Payment Pending)' : ' and activated'}`
+        : isReject
+        ? 'Vendor KYC rejected'
+        : 'Additional information requested from vendor',
       vendor: populated,
       data: populated
     });
