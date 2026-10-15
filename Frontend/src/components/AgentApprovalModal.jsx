@@ -419,10 +419,44 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
             </div>
           </div>
 
+          {/* Approved / Activated Status Banner */}
+          {(isActive || activeAgent.adminApprovalStatus === 'approved') && (
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-bold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <span>Registration Approved & Active</span>
+              </div>
+              <p className="text-emerald-700 dark:text-emerald-400">
+                Territory credentials cleared and authorized by {activeAgent.adminApprovedBy || 'Administrator'}
+                {activeAgent.adminApprovedByRole ? ` (${activeAgent.adminApprovedByRole})` : ''}
+                {activeAgent.adminApprovedAt ? ` on ${new Date(activeAgent.adminApprovedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}.
+              </p>
+            </div>
+          )}
+
+          {/* Action Required / Pending Reason Banner (Only when pending) */}
+          {isPending && (activeAgent.pendingReason || activeAgent.adminNotes) && (
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+                <Clock className="w-4 h-4 text-amber-500" />
+                <span>Pending Reviewer Reason:</span>
+              </div>
+              <p className="text-amber-700 dark:text-amber-400 font-medium">
+                {activeAgent.pendingReason || activeAgent.adminNotes}
+              </p>
+              {activeAgent.adminPendingBy && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-500">
+                  By {activeAgent.adminPendingBy} {activeAgent.adminPendingByRole ? `(${activeAgent.adminPendingByRole})` : ''}
+                  {activeAgent.adminPendingAt ? ` on ${new Date(activeAgent.adminPendingAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Rejection Reason (If Rejected) */}
-          {activeAgent.rejectionReason && (
-            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs">
-              <div className="flex items-center gap-2 font-bold text-red-700 dark:text-red-400 mb-1">
+          {isRejected && activeAgent.rejectionReason && (
+            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-bold text-red-700 dark:text-red-400">
                 <XCircle className="w-4 h-4" /> Rejection Reason Recorded
               </div>
               <p className="text-red-600 dark:text-red-300">{activeAgent.rejectionReason}</p>
@@ -511,6 +545,40 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
               </div>
             </div>
           </div>
+
+          {/* Historical Review History / Audit Trail */}
+          {Array.isArray(activeAgent.reviewHistory) && activeAgent.reviewHistory.length > 0 && (
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 text-xs space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                Review & Approval History
+              </h4>
+              <div className="divide-y divide-slate-200 dark:divide-slate-700/60">
+                {activeAgent.reviewHistory.map((entry, idx) => (
+                  <div key={idx} className="py-2 flex items-start justify-between gap-3 text-[11px]">
+                    <div>
+                      <span className={`font-bold uppercase ${
+                        entry.action === 'APPROVED' ? 'text-emerald-600 dark:text-emerald-400' :
+                        entry.action === 'REJECTED' ? 'text-red-600 dark:text-red-400' :
+                        'text-amber-600 dark:text-amber-400'
+                      }`}>
+                        {entry.action || 'REVIEW'}:
+                      </span>{' '}
+                      <span className="text-slate-700 dark:text-slate-300">{entry.reason || entry.note || entry.status || 'Updated'}</span>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        By {entry.reviewerName || 'Administrator'} {entry.reviewerRole ? `(${entry.reviewerRole})` : ''}
+                      </div>
+                    </div>
+                    {(entry.reviewedAt || entry.timestamp) && (
+                      <span className="text-[10px] text-slate-400 shrink-0 font-mono">
+                        {new Date(entry.reviewedAt || entry.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Rejection Prompt Box */}
           {showRejectBox && (

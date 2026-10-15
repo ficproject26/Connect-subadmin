@@ -141,6 +141,23 @@ export function AgentRequestsPage() {
       const res = await dataService.approveAgent(targetId);
       if (res.success) {
         showNotification('success', `Registration for "${ag.name}" approved successfully. Agent status updated to Active.`);
+        setRequests(prev => prev.map(item => {
+          if (String(item.id || item._id) === String(targetId)) {
+            return {
+              ...item,
+              status: 'Active',
+              adminApprovalStatus: 'approved',
+              workflowStage: 'Activated',
+              pendingReason: null,
+              rejectionReason: null,
+              reviewerReason: `Approved by ${user?.name || 'Administrator'}`,
+              adminApprovedBy: user?.name || user?.email,
+              adminApprovedByRole: user?.role,
+              adminApprovedAt: new Date().toISOString()
+            };
+          }
+          return item;
+        }));
         await loadRequests();
       } else {
         showNotification('error', res.message || 'Failed to approve agent request');
@@ -164,13 +181,31 @@ export function AgentRequestsPage() {
       showNotification('error', 'Please enter a rejection reason.');
       return;
     }
+    const targetId = quickRejectTarget.id || quickRejectTarget._id;
     setActionLoading(true);
     try {
-      const res = await dataService.rejectAgent(quickRejectTarget.id || quickRejectTarget._id, {
+      const res = await dataService.rejectAgent(targetId, {
         reason: quickRejectReason.trim()
       });
       if (res.success) {
         showNotification('success', `Registration for "${quickRejectTarget.name}" rejected.`);
+        setRequests(prev => prev.map(item => {
+          if (String(item.id || item._id) === String(targetId)) {
+            return {
+              ...item,
+              status: 'rejected',
+              adminApprovalStatus: 'rejected',
+              workflowStage: 'Territory Rejected',
+              pendingReason: null,
+              rejectionReason: quickRejectReason.trim(),
+              reviewerReason: quickRejectReason.trim(),
+              adminRejectedBy: user?.name || user?.email,
+              adminRejectedByRole: user?.role,
+              adminRejectedAt: new Date().toISOString()
+            };
+          }
+          return item;
+        }));
         setQuickRejectTarget(null);
         setQuickRejectReason('');
         await loadRequests();
@@ -195,13 +230,30 @@ export function AgentRequestsPage() {
       showNotification('error', 'Please enter a pending reason or administrative note.');
       return;
     }
+    const targetId = quickPendingTarget.id || quickPendingTarget._id;
     setActionLoading(true);
     try {
-      const res = await dataService.keepPendingAgent(quickPendingTarget.id || quickPendingTarget._id, {
+      const res = await dataService.keepPendingAgent(targetId, {
         reason: quickPendingReason.trim()
       });
       if (res.success) {
         showNotification('success', `Registration for "${quickPendingTarget.name}" kept pending. Reason recorded.`);
+        setRequests(prev => prev.map(item => {
+          if (String(item.id || item._id) === String(targetId)) {
+            return {
+              ...item,
+              status: 'pending',
+              adminApprovalStatus: 'pending',
+              workflowStage: 'Territory Pending',
+              pendingReason: quickPendingReason.trim(),
+              reviewerReason: quickPendingReason.trim(),
+              adminPendingBy: user?.name || user?.email,
+              adminPendingByRole: user?.role,
+              adminPendingAt: new Date().toISOString()
+            };
+          }
+          return item;
+        }));
         setQuickPendingTarget(null);
         setQuickPendingReason('');
         await loadRequests();
@@ -427,6 +479,13 @@ export function AgentRequestsPage() {
     {
       header: 'Current Approval Status',
       key: 'status',
+      accessor: (row) => {
+        const s = (row.status || 'pending').toLowerCase();
+        if (s === 'active' || s === 'approved') return 'Approved';
+        if (s === 'rejected') return 'Rejected';
+        if (s === 'pending_kyc') return 'Approved';
+        return 'Pending';
+      },
       render: (row) => {
         const s = (row.status || 'pending').toLowerCase();
         let statusBadgeText = 'Pending';
@@ -454,24 +513,92 @@ export function AgentRequestsPage() {
     {
       header: 'Reviewer Reason',
       key: 'rejectionReason',
-      render: (row) => {
-        const reason = row.pendingReason || row.rejectionReason || row.adminNotes;
-        if (!reason) {
-          return <span className="text-xs text-slate-400 italic">—</span>;
+      accessor: (row) => {
+        const s = (row.status || '').toLowerCase();
+        const adminApproval = (row.adminApprovalStatus || '').toLowerCase();
+        if (s === 'active' || s === 'approved' || adminApproval === 'approved') {
+          return row.adminApprovedBy ? `Approved by ${row.adminApprovedBy} (${row.adminApprovedByRole || 'Admin'})` : 'Approved';
         }
-        const isRej = !!row.rejectionReason && !row.pendingReason;
-        const reviewer = row.adminPendingBy || row.adminRejectedBy || '';
-        const reviewerRole = row.adminPendingByRole || row.adminRejectedByRole || '';
-        const timestamp = row.adminPendingAt || row.adminRejectedAt || '';
+        if (s === 'rejected' || adminApproval === 'rejected') {
+          return `Rejected: ${row.rejectionReason || 'Registration Rejected'}`;
+        }
+        return row.pendingReason || row.adminNotes || 'Awaiting Review';
+      },
+      render: (row) => {
+        const s = (row.status || '').toLowerCase();
+        const adminApproval = (row.adminApprovalStatus || '').toLowerCase();
+        const isApproved = s === 'active' || s === 'approved' || adminApproval === 'approved';
+        const isRejected = s === 'rejected' || adminApproval === 'rejected';
+
+        // 1. Approved / Activated Status - Never display an obsolete pending reason
+        if (isApproved) {
+          const approver = row.adminApprovedBy || 'Admin';
+          const approverRole = row.adminApprovedByRole || 'Administrator';
+          const timestamp = row.adminApprovedAt;
+
+          return (
+            <div className="text-xs max-w-[220px] space-y-0.5">
+              <div className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Approved</span>
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate" title={`By: ${approver} (${approverRole})`}>
+                By: {approver} {approverRole ? `(${approverRole})` : ''}
+              </div>
+              {timestamp && (
+                <div className="text-[10px] text-slate-400 font-mono">
+                  {new Date(timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // 2. Rejected Status
+        if (isRejected) {
+          const reason = row.rejectionReason || 'Registration Rejected';
+          const reviewer = row.adminRejectedBy || '';
+          const reviewerRole = row.adminRejectedByRole || '';
+          const timestamp = row.adminRejectedAt;
+
+          return (
+            <div className="text-xs max-w-[220px] space-y-0.5">
+              <div className="font-semibold text-red-600 dark:text-red-400 line-clamp-2" title={reason}>
+                <span className="font-bold">Rejected: </span>
+                {reason}
+              </div>
+              {reviewer && (
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate" title={`By: ${reviewer} (${reviewerRole || 'Admin'})`}>
+                  By: {reviewer} {reviewerRole ? `(${reviewerRole})` : ''}
+                </div>
+              )}
+              {timestamp && (
+                <div className="text-[10px] text-slate-400 font-mono">
+                  {new Date(timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // 3. Pending / Action Required Status
+        const reason = row.pendingReason || row.adminNotes;
+        if (!reason) {
+          return <span className="text-xs text-slate-400 italic">Awaiting Review</span>;
+        }
+
+        const reviewer = row.adminPendingBy || '';
+        const reviewerRole = row.adminPendingByRole || '';
+        const timestamp = row.adminPendingAt;
 
         return (
-          <div className="text-xs max-w-[200px] space-y-0.5">
-            <div className={`font-semibold line-clamp-2 ${isRej ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`} title={reason}>
-              <span className="font-bold">{isRej ? 'Rejected: ' : 'Pending: '}</span>
+          <div className="text-xs max-w-[220px] space-y-0.5">
+            <div className="font-semibold text-amber-600 dark:text-amber-400 line-clamp-2" title={reason}>
+              <span className="font-bold">Pending: </span>
               {reason}
             </div>
             {reviewer && (
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate" title={`${reviewer} (${reviewerRole || 'Admin'})`}>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate" title={`By: ${reviewer} (${reviewerRole || 'Admin'})`}>
                 By: {reviewer} {reviewerRole ? `(${reviewerRole})` : ''}
               </div>
             )}

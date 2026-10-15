@@ -453,6 +453,10 @@ const getVendors = async (req, res) => {
       subCategory,
       status,
       kycStatus,
+      state,
+      district,
+      division,
+      pincode,
       districtId,
       divisionId,
       pincodeId,
@@ -488,10 +492,30 @@ const getVendors = async (req, res) => {
       if (status && status !== 'All' && (v.status || '').toLowerCase() !== status.toLowerCase()) return false;
       if (kycStatus && kycStatus !== 'All' && (v.kycStatus || '').toLowerCase() !== kycStatus.toLowerCase()) return false;
 
-      // 4. Sub-location filters
-      if (districtId && v.districtId !== districtId) return false;
-      if (divisionId && v.divisionId !== divisionId) return false;
-      if (pincodeId && v.pincodeId !== pincodeId) return false;
+      // 4. Sub-location territory filters (strictly within authorized caller scope)
+      if (state && state !== 'All') {
+        const sNorm = state.trim().toLowerCase();
+        const vState = (v.state || v.stateName || '').trim().toLowerCase();
+        if (vState && vState !== sNorm) return false;
+      }
+      if (district && district !== 'All') {
+        const dNorm = district.trim().toLowerCase();
+        const vDist = (v.district || v.districtName || '').trim().toLowerCase();
+        if (vDist && vDist !== dNorm) return false;
+      }
+      if (division && division !== 'All') {
+        const divNorm = division.trim().toLowerCase().replace(/\s+division$/i, '');
+        const vDiv = (v.division || v.divisionName || '').trim().toLowerCase().replace(/\s+division$/i, '');
+        if (vDiv && vDiv !== divNorm) return false;
+      }
+      if (pincode && pincode !== 'All') {
+        const pinNorm = String(pincode).trim();
+        const vPin = String(v.pincode || v.pincodeCode || '').trim();
+        if (vPin && vPin !== pinNorm) return false;
+      }
+      if (districtId && String(v.districtId || '') !== String(districtId)) return false;
+      if (divisionId && String(v.divisionId || '') !== String(divisionId)) return false;
+      if (pincodeId && String(v.pincodeId || '') !== String(pincodeId)) return false;
 
       return true;
     });

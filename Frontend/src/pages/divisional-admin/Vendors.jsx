@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
+import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { RegisterVendorModal } from '../../components/RegisterVendorModal';
 import { VendorDetailsModal } from '../../components/VendorDetailsModal';
 import { resolvePincodeHierarchy, resolveVendorAddedBy } from '../../utils/pincodeDirectory';
@@ -28,11 +29,16 @@ export function DivisionalVendors() {
   const { user } = useAuth();
   const divisionName = user?.division || '';
   const districtName = user?.district || '';
+  const assignedState = user?.state || 'Tamil Nadu';
   const [searchParams] = useSearchParams();
   const pincodeParam = searchParams.get('pincode');
 
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [territoryTree, setTerritoryTree] = useState([]);
+
+  // Hierarchical Territory Filters (Division Admin: Pincode filter only)
+  const [selectedPincode, setSelectedPincode] = useState(pincodeParam || '');
 
   // Filters
   const [kycFilter, setKycFilter] = useState('');
@@ -43,35 +49,48 @@ export function DivisionalVendors() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [selectedVendorForDetails, setSelectedVendorForDetails] = useState(null);
 
-  const loadData = async () => {
+  // Load Territory Tree
+  useEffect(() => {
+    dataService.getTerritoryHierarchy().then(res => {
+      if (res?.success && Array.isArray(res.hierarchy)) {
+        setTerritoryTree(res.hierarchy);
+      }
+    }).catch(console.error);
+  }, []);
+
+  const loadData = useCallback(async (overrides = {}) => {
     setLoading(true);
     try {
-      const res = await dataService.getVendors();
-      if (res.success) {
+      const params = {};
+      if (assignedState) params.state = assignedState;
+      if (districtName) params.district = districtName;
+      if (divisionName) params.division = divisionName;
+      const p = overrides.pincode !== undefined ? overrides.pincode : selectedPincode;
+      if (p) params.pincode = p;
+
+      const res = await dataService.getVendors(params);
+      if (res && res.success) {
         let list = res.vendors || [];
+        // Strict boundary: Never display vendors outside assigned division
         if (divisionName) {
-          const filtered = list.filter(
-            v => (v.division || '')?.toLowerCase() === divisionName.toLowerCase()
-          );
-          if (filtered.length > 0) {
-            list = filtered;
-          }
-        }
-        if (pincodeParam) {
-          list = list.filter(v => String(v.pincode) === String(pincodeParam));
+          const divNorm = divisionName.toLowerCase().trim().replace(/\s+division$/i, '');
+          list = list.filter(v => (v.division || v.divisionName || '').toLowerCase().trim().replace(/\s+division$/i, '') === divNorm);
         }
         setVendors(list);
+      } else {
+        setVendors([]);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Failed to load division vendors:', e);
+      setVendors([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [assignedState, districtName, divisionName, selectedPincode]);
 
   useEffect(() => {
     loadData();
-  }, [pincodeParam]);
+  }, [loadData]);
 
   // Helper to determine if a vendor is awaiting Pincode Admin approval (Stage 1)
   const isAwaitingPincodeApproval = (v) => {
@@ -88,13 +107,31 @@ export function DivisionalVendors() {
     return false;
   };
 
-  // Compute 4 KPI stats
+  // Territory-scoped vendors based on assigned division and selected pincode filter
+  const territoryScopedVendors = useMemo(() => {
+    return vendors.filter(v => {
+      // Must match assigned division
+      if (divisionName) {
+        const divNorm = divisionName.toLowerCase().trim().replace(/\s+division$/i, '');
+        const vDiv = (v.division || v.divisionName || '').toLowerCase().trim().replace(/\s+division$/i, '');
+        if (vDiv && vDiv !== divNorm) return false;
+      }
+      if (selectedPincode) {
+        const pinNorm = String(selectedPincode).trim();
+        const vPin = String(v.pincode || v.pincodeCode || '').trim();
+        if (vPin && vPin !== pinNorm) return false;
+      }
+      return true;
+    });
+  }, [vendors, divisionName, selectedPincode]);
+
+  // Compute 4 KPI stats from territory-scoped dataset
   const kpiStats = useMemo(() => {
-    const total = vendors.length;
-    const verified = vendors.filter(v => (v.kycStatus || '').toLowerCase().includes('approved') || (v.kycStatus || '').toLowerCase() === 'verified' || (v.status || '').toLowerCase() === 'active').length;
-    const pendingPincode = vendors.filter(isAwaitingPincodeApproval).length;
-    const pendingKyc = vendors.filter(v => (v.kycStatus || '').toLowerCase() === 'kyc pending' || (v.kycStatus || '').toLowerCase().includes('admin approved')).length;
-    const pendingPayout = vendors.reduce((sum, v) => sum + (Number(v.pendingPayout) || 0), 0);
+    const total = territoryScopedVendors.length;
+    const verified = territoryScopedVendors.filter(v => (v.kycStatus || '').toLowerCase().includes('approved') || (v.kycStatus || '').toLowerCase() === 'verified' || (v.status || '').toLowerCase() === 'active').length;
+    const pendingPincode = territoryScopedVendors.filter(isAwaitingPincodeApproval).length;
+    const pendingKyc = territoryScopedVendors.filter(v => (v.kycStatus || '').toLowerCase() === 'kyc pending' || (v.kycStatus || '').toLowerCase().includes('admin approved')).length;
+    const pendingPayout = territoryScopedVendors.reduce((sum, v) => sum + (Number(v.pendingPayout) || 0), 0);
 
     return {
       total,
@@ -103,11 +140,11 @@ export function DivisionalVendors() {
       pendingKyc,
       pendingPayout
     };
-  }, [vendors]);
+  }, [territoryScopedVendors]);
 
   // Filtered vendors list based on active filters
   const filteredVendors = useMemo(() => {
-    return vendors.filter(v => {
+    return territoryScopedVendors.filter(v => {
       // 1. KYC Status Filter
       if (kycFilter) {
         const k = (v.kycStatus || '').toLowerCase();
@@ -298,6 +335,22 @@ export function DivisionalVendors() {
           <p className="text-xs text-slate-500 dark:text-slate-400">Merchant partners and commercial supply points under {divisionName} division jurisdiction.</p>
         </div>
       </div>
+
+      {/* Territory Hierarchy Filter (Pincode filter only) */}
+      <TerritoryHierarchyFilter
+        selectedState={assignedState}
+        selectedDistrict={districtName}
+        selectedDivision={divisionName}
+        selectedPincode={selectedPincode}
+        onPincodeChange={(pin) => setSelectedPincode(pin)}
+        onClear={() => setSelectedPincode('')}
+        territoryTree={territoryTree}
+        title="Territory Hierarchy Filter"
+        showState={false}
+        showDistrict={false}
+        showDivision={false}
+        showPincode={true}
+      />
 
       {/* 4 KPI Cards in a single row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">

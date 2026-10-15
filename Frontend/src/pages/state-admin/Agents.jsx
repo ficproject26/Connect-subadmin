@@ -360,15 +360,17 @@ export function StateAgents({ level = 'state' }) {
         </div>
       )
     },
-    {
-      header: 'Wallet Balance',
-      accessor: 'walletBalance',
-      render: (row) => (
-        <span className="font-mono font-bold text-slate-900 dark:text-amber-300 text-xs">
-          ₹{(row.walletBalance || 0).toLocaleString()}
-        </span>
-      )
-    },
+    ...(activeLevel === 'divisional' ? [] : [
+      {
+        header: 'Wallet Balance',
+        accessor: 'walletBalance',
+        render: (row) => (
+          <span className="font-mono font-bold text-slate-900 dark:text-amber-300 text-xs">
+            ₹{(row.walletBalance || 0).toLocaleString()}
+          </span>
+        )
+      }
+    ]),
     {
       header: 'Status',
       accessor: 'status',

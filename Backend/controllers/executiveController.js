@@ -1485,26 +1485,27 @@ async function getAgentRequests(req, res) {
     });
 
     const rawAgents = Array.from(new Set(agentMap.values()));
-    // Scoped to pending/under-review agent requests
-    const pendingAgents = rawAgents.filter(a => {
-      const s = (a.status || '').toLowerCase().trim();
-      const adminApproval = (a.adminApprovalStatus || '').toLowerCase().trim();
-      const isApproved = a.isApproved === true || s === 'approved' || s === 'active';
-      return (
-        s === 'pending' ||
-        s === 'under_review' ||
-        s === 'pending_approval' ||
-        s === 'pending_admin_approval' ||
-        s === 'pending_kyc' ||
-        s === 'rejected' ||
-        adminApproval === 'pending' ||
-        adminApproval === 'under_review' ||
-        adminApproval === 'rejected' ||
-        !isApproved
-      );
-    });
+    // Scoped to agent registration requests (supports pending, approved, and rejected tabs)
+    let candidateAgents = rawAgents;
+    if (req.query.status && String(req.query.status).toLowerCase() !== 'all') {
+      const qStatus = String(req.query.status).toLowerCase().trim();
+      candidateAgents = candidateAgents.filter(a => {
+        const s = (a.status || '').toLowerCase().trim();
+        const adminApproval = (a.adminApprovalStatus || '').toLowerCase().trim();
+        if (qStatus === 'pending') {
+          return s === 'pending' || s === 'under_review' || s === 'pending_approval' || s === 'pending_admin_approval' || adminApproval === 'pending' || adminApproval === 'under_review';
+        }
+        if (qStatus === 'approved' || qStatus === 'active') {
+          return s === 'active' || s === 'approved' || adminApproval === 'approved';
+        }
+        if (qStatus === 'rejected') {
+          return s === 'rejected' || adminApproval === 'rejected';
+        }
+        return s === qStatus || adminApproval === qStatus;
+      });
+    }
 
-    const visibleAgents = pendingAgents.filter(a => canAdminViewAgent(req.user, a));
+    const visibleAgents = candidateAgents.filter(a => canAdminViewAgent(req.user, a));
 
     const formatted = visibleAgents.map(a => {
       const normLevel = normalizeLevel(getAgentLevel(a));
@@ -1572,13 +1573,23 @@ async function getAgentRequests(req, res) {
         status: (a.status && a.status.toLowerCase() === 'approved') ? 'Active' : (a.status || 'pending'),
         adminApprovalStatus: adminApproval || 'pending',
         kycStatus: a.kycStatus || 'pending_verification',
-        rejectionReason: a.rejectionReason || null,
-        pendingReason: a.pendingReason || a.adminNotes || null,
-        reviewerReason: a.pendingReason || a.adminNotes || a.rejectionReason || null,
-        adminPendingBy: a.adminPendingBy || null,
-        adminPendingById: a.adminPendingById || null,
-        adminPendingByRole: a.adminPendingByRole || a.adminPendingRole || null,
-        adminPendingAt: a.adminPendingAt || null,
+        rejectionReason: (s === 'rejected' || adminApproval === 'rejected') ? (a.rejectionReason || a.adminRejectionReason || 'Rejected') : null,
+        pendingReason: (s === 'rejected' || adminApproval === 'rejected' || s === 'active' || s === 'approved' || adminApproval === 'approved') ? null : (a.pendingReason || a.adminNotes || null),
+        reviewerReason: (s === 'active' || s === 'approved' || adminApproval === 'approved') 
+          ? (a.adminApprovedBy ? `Approved by ${a.adminApprovedBy}${a.adminApprovedByRole ? ` (${a.adminApprovedByRole})` : ''}` : 'Approved')
+          : (s === 'rejected' || adminApproval === 'rejected')
+          ? (a.rejectionReason || a.adminRejectionReason || 'Rejected')
+          : (a.pendingReason || a.adminNotes || null),
+        adminApprovedBy: a.adminApprovedBy || null,
+        adminApprovedByRole: a.adminApprovedByRole || null,
+        adminApprovedAt: a.adminApprovedAt || null,
+        adminRejectedBy: a.adminRejectedBy || null,
+        adminRejectedByRole: a.adminRejectedByRole || null,
+        adminRejectedAt: a.adminRejectedAt || null,
+        adminPendingBy: (s === 'active' || s === 'approved' || s === 'rejected') ? null : (a.adminPendingBy || null),
+        adminPendingById: (s === 'active' || s === 'approved' || s === 'rejected') ? null : (a.adminPendingById || null),
+        adminPendingByRole: (s === 'active' || s === 'approved' || s === 'rejected') ? null : (a.adminPendingByRole || a.adminPendingRole || null),
+        adminPendingAt: (s === 'active' || s === 'approved' || s === 'rejected') ? null : (a.adminPendingAt || null),
         reviewHistory: Array.isArray(a.reviewHistory) ? a.reviewHistory : [],
         workflowStage,
         canApprove,
@@ -1646,6 +1657,8 @@ async function approveAgent(req, res) {
       adminApprovedAt: now,
       rejectionReason: null,
       pendingReason: null,
+      reviewerReason: null,
+      adminNotes: null,
       reviewHistory: updatedHistory,
       updatedAt: now
     };
@@ -1704,6 +1717,11 @@ async function approveAgent(req, res) {
         user.kycStatus = 'Verified';
         user.adminApprovedBy = req.user.name;
         user.adminApprovedAt = now;
+        user.pendingReason = null;
+        user.reviewerReason = null;
+        user.adminNotes = null;
+        user.rejectionReason = null;
+        user.adminRejectionReason = null;
         user.reviewHistory = updatedHistory;
         user.updatedAt = now;
         await db.users.findByIdAndUpdate(user._id || user.id, {
@@ -1714,6 +1732,11 @@ async function approveAgent(req, res) {
           kycStatus: 'Verified',
           adminApprovedBy: req.user.name,
           adminApprovedAt: now,
+          pendingReason: null,
+          reviewerReason: null,
+          adminNotes: null,
+          rejectionReason: null,
+          adminRejectionReason: null,
           reviewHistory: updatedHistory,
           updatedAt: now
         });

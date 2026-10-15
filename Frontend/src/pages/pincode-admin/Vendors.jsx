@@ -41,20 +41,22 @@ export function PincodeVendors() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await dataService.getVendors();
+      const params = {};
+      if (assignedPincode) params.pincode = assignedPincode;
+      const res = await dataService.getVendors(params);
       if (res.success) {
         let list = res.vendors || [];
-        // Scope to this pincode if set
+        // Strict boundary: Never display vendors outside assigned pincode
         if (assignedPincode) {
-          const scoped = list.filter(v => String(v.pincode) === String(assignedPincode));
-          if (scoped.length > 0) {
-            list = scoped;
-          }
+          list = list.filter(v => String(v.pincode || v.pincodeCode || '').trim() === String(assignedPincode).trim());
         }
         setVendors(list);
+      } else {
+        setVendors([]);
       }
     } catch (e) {
       console.error('Failed to load vendors:', e);
+      setVendors([]);
     } finally {
       setLoading(false);
     }

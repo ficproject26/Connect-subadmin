@@ -97,15 +97,6 @@ export function DivisionalAgents() {
       )
     },
     {
-      header: 'Wallet Balance',
-      accessor: 'walletBalance',
-      render: (row) => (
-        <span className="font-mono font-bold text-slate-900 dark:text-amber-300 text-xs">
-          ₹{(Number(row.walletBalance) || 0).toLocaleString()}
-        </span>
-      )
-    },
-    {
       header: 'Status',
       accessor: 'status',
       render: (row) => <StatusBadge status={row.status} />

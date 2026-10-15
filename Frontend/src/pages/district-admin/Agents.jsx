@@ -317,16 +317,18 @@ export function DistrictAgents({ level = 'district' }) {
         </div>
       )
     },
-    {
-      header: 'Wallet Balance',
-      accessor: 'walletBalance',
-      className: 'whitespace-nowrap',
-      render: (row) => (
-        <span className="font-mono font-bold text-slate-900 dark:text-amber-300 text-xs">
-          ₹{(row.walletBalance || 0).toLocaleString()}
-        </span>
-      )
-    },
+    ...(activeLevel === 'divisional' ? [] : [
+      {
+        header: 'Wallet Balance',
+        accessor: 'walletBalance',
+        className: 'whitespace-nowrap',
+        render: (row) => (
+          <span className="font-mono font-bold text-slate-900 dark:text-amber-300 text-xs">
+            ₹{(row.walletBalance || 0).toLocaleString()}
+          </span>
+        )
+      }
+    ]),
     {
       header: 'Status',
       accessor: 'status',
