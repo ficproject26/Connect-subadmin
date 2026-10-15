@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import { StatusBadge } from './Badge';
 import { dataService } from '../services/dataService';
 import { useAuth } from '../context/AuthContext';
+import { canAdminApproveManagerRequest } from '../utils/permissions';
 import {
   UserCog,
   ShieldCheck,
@@ -66,6 +67,7 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   const isPending = isPendingAdmin || isPendingKyc;
   const isActive = s === 'active';
   const isRejected = s === 'rejected' || s === 'rejected_by_sub_admin' || s === 'kyc_rejected';
+  const canApprove = canAdminApproveManagerRequest(user, activeMgr);
 
   // Format relative uploads so they route via current host & Vite proxy cleanly
   const resolveMediaUrl = (url) => {
@@ -75,6 +77,10 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   };
 
   const handleApprove = async () => {
+    if (!canApprove) {
+      setError('You do not have administrative authority to approve requests for this territory level.');
+      return;
+    }
     setLoading(true);
     setError('');
     setSuccessMsg('');
@@ -99,6 +105,10 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   };
 
   const handleReject = async () => {
+    if (!canApprove) {
+      setError('You do not have administrative authority to reject requests for this territory level.');
+      return;
+    }
     if (!rejectReason.trim()) {
       setError('Please provide a reason for rejecting the manager registration.');
       return;
@@ -126,6 +136,10 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
   };
 
   const handleKeepPending = async () => {
+    if (!canApprove) {
+      setError('You do not have administrative authority to manage requests for this territory level.');
+      return;
+    }
     if (!pendingReason.trim()) {
       setError('Please provide a reason or note explaining why this manager is kept pending.');
       return;
@@ -733,13 +747,13 @@ export function ManagerApprovalModal({ isOpen, onClose, manager, onManagerUpdate
               Close
             </button>
 
-            {isPending && activeMgr.canApprove === false && (
+            {isPending && !canApprove && (
               <span className="text-xs font-semibold text-slate-500 italic px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                Authority designated to {activeMgr.targetAdminRole}
+                Authority designated to {activeMgr.targetAdminRole || 'Level Administrator'}
               </span>
             )}
 
-            {!isActive && !showRejectBox && !showPendingBox && activeMgr.canApprove !== false && (
+            {!isActive && !showRejectBox && !showPendingBox && canApprove && (
               <>
                 <button
                   type="button"

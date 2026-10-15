@@ -7,6 +7,7 @@ import { StatusBadge } from '../../components/Badge';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { ManagerApprovalModal } from '../../components/ManagerApprovalModal';
 import { getTerritoryLocking, safeString, safeLowerCase, formatAddress } from '../../utils/territoryHelper';
+import { canAdminApproveManagerRequest } from '../../utils/permissions';
 import {
   UserCheck,
   UserCog,
@@ -134,6 +135,11 @@ export function ManagerRequestsPage() {
     const targetId = mgr.id || mgr._id;
     if (!targetId || approvingId === targetId) return;
 
+    if (!canAdminApproveManagerRequest(user, mgr)) {
+      showNotification('error', 'You do not have administrative authority to approve requests for this territory level.');
+      return;
+    }
+
     setApprovingId(targetId);
     try {
       const res = await dataService.approveManager(targetId);
@@ -153,6 +159,10 @@ export function ManagerRequestsPage() {
   // Handle Quick Reject Submit
   const handleQuickRejectSubmit = async () => {
     if (!quickRejectTarget) return;
+    if (!canAdminApproveManagerRequest(user, quickRejectTarget)) {
+      showNotification('error', 'You do not have administrative authority to reject requests for this territory level.');
+      return;
+    }
     if (!quickRejectReason.trim()) {
       showNotification('error', 'Please enter a rejection reason.');
       return;
@@ -180,6 +190,10 @@ export function ManagerRequestsPage() {
   // Handle Quick Pending Submit
   const handleQuickPendingSubmit = async () => {
     if (!quickPendingTarget) return;
+    if (!canAdminApproveManagerRequest(user, quickPendingTarget)) {
+      showNotification('error', 'You do not have administrative authority to manage requests for this territory level.');
+      return;
+    }
     if (!quickPendingReason.trim()) {
       showNotification('error', 'Please enter a pending reason or administrative note.');
       return;
@@ -474,12 +488,12 @@ export function ManagerRequestsPage() {
       render: (row) => {
         const s = (row.status || '').toLowerCase();
         const isPending = s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
-        const canApprove = row.canApprove !== false;
+        const canApprove = canAdminApproveManagerRequest(user, row);
         const isApprovingThis = approvingId === (row.id || row._id);
 
         return (
           <div className="flex items-center gap-1.5 justify-end">
-            {/* Quick Approve / Pending / Reject buttons if user is the authorized approver */}
+            {/* Quick Approve / Pending / Reject buttons ONLY if user is the designated territory admin for this level */}
             {isPending && canApprove && (
               <>
                 <button

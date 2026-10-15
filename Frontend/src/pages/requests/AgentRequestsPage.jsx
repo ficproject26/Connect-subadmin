@@ -7,6 +7,7 @@ import { StatusBadge } from '../../components/Badge';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { AgentApprovalModal } from '../../components/AgentApprovalModal';
 import { getTerritoryLocking, safeString, safeLowerCase, formatAddress } from '../../utils/territoryHelper';
+import { canAdminApproveAgentRequest } from '../../utils/permissions';
 import {
   UserPlus,
   UserCheck,
@@ -127,6 +128,13 @@ export function AgentRequestsPage() {
   // Handle Direct Quick Approve (No browser confirm dialog, per requirement 1)
   const handleQuickApprove = async (ag) => {
     const targetId = ag.id || ag._id;
+    if (!targetId || approvingId === targetId) return;
+
+    if (!canAdminApproveAgentRequest(user, ag)) {
+      showNotification('error', 'You do not have administrative authority to approve requests for this territory level.');
+      return;
+    }
+
     setApprovingId(targetId);
     setActionLoading(true);
     try {
@@ -148,6 +156,10 @@ export function AgentRequestsPage() {
   // Handle Quick Reject Submit
   const handleQuickRejectSubmit = async () => {
     if (!quickRejectTarget) return;
+    if (!canAdminApproveAgentRequest(user, quickRejectTarget)) {
+      showNotification('error', 'You do not have administrative authority to reject requests for this territory level.');
+      return;
+    }
     if (!quickRejectReason.trim()) {
       showNotification('error', 'Please enter a rejection reason.');
       return;
@@ -175,6 +187,10 @@ export function AgentRequestsPage() {
   // Handle Quick Pending Submit
   const handleQuickPendingSubmit = async () => {
     if (!quickPendingTarget) return;
+    if (!canAdminApproveAgentRequest(user, quickPendingTarget)) {
+      showNotification('error', 'You do not have administrative authority to manage requests for this territory level.');
+      return;
+    }
     if (!quickPendingReason.trim()) {
       showNotification('error', 'Please enter a pending reason or administrative note.');
       return;
@@ -472,8 +488,9 @@ export function AgentRequestsPage() {
       header: 'Actions',
       key: 'actions',
       render: (row) => {
-        const isPending = row.status === 'under_review' || row.status === 'pending' || row.status === 'pending_admin_approval';
-        const canApprove = row.canApprove !== false;
+        const s = (row.status || '').toLowerCase();
+        const isPending = s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
+        const canApprove = canAdminApproveAgentRequest(user, row);
         const targetId = row.id || row._id;
         const isApprovingThis = approvingId === targetId;
 

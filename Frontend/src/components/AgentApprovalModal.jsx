@@ -4,6 +4,7 @@ import { StatusBadge } from './Badge';
 import { dataService } from '../services/dataService';
 import { useAuth } from '../context/AuthContext';
 import { formatAddress } from '../utils/territoryHelper';
+import { canAdminApproveAgentRequest } from '../utils/permissions';
 import {
   UserPlus,
   ShieldCheck,
@@ -67,6 +68,7 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
   const isPendingKyc = s === 'pending_kyc' || s === 'pending_kyc_approval';
   const isActive = s === 'active' || s === 'approved';
   const isRejected = s === 'rejected';
+  const canApprove = canAdminApproveAgentRequest(user, activeAgent);
 
   const resolveMediaUrl = (url) => {
     if (!url) return '';
@@ -75,6 +77,10 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
   };
 
   const handleApprove = async () => {
+    if (!canApprove) {
+      setError('You do not have administrative authority to approve requests for this territory level.');
+      return;
+    }
     setLoading(true);
     setError('');
     setSuccessMsg('');
@@ -99,6 +105,10 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
   };
 
   const handleReject = async () => {
+    if (!canApprove) {
+      setError('You do not have administrative authority to reject requests for this territory level.');
+      return;
+    }
     if (!rejectReason.trim()) {
       setError('Please provide a reason for rejecting the agent registration.');
       return;
@@ -127,6 +137,10 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
   };
 
   const handleKeepPending = async () => {
+    if (!canApprove) {
+      setError('You do not have administrative authority to manage requests for this territory level.');
+      return;
+    }
     if (!pendingReason.trim()) {
       setError('Please provide a reason or note explaining why this agent is kept pending.');
       return;
@@ -584,13 +598,13 @@ export function AgentApprovalModal({ isOpen, onClose, agent, onAgentUpdated }) {
             </button>
 
             <div className="flex items-center gap-2">
-              {isPending && activeAgent.canApprove === false && (
+              {isPending && !canApprove && (
                 <span className="text-xs font-semibold text-slate-500 italic px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl">
                   Authority designated to {activeAgent.targetAdminRole || 'Territory Administrator'}
                 </span>
               )}
 
-              {isPending && !showRejectBox && !showPendingBox && activeAgent.canApprove !== false && (
+              {isPending && !showRejectBox && !showPendingBox && canApprove && (
                 <>
                   <button
                     type="button"

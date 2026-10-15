@@ -40,7 +40,7 @@ export function StateReports() {
             State Business &amp; Financial Reports
           </h2>
           <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"} mt-0.5`}>
-            Jurisdiction: <span className="font-semibold">{report?.adminScope || "Tamil Nadu"}</span>
+            Jurisdiction: <span className="font-semibold">{report?.adminScope || "State Scope"}</span>
             {report?.generatedAt && (
               <span className="ml-2 text-[11px] opacity-75">
                 (Generated: {new Date(report.generatedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })})

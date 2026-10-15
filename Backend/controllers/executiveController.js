@@ -910,46 +910,112 @@ function getDeliveryPartners(req, res) {
 
 function isRelatedAdminForAgent(admin, agent) {
   if (!admin || !agent) return false;
-  return canAdminViewAgent(admin, agent);
+  const adminRole = String(admin.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const adminUserRole = String(admin.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+
+  // Non-administrative roles (managers, agents, customers, vendors) cannot approve
+  if (!adminRole.includes('admin') || adminRole.includes('manager') || adminRole.includes('agent')) {
+    return false;
+  }
+
+  // Global Unscoped Super Admin can approve all
+  const isSuper = (adminRole === 'super admin' || adminRole === 'main admin' || (adminRole === 'admin' && !adminUserRole.includes('state') && !adminUserRole.includes('district') && !adminUserRole.includes('division') && !adminUserRole.includes('pincode') && !admin.level?.includes('state'))) && (!admin.state || admin.state.toLowerCase() === 'all india');
+  if (isSuper) return true;
+
+  const aLevel = normalizeLevel(getAgentLevel(agent));
+  const t = getAgentTerritory(agent);
+
+  const clean = (val) => String(val || '').trim().toLowerCase().replace(/\s+(district|division|state)$/, '').trim();
+  const uState = clean(admin.state || admin.assignedState);
+  const tState = clean(t.state);
+  const uDist = clean(admin.district || admin.assignedDistrict);
+  const tDist = clean(t.district);
+  const uDiv = clean(admin.division || admin.assignedDivision);
+  const tDiv = clean(t.division);
+  const uPin = String(admin.pincode || admin.assignedPincode || '').trim();
+  const tPin = String(t.pincode || '').trim();
+
+  // 1. State Agent -> ONLY State Admin of the same state
+  if (aLevel === 'state') {
+    if (!adminRole.includes('state') && !(adminRole === 'admin' && uState)) return false;
+    return Boolean(uState && tState && uState === tState);
+  }
+
+  // 2. District Agent -> ONLY District Admin of the same district
+  if (aLevel === 'district') {
+    if (!adminRole.includes('district')) return false;
+    const matchState = !uState || uState === 'all india' || (tState && tState === uState);
+    return Boolean(matchState && uDist && tDist && uDist === tDist);
+  }
+
+  // 3. Division Agent -> ONLY Division Admin of the same division
+  if (aLevel === 'division' || aLevel === 'divisional') {
+    if (!adminRole.includes('division') && !adminRole.includes('divisional')) return false;
+    const matchState = !uState || uState === 'all india' || (tState && tState === uState);
+    const matchDist = matchState && (!uDist || uDist === 'all districts' || (tDist && tDist === uDist));
+    return Boolean(matchDist && uDiv && tDiv && (uDiv === tDiv || divisionMatches(t.division, admin.division)));
+  }
+
+  // 4. Pincode Agent -> ONLY Pincode Admin of the same pincode
+  if (aLevel === 'pincode') {
+    if (!adminRole.includes('pincode')) return false;
+    const matchState = !uState || uState === 'all india' || (tState && tState === uState);
+    const matchDist = matchState && (!uDist || uDist === 'all districts' || (tDist && tDist === uDist));
+    const matchDiv = matchDist && (!uDiv || uDiv === 'all divisions' || (tDiv && (tDiv === uDiv || divisionMatches(t.division, admin.division))));
+    return Boolean(matchDiv && uPin && tPin && uPin === tPin);
+  }
+
+  return false;
 }
 
 function canAdminViewAgent(admin, agent) {
   if (!admin || !agent) return false;
   const adminRole = String(admin.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-  if (adminRole === 'super admin' || adminRole === 'main admin' || adminRole === 'admin') return true;
+  const adminUserRole = String(admin.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const isSuper = (adminRole === 'super admin' || adminRole === 'main admin' || (adminRole === 'admin' && !adminUserRole.includes('state') && !adminUserRole.includes('district') && !adminUserRole.includes('division') && !adminUserRole.includes('pincode') && !admin.level?.includes('state'))) && (!admin.state || admin.state.toLowerCase() === 'all india');
+  if (isSuper) return true;
 
   const aLevel = normalizeLevel(getAgentLevel(agent));
   const t = getAgentTerritory(agent);
 
-  const uState = (admin.state || '').toLowerCase().trim();
-  const uDist = (admin.district || '').toLowerCase().trim();
-  const uDiv = (admin.division || '').toLowerCase().trim();
-  const uPin = String(admin.pincode || '').trim();
+  const clean = (val) => String(val || '').trim().toLowerCase().replace(/\s+(district|division|state)$/, '').trim();
+  const uState = clean(admin.state || admin.assignedState);
+  const tState = clean(t.state);
+  const uDist = clean(admin.district || admin.assignedDistrict);
+  const tDist = clean(t.district);
+  const uDiv = clean(admin.division || admin.assignedDivision);
+  const tDiv = clean(t.division);
+  const uPin = String(admin.pincode || admin.assignedPincode || '').trim();
+  const tPin = String(t.pincode || '').trim();
 
-  // State Admin: can view all agents within their state
-  if (adminRole.includes('state')) {
-    return !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
+  // State Admin (or state-scoped admin): can view all agents within their state
+  if (adminRole.includes('state') || (adminRole === 'admin' && uState)) {
+    if (!uState || uState === 'all india') return true;
+    return Boolean(tState && tState === uState);
   }
 
   // District Admin: can view district, division, and pincode agents in their district
   if (adminRole.includes('district')) {
     if (aLevel === 'state') return false;
-    const matchState = !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
-    return matchState && (!uDist || uDist === 'all districts' || (t.district && t.district.toLowerCase() === uDist));
+    const matchState = !uState || uState === 'all india' || (tState && tState === uState);
+    return Boolean(matchState && (!uDist || uDist === 'all districts' || (tDist && tDist === uDist)));
   }
 
   // Division Admin: can view division and pincode agents in their division
   if (adminRole.includes('division') || adminRole.includes('divisional')) {
     if (aLevel === 'state' || aLevel === 'district') return false;
-    const matchState = !uState || uState === 'all india' || (t.state && t.state.toLowerCase() === uState);
-    const matchDist = matchState && (!uDist || uDist === 'all districts' || (t.district && t.district.toLowerCase() === uDist));
-    return matchDist && (!uDiv || uDiv === 'all divisions' || divisionMatches(t.division, uDiv));
+    const matchState = !uState || uState === 'all india' || (tState && tState === uState);
+    const matchDist = matchState && (!uDist || uDist === 'all districts' || (tDist && tDist === uDist));
+    return Boolean(matchDist && (!uDiv || uDiv === 'all divisions' || (tDiv && (tDiv === uDiv || divisionMatches(t.division, admin.division)))));
   }
 
   // Pincode Admin: can view pincode agents in their pincode
   if (adminRole.includes('pincode')) {
     if (aLevel !== 'pincode') return false;
-    return !uPin || uPin === 'all' || (t.pincode && t.pincode === uPin);
+    const matchState = !uState || uState === 'all india' || (tState && tState === uState);
+    const matchDist = matchState && (!uDist || uDist === 'all districts' || (tDist && tDist === uDist));
+    const matchDiv = matchDist && (!uDiv || uDiv === 'all divisions' || (tDiv && (tDiv === uDiv || divisionMatches(t.division, admin.division))));
+    return Boolean(matchDiv && (!uPin || uPin === 'all' || (tPin && tPin === uPin)));
   }
 
   return false;
@@ -958,7 +1024,8 @@ function canAdminViewAgent(admin, agent) {
 async function getAgentRequests(req, res) {
   try {
     const userRole = String(req.user?.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-    const isSuperAdmin = userRole.includes('super admin') || userRole === 'admin' || userRole === 'main admin' || req.user?.state === 'All India';
+    const adminUserRole = String(req.user?.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+    const isSuperAdmin = (userRole.includes('super admin') || userRole === 'main admin' || (userRole === 'admin' && !adminUserRole.includes('state') && !adminUserRole.includes('district') && !adminUserRole.includes('division') && !adminUserRole.includes('pincode') && !req.user?.level?.includes('state'))) && (!req.user?.state || req.user?.state.toLowerCase() === 'all india');
 
     if (!isSuperAdmin) {
       const { state, district, division, pincode } = req.query;
@@ -967,7 +1034,7 @@ async function getAgentRequests(req, res) {
       const userDivision = (req.user?.division || '').toLowerCase().trim();
       const userPincode = String(req.user?.pincode || '').trim();
 
-      if (userRole.includes('state')) {
+      if (userRole.includes('state') || (userRole === 'admin' && userState)) {
         if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
           return res.status(403).json({
             success: false,

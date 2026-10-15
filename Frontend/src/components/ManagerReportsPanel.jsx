@@ -781,8 +781,14 @@ export function ManagerReportsPanel() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className={`font-semibold ${isDark?"text-slate-200":"text-slate-900"}`}>{rpt.district||"—"}{rpt.division?` › ${rpt.division}`:""}</div>
-                      {rpt.pincode&&<div className={`font-mono text-[10px] mt-0.5 ${isDark?"text-slate-500":"text-slate-400"}`}>PIN {rpt.pincode}</div>}
+                      <div className={`font-semibold ${isDark?"text-slate-200":"text-slate-900"}`}>
+                        {rpt.district ? `${rpt.district}${rpt.division ? ` › ${rpt.division}` : ""}` : (rpt.state || "—")}
+                      </div>
+                      {(rpt.pincode || (rpt.state && rpt.district)) && (
+                        <div className={`font-mono text-[10px] mt-0.5 ${isDark?"text-slate-500":"text-slate-400"}`}>
+                          {[rpt.pincode ? `PIN ${rpt.pincode}` : null, rpt.state].filter(Boolean).join(" • ")}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className={`font-semibold ${isDark?"text-slate-200":"text-slate-900"}`}>{rpt.dateRange||rpt.periodLabel}</div>

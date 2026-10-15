@@ -76,7 +76,7 @@ export function getTerritoryLocking(user) {
       districtLocked: false,
       divisionLocked: false,
       pincodeLocked: false,
-      defaultState: 'Tamil Nadu',
+      defaultState: '',
       defaultDistrict: '',
       defaultDivision: '',
       defaultPincode: ''
@@ -85,18 +85,19 @@ export function getTerritoryLocking(user) {
 
   const rawRole = safeLowerCase(user.role || user.adminRole || '');
   const normalizedRole = normalizeRole(user.role, user);
-  const userState = safeString(user.state || user.assignedState || 'Tamil Nadu');
+  const userState = safeString(user.state || user.assignedState || '');
   const userDistrict = safeString(user.district || user.assignedDistrict || '');
   const userDivision = safeString(user.division || user.assignedDivision || '');
   const userPincode = safeString(user.pincode || user.assignedPincode || '');
 
-  // 1. Super Admin: full access, nothing locked
+  // 1. Super Admin: full access, nothing locked (only if unscoped / All India)
   const isSuperAdmin =
-    normalizedRole === ROLES.SUPER_ADMIN ||
+    (normalizedRole === ROLES.SUPER_ADMIN ||
     normalizedRole === 'super-admin' ||
     rawRole.includes('super') ||
-    rawRole === 'admin' ||
-    rawRole === 'main admin';
+    rawRole === 'main admin' ||
+    rawRole === 'admin') &&
+    (!userState || userState.toLowerCase() === 'all india');
 
   if (isSuperAdmin) {
     return {

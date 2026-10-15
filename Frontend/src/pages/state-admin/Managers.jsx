@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { dataService } from '../../services/dataService';
 import { useAuth } from '../../context/AuthContext';
-import { normalizeRole } from '../../utils/permissions';
+import { normalizeRole, canAdminApproveManagerRequest } from '../../utils/permissions';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { ManagerApprovalModal } from '../../components/ManagerApprovalModal';
@@ -136,7 +136,7 @@ function FieldInput({ label, required, children }) {
 const LEVEL_CONFIGS = {
   state: {
     title: 'State Managers',
-    subtitle: 'Apex state-level operations managers, nodal coordinators, and zone directors across Tamil Nadu.',
+    subtitle: 'Apex state-level operations managers, nodal coordinators, and zone directors across territory network.',
     breadcrumb: 'State Managers',
     badge: 'State Manager',
     badgeColor: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800/60',
@@ -532,8 +532,8 @@ export function StateManagers({ level }) {
       ? adminAllowedCreationRole
       : (prefill.role || designatedRole);
     const stateToUse = locking.stateLocked
-      ? (locking.defaultState || 'Tamil Nadu')
-      : (prefill.assignedState || effectiveUser?.state || user?.state || (territoryTree[0]?.name || 'Tamil Nadu'));
+      ? (locking.defaultState || effectiveUser?.state || user?.state || '')
+      : (prefill.assignedState || effectiveUser?.state || user?.state || (territoryTree[0]?.name || ''));
     const matchedState = territoryTree.find(s => s.name?.toLowerCase() === stateToUse?.toLowerCase());
     const stateIdToUse = prefill.assignedStateId || (matchedState ? String(matchedState.id || matchedState._id) : '');
 
@@ -1833,7 +1833,7 @@ export function StateManagers({ level }) {
       render: (row) => (
         <div>
           <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-            {row.jurisdiction || 'Tamil Nadu'}
+            {row.jurisdiction || row.state || row.assignedState || effectiveUser?.state || user?.state || 'Territory'}
           </div>
           <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]" title={row.assignedArea}>
             {row.assignedArea || 'State Zone'}
@@ -1876,7 +1876,7 @@ export function StateManagers({ level }) {
       accessor: 'actions',
       render: (row) => {
         const isPendingAdmin = row.status === 'under_review' || row.status === 'pending' || row.status === 'pending_admin_approval';
-        const canApprove = row.canApprove !== false;
+        const canApprove = canAdminApproveManagerRequest(effectiveUser, row);
         return (
           <div className="flex items-center gap-2">
             {isPendingAdmin ? (
@@ -1908,7 +1908,7 @@ export function StateManagers({ level }) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const s = row.state || row.assignedState || queryState || 'Tamil Nadu';
+                  const s = row.state || row.assignedState || queryState || effectiveUser?.state || user?.state || '';
                   navigate(`/state-admin/managers/district?state=${encodeURIComponent(s)}`);
                 }}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition shadow-xs cursor-pointer ${
@@ -1928,7 +1928,7 @@ export function StateManagers({ level }) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const s = row.state || row.assignedState || queryState || 'Tamil Nadu';
+                  const s = row.state || row.assignedState || queryState || effectiveUser?.state || user?.state || '';
                   const d = row.district || row.assignedDistrict || '';
                   navigate(`/state-admin/managers/divisional?state=${encodeURIComponent(s)}&district=${encodeURIComponent(d)}`);
                 }}
@@ -1949,7 +1949,7 @@ export function StateManagers({ level }) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const s = row.state || row.assignedState || queryState || 'Tamil Nadu';
+                  const s = row.state || row.assignedState || queryState || effectiveUser?.state || user?.state || '';
                   const d = row.district || row.assignedDistrict || queryDistrict || '';
                   const v = row.division || row.assignedDivision || '';
                   navigate(`/state-admin/managers/pincode?state=${encodeURIComponent(s)}&district=${encodeURIComponent(d)}&division=${encodeURIComponent(v)}`);

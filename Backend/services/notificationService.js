@@ -50,10 +50,14 @@ function isNotificationInScope(notification, user) {
     return true;
   }
 
-  // 2. Super Admin has authorized global scope
-  if (role.includes('super admin') || role === 'admin' || role === 'superadmin' || user.role === 'super-admin' || (!user.state || user.state === 'All India')) {
+  // 2. Super Admin has authorized global scope (only if unscoped / All India)
+  const userAdminRole = (user.adminRole || '').toLowerCase();
+  const isSuper = (role.includes('super admin') || role === 'superadmin' || user.role === 'super-admin' || (role === 'admin' && !userAdminRole.includes('state') && !userAdminRole.includes('district') && !userAdminRole.includes('division') && !userAdminRole.includes('pincode') && !user.adminLevel)) && (!user.state || user.state.toLowerCase() === 'all india');
+  if (isSuper) {
     return true;
   }
+
+  const userState = (user.state || user.assignedState || '').toLowerCase().trim();
 
   // 3. Global system broadcast / maintenance announcements without any geographic bounds
   const isBroadcast = ['system', 'broadcast', 'announcement', 'maintenance', 'system_update'].includes((notification.type || '').toLowerCase());
@@ -76,14 +80,41 @@ function isNotificationInScope(notification, user) {
   }
 
   // 6. Enforce strict geographic hierarchy via filterByLocation
-  // filterByLocation checks top-level state/district/division/pincode fields.
-  // Notifications store these inside `scope`, so we flatten them for the check.
+  let resolvedState = nScope.state || meta.state || notification.state;
+  let resolvedDistrict = nScope.district || meta.district || notification.district;
+  let resolvedDivision = nScope.division || meta.division || notification.division;
+  let resolvedPincode = nScope.pincode || meta.pincode || notification.pincode;
+
+  if (!resolvedState && notification.userId) {
+    const creator = (db.users || []).find(u => String(u._id || u.id) === String(notification.userId)) ||
+                    (db.managers || []).find(m => String(m._id || m.id) === String(notification.userId));
+    if (creator) {
+      resolvedState = resolvedState || creator.state || creator.assignedState;
+      resolvedDistrict = resolvedDistrict || creator.district || creator.assignedDistrict;
+      resolvedDivision = resolvedDivision || creator.division || creator.assignedDivision;
+      resolvedPincode = resolvedPincode || creator.pincode || creator.assignedPincode;
+    }
+  }
+
+  const rawText = String(notification.message || notification.desc || notification.title || '');
+  if (!resolvedState && rawText) {
+    if (/tamil\s*nadu/i.test(rawText)) resolvedState = 'Tamil Nadu';
+    else if (/karnataka/i.test(rawText)) resolvedState = 'Karnataka';
+    else if (/kerala/i.test(rawText)) resolvedState = 'Kerala';
+    else if (/andhra\s*pradesh/i.test(rawText)) resolvedState = 'Andhra Pradesh';
+  }
+
+  // Prevent cross-state leakage
+  if (userState && userState !== 'all india' && resolvedState && resolvedState.toLowerCase().trim() !== userState) {
+    return false;
+  }
+
   const flatNotification = {
     ...notification,
-    state: nScope.state || meta.state || notification.state,
-    district: nScope.district || meta.district || notification.district,
-    division: nScope.division || meta.division || notification.division,
-    pincode: nScope.pincode || meta.pincode || notification.pincode,
+    state: resolvedState,
+    district: resolvedDistrict,
+    division: resolvedDivision,
+    pincode: resolvedPincode,
     stateId: nScope.stateId || meta.stateId || notification.stateId,
     districtId: nScope.districtId || meta.districtId || notification.districtId,
     divisionId: nScope.divisionId || meta.divisionId || notification.divisionId,

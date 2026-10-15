@@ -856,11 +856,23 @@ function extractEntityGeo(item, pinLookup) {
     }
   }
 
-  // If pincode missing, search address text
-  const rawAddr = String(item.address || item.fullAddress || item.customer_address || addr0.address || '');
+  // If pincode missing, search address and message text
+  const rawAddr = String(item.address || item.fullAddress || item.customer_address || addr0.address || item.message || item.desc || item.title || '');
   if (!pincode && rawAddr) {
     const m = rawAddr.match(/\b\d{6}\b/);
     if (m) pincode = m[0];
+  }
+
+  // If geo is missing, resolve from userId if available
+  if (!state && item.userId) {
+    const usr = (db.users || []).find(u => String(u._id || u.id) === String(item.userId)) ||
+                (db.managers || []).find(m => String(m._id || m.id) === String(item.userId));
+    if (usr) {
+      if (!state) state = usr.state || usr.assignedState;
+      if (!district) district = usr.district || usr.assignedDistrict;
+      if (!division) division = usr.division || usr.assignedDivision;
+      if (!pincode) pincode = usr.pincode || usr.assignedPincode;
+    }
   }
 
   // Lookup in dynamic + static pin table
@@ -888,7 +900,7 @@ function extractEntityGeo(item, pinLookup) {
     state = DISTRICT_STATE_MAP[dNorm];
   }
 
-  // String address fallback
+  // String address / message fallback
   if (!state && rawAddr) {
     if (/tamil\s*nadu/i.test(rawAddr)) state = 'Tamil Nadu';
     else if (/karnataka/i.test(rawAddr)) state = 'Karnataka';
@@ -919,7 +931,8 @@ function filterByLocation(items, user) {
 
   const rawRole = user.role || '';
   const role = rawRole.toLowerCase().replace(/[_-]/g, ' ');
-  const isSuper = role.includes('super admin') || role === 'admin' || role === 'superadmin' || rawRole === 'super-admin' || role.includes('kyc') || (user.adminLevel && user.adminLevel.toLowerCase() === 'kyc') || user.state === 'All India';
+  const userAdminRole = (user.adminRole || '').toLowerCase();
+  const isSuper = (role.includes('super admin') || role === 'superadmin' || rawRole === 'super-admin' || role.includes('kyc') || (user.adminLevel && user.adminLevel.toLowerCase() === 'kyc') || (role === 'admin' && !userAdminRole.includes('state') && !userAdminRole.includes('district') && !userAdminRole.includes('division') && !userAdminRole.includes('pincode') && !user.adminLevel)) && (!user.state || user.state.toLowerCase() === 'all india');
   if (isSuper) return items;
 
   const { state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = user;
@@ -978,7 +991,7 @@ function filterByLocation(items, user) {
     }
 
     // ── 4. STATE ADMIN (Level 1) ────────────────────────────────────
-    if (role.includes('state')) {
+    if (role.includes('state') || (role === 'admin' && (userState || userAdminRole.includes('state')))) {
       if (!userState || userState === 'all india') return true;
       // Reject cross-state records
       if (geo.state) {

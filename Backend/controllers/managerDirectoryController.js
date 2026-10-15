@@ -18,14 +18,19 @@ const formatRoleTitle = (role) => {
   }
 };
 
+// Clean territory strings for robust comparison
+const cleanTerritory = (str) => {
+  return String(str || '').trim().toLowerCase().replace(/\s+(district|division|taluk)$/, '').trim();
+};
+
 // Check if an admin and a manager share the same state
 const matchesState = (admin, manager) => {
   if (!admin || !manager) return false;
-  const adminState = (admin.state || '').trim().toLowerCase();
+  const adminState = cleanTerritory(admin.state || admin.assignedState);
   if (!adminState || adminState === 'all india') return true;
-  const mgrState = (manager.state || manager.assignedState || '').trim().toLowerCase();
+  const mgrState = cleanTerritory(manager.state || manager.assignedState);
   if (adminState && mgrState && adminState === mgrState) return true;
-  const adminStateId = String(admin.stateId || '').trim().toLowerCase();
+  const adminStateId = String(admin.stateId || admin.assignedStateId || '').trim().toLowerCase();
   const mgrStateId = String(manager.stateId || manager.assignedStateId || '').trim().toLowerCase();
   if (adminStateId && mgrStateId && adminStateId === mgrStateId) return true;
   return false;
@@ -36,11 +41,11 @@ const matchesDistrict = (admin, manager) => {
   if (!admin || !manager) return false;
   if (!matchesState(admin, manager)) return false;
 
-  const adminDist = (admin.district || '').trim().toLowerCase();
+  const adminDist = cleanTerritory(admin.district || admin.assignedDistrict);
   if (!adminDist || adminDist === 'all districts') return true;
-  const mgrDist = (manager.district || manager.assignedDistrict || '').trim().toLowerCase();
+  const mgrDist = cleanTerritory(manager.district || manager.assignedDistrict);
   if (adminDist && mgrDist && adminDist === mgrDist) return true;
-  const adminDistId = String(admin.districtId || '').trim().toLowerCase();
+  const adminDistId = String(admin.districtId || admin.assignedDistrictId || '').trim().toLowerCase();
   const mgrDistId = String(manager.districtId || manager.assignedDistrictId || '').trim().toLowerCase();
   if (adminDistId && mgrDistId && adminDistId === mgrDistId) return true;
   return false;
@@ -51,11 +56,11 @@ const matchesDivision = (admin, manager) => {
   if (!admin || !manager) return false;
   if (!matchesDistrict(admin, manager)) return false;
 
-  const adminDiv = (admin.division || '').trim().toLowerCase();
+  const adminDiv = cleanTerritory(admin.division || admin.assignedDivision);
   if (!adminDiv || adminDiv === 'all divisions') return true;
-  const mgrDiv = (manager.division || manager.assignedDivision || '').trim().toLowerCase();
+  const mgrDiv = cleanTerritory(manager.division || manager.assignedDivision);
   if (adminDiv && mgrDiv && adminDiv === mgrDiv) return true;
-  const adminDivId = String(admin.divisionId || '').trim().toLowerCase();
+  const adminDivId = String(admin.divisionId || admin.assignedDivisionId || '').trim().toLowerCase();
   const mgrDivId = String(manager.divisionId || manager.assignedDivisionId || '').trim().toLowerCase();
   if (adminDivId && mgrDivId && adminDivId === mgrDivId) return true;
   return false;
@@ -66,11 +71,11 @@ const matchesPincode = (admin, manager) => {
   if (!admin || !manager) return false;
   if (!matchesDivision(admin, manager)) return false;
 
-  const adminPin = String(admin.pincode || '').trim();
+  const adminPin = String(admin.pincode || admin.assignedPincode || '').trim();
   if (!adminPin || adminPin === 'all') return true;
   const mgrPin = String(manager.pincode || manager.assignedPincode || '').trim();
   if (adminPin && mgrPin && adminPin === mgrPin) return true;
-  const adminPinId = String(admin.pincodeId || '').trim().toLowerCase();
+  const adminPinId = String(admin.pincodeId || admin.assignedPincodeId || '').trim().toLowerCase();
   const mgrPinId = String(manager.pincodeId || manager.assignedPincodeId || '').trim().toLowerCase();
   if (adminPinId && mgrPinId && adminPinId === mgrPinId) return true;
   return false;
@@ -171,12 +176,19 @@ const canAdminManage = (admin, manager) => {
   const adminRole = (admin.role || '').trim();
   const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
 
+  // Non-administrative roles (Managers, Agents, Customers, Vendors) strictly have no administrative jurisdiction
+  if (!adminRoleLower.includes('admin') || adminRoleLower.includes('manager') || adminRoleLower.includes('agent')) {
+    return false;
+  }
+
   // Global Unscoped Super Admin / Main Admin can view all
   const isGlobalSuper = adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || (adminRoleLower === 'admin' && (!admin.state || admin.state.toLowerCase() === 'all india'));
   if (isGlobalSuper) return true;
 
-  const managerRoles = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'];
-  if (!managerRoles.includes(manager.role)) return false;
+  let rawMgrRole = String(manager.role || manager.level || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const levelNumMap = { '1': 'state', '2': 'district', '3': 'division', '4': 'pincode' };
+  if (levelNumMap[rawMgrRole]) rawMgrRole = levelNumMap[rawMgrRole];
+  if (levelNumMap[String(manager.level || '').trim()]) rawMgrRole = levelNumMap[String(manager.level || '').trim()];
 
   // State Admin (or admin scoped to a state): can view all managers within their state
   if (adminRoleLower.includes('state') || (adminRoleLower === 'admin' && admin.state)) {
@@ -185,19 +197,19 @@ const canAdminManage = (admin, manager) => {
 
   // District Admin: can view district, division, and pincode managers within their district
   if (adminRoleLower.includes('district')) {
-    if (manager.role === 'state_manager') return false; // Strictly never view State Manager
+    if (rawMgrRole.includes('state')) return false; // Strictly never view State Manager
     return matchesDistrict(admin, manager);
   }
 
   // Division Admin: can view division and pincode managers within their division
   if (adminRoleLower.includes('division') || adminRoleLower.includes('divisional')) {
-    if (manager.role === 'state_manager' || manager.role === 'district_manager') return false; // Strictly never view State or District Manager
+    if (rawMgrRole.includes('state') || rawMgrRole.includes('district')) return false; // Strictly never view State or District Manager
     return matchesDivision(admin, manager);
   }
 
   // Pincode Admin: can view pincode managers within their pincode
   if (adminRoleLower.includes('pincode')) {
-    if (manager.role !== 'pincode_manager') return false; // Strictly never view higher managers
+    if (!rawMgrRole.includes('pincode')) return false; // Strictly never view higher managers
     return matchesPincode(admin, manager);
   }
 
@@ -210,32 +222,40 @@ const isDesignatedTerritorialAdmin = (admin, manager) => {
   const adminRole = (admin.role || '').trim();
   const adminRoleLower = adminRole.toLowerCase().replace(/_/g, ' ');
 
+  // Non-administrative roles (Managers, Agents, Customers, Vendors) strictly have no approval authority
+  if (!adminRoleLower.includes('admin') || adminRoleLower.includes('manager') || adminRoleLower.includes('agent')) {
+    return false;
+  }
+
   // Global Unscoped Super Admin
   const isGlobalSuper = adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || (adminRoleLower === 'admin' && (!admin.state || admin.state.toLowerCase() === 'all india'));
   if (isGlobalSuper) return true;
 
-  const mgrRole = (manager.role || '').toLowerCase();
+  let rawMgrRole = String(manager.role || manager.level || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const levelNumMap = { '1': 'state', '2': 'district', '3': 'division', '4': 'pincode' };
+  if (levelNumMap[rawMgrRole]) rawMgrRole = levelNumMap[rawMgrRole];
+  if (levelNumMap[String(manager.level || '').trim()]) rawMgrRole = levelNumMap[String(manager.level || '').trim()];
 
-  // State Manager -> ONLY State Admin (or state-scoped admin) for that state
-  if (mgrRole === 'state_manager') {
+  // 1. State Manager -> ONLY State Admin for that state
+  if (rawMgrRole.includes('state')) {
     if (!adminRoleLower.includes('state') && !(adminRoleLower === 'admin' && admin.state)) return false;
     return matchesState(admin, manager);
   }
 
-  // District Manager -> ONLY District Admin for that district
-  if (mgrRole === 'district_manager') {
+  // 2. District Manager -> ONLY District Admin for that district
+  if (rawMgrRole.includes('district')) {
     if (!adminRoleLower.includes('district')) return false;
     return matchesDistrict(admin, manager);
   }
 
-  // Division Manager -> ONLY Division Admin for that division
-  if (mgrRole === 'division_manager') {
+  // 3. Division Manager -> ONLY Division Admin for that division
+  if (rawMgrRole.includes('division') || rawMgrRole.includes('divisional')) {
     if (!adminRoleLower.includes('division') && !adminRoleLower.includes('divisional')) return false;
     return matchesDivision(admin, manager);
   }
 
-  // Pincode Manager -> ONLY Pincode Admin for that exact pincode
-  if (mgrRole === 'pincode_manager') {
+  // 4. Pincode Manager -> ONLY Pincode Admin for that exact pincode
+  if (rawMgrRole.includes('pincode')) {
     if (!adminRoleLower.includes('pincode')) return false;
     return matchesPincode(admin, manager);
   }
@@ -439,7 +459,7 @@ const populateManager = async (m, relation, user) => {
       ? `${resolvedDivision} Division` 
       : resolvedDistrict 
       ? `${resolvedDistrict} District` 
-      : resolvedState || 'Tamil Nadu',
+      : resolvedState || '',
     assignedArea: [
       pincode?.areaName, 
       resolvedDivision, 
@@ -457,22 +477,97 @@ const getLowerLevelManagers = async (req, res) => {
     const user = req.user;
     const allUsersList = Array.from(db.users || []);
     const allManagersList = Array.from(db.managers || []);
-
     const combinedManagersMap = new Map();
+    const emailToIdMap = new Map();
+
     allUsersList.filter(u => (u.role || '').toLowerCase().includes('manager')).forEach(u => {
-      const idKey = String(u._id || u.id || u.email || '').trim().toLowerCase();
-      if (idKey) combinedManagersMap.set(idKey, u);
+      const primaryKey = String(u._id || u.id || u.email || '').trim().toLowerCase();
+      if (primaryKey) {
+        combinedManagersMap.set(primaryKey, u);
+        if (u.email) emailToIdMap.set(String(u.email).trim().toLowerCase(), primaryKey);
+      }
     });
+
     allManagersList.forEach(m => {
-      const idKey = String(m._id || m.id || m.email || '').trim().toLowerCase();
-      if (idKey && !combinedManagersMap.has(idKey)) {
-        combinedManagersMap.set(idKey, {
+      const primaryKey = String(m._id || m.id || m.email || '').trim().toLowerCase();
+      const existingId = combinedManagersMap.has(primaryKey) ? primaryKey : (m.email && emailToIdMap.get(String(m.email).trim().toLowerCase()));
+      if (existingId) {
+        Object.assign(combinedManagersMap.get(existingId), {
           ...m,
           role: m.role || 'pincode_manager',
           status: m.status || 'active'
         });
+      } else if (primaryKey) {
+        combinedManagersMap.set(primaryKey, {
+          ...m,
+          role: m.role || 'pincode_manager',
+          status: m.status || 'active'
+        });
+        if (m.email) emailToIdMap.set(String(m.email).trim().toLowerCase(), primaryKey);
       }
     });
+
+    // Also merge approved manager portal registrations from MongoDB Atlas managerrequests collection
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const atlasRequests = await mongoDb.collection('managerrequests').find({
+          status: { $in: ['approved', 'Approved', 'active', 'Active'] }
+        }).toArray();
+        for (const reqDoc of atlasRequests) {
+          const levelMap = {
+            'state': 'state_manager',
+            'district': 'district_manager',
+            'division': 'division_manager',
+            'divisional': 'division_manager',
+            'pincode': 'pincode_manager',
+            '1': 'state_manager',
+            '2': 'district_manager',
+            '3': 'division_manager',
+            '4': 'pincode_manager'
+          };
+          const derivedRole = levelMap[String(reqDoc.level || '').toLowerCase()] || reqDoc.role || 'pincode_manager';
+          const rawId = String(reqDoc.userId || reqDoc._id || reqDoc.id || '').trim().toLowerCase();
+          const email = reqDoc.email ? String(reqDoc.email).trim().toLowerCase() : null;
+          const existingId = (rawId && combinedManagersMap.has(rawId)) ? rawId : (email && emailToIdMap.get(email));
+
+          const existing = existingId ? combinedManagersMap.get(existingId) : null;
+          const mappedApproved = {
+            ...(existing || {}),
+            _id: reqDoc._id,
+            id: reqDoc.userId || String(reqDoc._id),
+            userId: reqDoc.userId || String(reqDoc._id),
+            name: reqDoc.name || existing?.name || 'Manager',
+            email: reqDoc.email || existing?.email || '',
+            phone: reqDoc.phone || reqDoc.altPhone || existing?.phone || '',
+            mobile: reqDoc.phone || reqDoc.altPhone || existing?.mobile || '',
+            role: derivedRole,
+            level: reqDoc.level || existing?.level || derivedRole.replace('_manager', ''),
+            state: reqDoc.assignedState || reqDoc.state || existing?.state || '',
+            district: reqDoc.assignedDistrict || reqDoc.district || existing?.district || '',
+            division: reqDoc.assignedDivision || reqDoc.division || existing?.division || '',
+            pincode: reqDoc.assignedPincode || reqDoc.pincode || existing?.pincode || '',
+            assignedState: reqDoc.assignedState || reqDoc.state || existing?.assignedState || '',
+            assignedDistrict: reqDoc.assignedDistrict || reqDoc.district || existing?.assignedDistrict || '',
+            assignedDivision: reqDoc.assignedDivision || reqDoc.division || existing?.assignedDivision || '',
+            assignedPincode: reqDoc.assignedPincode || reqDoc.pincode || existing?.assignedPincode || '',
+            status: 'active',
+            adminApprovalStatus: 'approved',
+            kycStatus: 'verified',
+            isActive: true
+          };
+
+          if (existingId) {
+            Object.assign(combinedManagersMap.get(existingId), mappedApproved);
+          } else if (rawId) {
+            combinedManagersMap.set(rawId, mappedApproved);
+            if (email) emailToIdMap.set(email, rawId);
+          }
+        }
+      }
+    } catch (_) {
+      // Atlas request fallback
+    }
 
     const allCandidateManagers = Array.from(combinedManagersMap.values());
     const currentUserId = String(user.id || user._id);
@@ -539,6 +634,7 @@ const getLowerLevelManagers = async (req, res) => {
       const levelMap = {
         'state': 'state_manager',
         'district': 'district_manager',
+        'division': 'division_manager',
         'divisional': 'division_manager',
         'pincode': 'pincode_manager',
         '1': 'state_manager',
@@ -634,7 +730,7 @@ const getLowerLevelManagers = async (req, res) => {
       const s = (m.status || '').toLowerCase().trim();
       const admApp = (m.adminApprovalStatus || '').toLowerCase().trim();
       const kycStat = (m.kycStatus || '').toLowerCase().trim();
-      // Unapproved, pending, under_review, pending_sub_admin_approval, pending_kyc, or rejected records belong exclusively in Manager Requests.
+      // Drop pending, under_review, awaiting KYC, or rejected records
       if (
         s === 'pending' ||
         s === 'under_review' ||
@@ -643,8 +739,9 @@ const getLowerLevelManagers = async (req, res) => {
         s === 'pending_kyc' ||
         s === 'pending_kyc_approval' ||
         s === 'rejected' ||
-        admApp !== 'approved' ||
-        (kycStat !== 'verified' && kycStat !== 'approved') ||
+        admApp === 'rejected' ||
+        (admApp && admApp !== 'approved') ||
+        kycStat === 'rejected' ||
         m.isActive === false
       ) {
         return false;
@@ -793,13 +890,8 @@ const getManagerRequests = async (req, res) => {
 
     let scopedRequests = allCandidateManagers;
     if (roleLower.includes('admin')) {
-      // Strict Role Separation & 1-to-1 Tier Routing for Registration Requests:
-      // State Manager -> State Admin
-      // District Manager -> District Admin
-      // Divisional Manager -> Divisional Admin
-      // Pincode Manager -> Pincode Admin
-      // Super Admin -> All
-      scopedRequests = scopedRequests.filter(u => isDesignatedTerritorialAdmin(user, u));
+      // Allow Admin to view all managers within their territorial oversight:
+      scopedRequests = scopedRequests.filter(u => canAdminManage(user, u));
     } else {
       scopedRequests = [];
     }

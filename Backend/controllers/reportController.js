@@ -276,7 +276,7 @@ async function getBusinessReports(req, res) {
 
       let district = o.district || o.deliveryDistrict || (customer ? (customer.district || customer.city) : null);
       let division = o.division || o.deliveryDivision || (customer ? customer.division : null);
-      let state = o.state || o.deliveryState || (customer ? customer.state : null) || user.state || 'Tamil Nadu';
+      let state = o.state || o.deliveryState || (customer ? customer.state : null) || user.state || '';
 
       if (pincode && db.pincodes) {
         const pObj = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === String(pincode));
@@ -289,8 +289,9 @@ async function getBusinessReports(req, res) {
       if (!district && /salem/i.test(rawAddress)) district = 'Salem';
       if (!division && /thalaivasal/i.test(rawAddress)) division = 'Thalaivasal';
       if (!state && /tamil\s*nadu/i.test(rawAddress)) state = 'Tamil Nadu';
+      else if (!state && /karnataka/i.test(rawAddress)) state = 'Karnataka';
       if (!division && district && district.toLowerCase() === 'salem') division = 'Thalaivasal';
-      if (!state) state = 'Tamil Nadu';
+      if (!state && user.state) state = user.state;
 
       // Timestamps
       const rawDate = o.createdAt || o.orderDate || o.created_at || o.date;
@@ -871,42 +872,79 @@ const submitManagerReport = async (req, res) => {
   }
 };
 
+function enrichReportWithTerritory(rpt) {
+  if (!rpt) return rpt;
+  if (!rpt.state || !rpt.district || !rpt.division || !rpt.pincode) {
+    const mgrId = String(rpt.managerId || '').trim();
+    const mgrName = String(rpt.managerName || '').trim().toLowerCase();
+    const mgr = Array.from(db.users || []).find(u => (mgrId && String(u._id || u.id) === mgrId) || (mgrName && u.name && u.name.trim().toLowerCase() === mgrName)) ||
+                Array.from(db.managers || []).find(m => (mgrId && String(m._id || m.id) === mgrId) || (mgrName && m.name && m.name.trim().toLowerCase() === mgrName));
+    if (mgr) {
+      if (!rpt.state) rpt.state = mgr.state || mgr.assignedState || '';
+      if (!rpt.district) rpt.district = mgr.district || mgr.assignedDistrict || '';
+      if (!rpt.division) rpt.division = mgr.division || mgr.assignedDivision || '';
+      if (!rpt.pincode) rpt.pincode = mgr.pincode || mgr.assignedPincode || '';
+    }
+  }
+
+  // Construct territory display field if not present or placeholder
+  if (!rpt.territory || rpt.territory === '—' || rpt.territory === '-') {
+    const parts = [
+      rpt.pincode ? `PIN: ${rpt.pincode}` : null,
+      rpt.division ? `${rpt.division} Division` : null,
+      rpt.district ? `${rpt.district} District` : null,
+      rpt.state || null
+    ].filter(Boolean);
+    rpt.territory = parts.length > 0 ? parts.join(', ') : '—';
+  }
+  return rpt;
+}
+
 function isReportInTerritoryScope(rpt, user) {
   if (!user || !rpt) return false;
-  const rawRole = (user.role || '').toLowerCase();
-  if (rawRole.includes('super admin') || rawRole === 'admin' || user.role === 'Super Admin') return true;
+  enrichReportWithTerritory(rpt);
 
-  const userState = (user.state || user.scope?.stateName || '').toLowerCase();
-  const rptState = (rpt.state || '').toLowerCase();
-  const userDist = (user.district || user.scope?.districtName || '').toLowerCase();
-  const rptDist = (rpt.district || '').toLowerCase();
-  const userDiv = (user.division || user.scope?.divisionName || '').toLowerCase();
-  const rptDiv = (rpt.division || '').toLowerCase();
-  const userPin = String(user.pincode || user.pincodeCode || user.scope?.pincodeCode || '').trim();
+  const rawRole = (user.role || '').toLowerCase();
+  const userAdminRole = (user.adminRole || '').toLowerCase();
+  const isSuper = (rawRole.includes('super admin') || rawRole === 'superadmin' || user.role === 'Super Admin' || (rawRole === 'admin' && !userAdminRole.includes('state') && !userAdminRole.includes('district') && !userAdminRole.includes('division') && !userAdminRole.includes('pincode'))) && (!user.state || user.state.toLowerCase() === 'all india');
+  if (isSuper) return true;
+
+  const clean = (val) => String(val || '').trim().toLowerCase().replace(/\s+(district|division|state)$/, '').trim();
+
+  const userState = clean(user.state || user.assignedState || user.scope?.stateName);
+  const rptState = clean(rpt.state);
+  const userDist = clean(user.district || user.assignedDistrict || user.scope?.districtName);
+  const rptDist = clean(rpt.district);
+  const userDiv = clean(user.division || user.assignedDivision || user.scope?.divisionName);
+  const rptDiv = clean(rpt.division);
+  const userPin = String(user.pincode || user.assignedPincode || user.pincodeCode || user.scope?.pincodeCode || '').trim();
   const rptPin = String(rpt.pincode || '').trim();
 
-  // State Admin / State Manager
-  if (rawRole.includes('state')) {
+  // State Admin / State Manager (or admin scoped to state)
+  if (rawRole.includes('state') || (rawRole === 'admin' && userState)) {
     if (!userState || userState === 'all india') return true;
-    return rptState === userState || (user.stateId && rpt.stateId === user.stateId);
+    return Boolean(rptState && rptState === userState);
   }
 
   // District Admin / District Manager
   if (rawRole.includes('district')) {
-    if (!userDist) return true;
-    return rptDist === userDist || (user.districtId && rpt.districtId && String(rpt.districtId).toLowerCase().includes(userDist));
+    if (userState && userState !== 'all india' && rptState && rptState !== userState) return false;
+    if (!userDist || userDist === 'all districts') return true;
+    return Boolean(rptDist && rptDist === userDist);
   }
 
   // Divisional Admin / Division Manager
   if (rawRole.includes('division') || rawRole.includes('divisional')) {
-    if (!userDiv) return true;
-    return rptDiv === userDiv || (user.divisionId && rpt.divisionId === user.divisionId);
+    if (userState && userState !== 'all india' && rptState && rptState !== userState) return false;
+    if (userDist && userDist !== 'all districts' && rptDist && rptDist !== userDist) return false;
+    if (!userDiv || userDiv === 'all divisions') return true;
+    return Boolean(rptDiv && rptDiv === userDiv);
   }
 
   // Pincode Admin / Pincode Manager
   if (rawRole.includes('pincode')) {
     const isSelf = rpt.managerId === user._id || rpt.managerId === user.id;
-    const isPin = userPin && (rptPin === userPin || rpt.pincodeId === user.pincodeId);
+    const isPin = Boolean(userPin && rptPin && rptPin === userPin);
     return isPin || isSelf;
   }
 
@@ -917,23 +955,42 @@ function isReportInTerritoryScope(rpt, user) {
 const getSubmittedReports = async (req, res) => {
   try {
     const user = req.user;
-    const allReports = Array.from(db.submittedReports || []);
+    const allReports = Array.from(db.submittedReports || []).map(r => enrichReportWithTerritory({ ...r }));
     const { district, division, pincode, managerRole, period, search } = req.query;
 
     // 1. RBAC Hierarchy Filter (Strict Territory Cascading)
     let filtered = allReports.filter(rpt => isReportInTerritoryScope(rpt, user));
 
+    // Dynamic dependent hierarchy: available districts based on authorized scope
+    const availableDistricts = Array.from(new Set(filtered.map(r => r.district).filter(Boolean)));
+
     // 2. Query Filters
-    if (district && district !== 'All') {
-      filtered = filtered.filter(r => r.district === district || r.districtId === district);
+    if (district && district !== 'All' && district !== 'All Districts') {
+      const cleanDist = String(district).trim().toLowerCase().replace(/\s+district$/, '');
+      filtered = filtered.filter(r => {
+        const rd = String(r.district || '').trim().toLowerCase().replace(/\s+district$/, '');
+        return rd === cleanDist || r.districtId === district;
+      });
     }
-    if (division && division !== 'All') {
-      filtered = filtered.filter(r => r.division === division || r.divisionId === division);
+
+    // Dynamic dependent divisions based on selected district
+    const availableDivisions = Array.from(new Set(filtered.map(r => r.division).filter(Boolean)));
+
+    if (division && division !== 'All' && division !== 'All Divisions') {
+      const cleanDiv = String(division).trim().toLowerCase().replace(/\s+division$/, '');
+      filtered = filtered.filter(r => {
+        const rv = String(r.division || '').trim().toLowerCase().replace(/\s+division$/, '');
+        return rv === cleanDiv || r.divisionId === division;
+      });
     }
-    if (pincode && pincode !== 'All') {
-      filtered = filtered.filter(r => r.pincode === pincode || r.pincodeId === pincode);
+
+    // Dynamic dependent pincodes based on selected division
+    const availablePincodes = Array.from(new Set(filtered.map(r => r.pincode).filter(Boolean)));
+
+    if (pincode && pincode !== 'All' && pincode !== 'All Pincodes') {
+      filtered = filtered.filter(r => String(r.pincode).trim() === String(pincode).trim() || r.pincodeId === pincode);
     }
-    if (managerRole && managerRole !== 'All') {
+    if (managerRole && managerRole !== 'All' && managerRole !== 'All Manager Tiers') {
       filtered = filtered.filter(r => (r.managerRole || '').toLowerCase().includes(managerRole.toLowerCase()));
     }
     if (period && period !== 'All') {
@@ -952,11 +1009,6 @@ const getSubmittedReports = async (req, res) => {
 
     // Sort newest first
     filtered.sort((a, b) => new Date(b.submittedAt || b.createdAt) - new Date(a.submittedAt || a.createdAt));
-
-    // Extract available hierarchy filters based on visible reports
-    const availableDistricts = Array.from(new Set(filtered.map(r => r.district).filter(Boolean)));
-    const availableDivisions = Array.from(new Set(filtered.map(r => r.division).filter(Boolean)));
-    const availablePincodes = Array.from(new Set(filtered.map(r => r.pincode).filter(Boolean)));
 
     return res.json({
       success: true,
