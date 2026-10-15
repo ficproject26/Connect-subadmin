@@ -7,6 +7,7 @@ import { StatusBadge } from '../../components/Badge';
 import { useTheme } from '../../context/ThemeContext';
 import { AgentActivityFlowModal } from '../../components/AgentActivityFlowModal';
 import { AgentDetailsModal } from '../../components/AgentDetailsModal';
+import { AgentOnboardingModal } from '../../components/AgentOnboardingModal';
 import { InitiateVendorOnboardingModal } from '../../components/InitiateVendorOnboardingModal';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { getTerritoryLocking, safeString, safeLowerCase } from '../../utils/territoryHelper';
@@ -124,6 +125,7 @@ export function StateAgents({ level = 'state' }) {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
 
   // Territory hierarchy filter state
   const [selectedFilterState, setSelectedFilterState] = useState(stateFilterParam || locking.defaultState || '');
@@ -543,6 +545,16 @@ export function StateAgents({ level = 'state' }) {
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">{config.title}</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{config.subtitle}</p>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAddAgentModal(true)}
+            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add {config.badge || 'State Agent'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Active Hierarchical Parent Filter Breadcrumb */}
@@ -682,6 +694,15 @@ export function StateAgents({ level = 'state' }) {
         isOpen={showOnboardModal}
         onClose={() => setShowOnboardModal(false)}
         onSuccess={handleCreateOnboarding}
+      />
+
+      <AgentOnboardingModal
+        isOpen={showAddAgentModal}
+        onClose={() => setShowAddAgentModal(false)}
+        onSuccess={() => {
+          loadData();
+        }}
+        level={activeLevel}
       />
     </div>
   );

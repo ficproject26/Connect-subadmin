@@ -4,6 +4,7 @@ import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { AgentActivityFlowModal } from '../../components/AgentActivityFlowModal';
+import { AgentOnboardingModal } from '../../components/AgentOnboardingModal';
 import { 
   UserPlus, 
   Phone, 
@@ -21,6 +22,7 @@ export function DivisionalAgents() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('roster');
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
 
   const division = user?.division || '';
 
@@ -160,11 +162,23 @@ export function DivisionalAgents() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Division Field Operations</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Cluster sales and pincode ground activities within {division ? `${division} Division` : 'assigned division'}.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Division Agents</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Cluster sales and pincode ground activities within {division ? `${division} Division` : 'assigned division'}.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAddAgentModal(true)}
+            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add Division Agent</span>
+          </button>
+        </div>
       </div>
 
       {/* Visibility Rule Notice */}
@@ -229,6 +243,15 @@ export function DivisionalAgents() {
         onClose={() => setSelectedActivity(null)}
         activity={selectedActivity}
         onAdvance={handleAdvanceActivity}
+      />
+
+      <AgentOnboardingModal
+        isOpen={showAddAgentModal}
+        onClose={() => setShowAddAgentModal(false)}
+        onSuccess={() => {
+          loadData();
+        }}
+        level="division"
       />
     </div>
   );

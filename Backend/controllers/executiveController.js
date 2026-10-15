@@ -543,6 +543,361 @@ async function getAgents(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// POST /operations/agents — Strict Territory-Based Agent Onboarding
+// ─────────────────────────────────────────────────────────────────
+async function addAgent(req, res) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const userRole = String(req.user.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+    const adminUserRole = String(req.user.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+    const isSuperAdmin = (userRole.includes('super admin') || userRole === 'main admin' || (userRole === 'admin' && !adminUserRole.includes('state') && !adminUserRole.includes('district') && !adminUserRole.includes('division') && !adminUserRole.includes('pincode') && !req.user?.level?.includes('state'))) && (!req.user?.state || req.user?.state.toLowerCase() === 'all india');
+
+    // 1. Determine permitted administrative level
+    let permittedLevel = '';
+    if (isSuperAdmin) {
+      permittedLevel = req.body.level ? normalizeLevel(req.body.level) : 'state';
+    } else if (userRole.includes('state') || (userRole === 'admin' && req.user?.state)) {
+      permittedLevel = 'state';
+    } else if (userRole.includes('district')) {
+      permittedLevel = 'district';
+    } else if (userRole.includes('division') || userRole.includes('divisional')) {
+      permittedLevel = 'division';
+    } else if (userRole.includes('pincode')) {
+      permittedLevel = 'pincode';
+    } else {
+      return res.status(403).json({
+        success: false,
+        code: 'UNAUTHORIZED_ROLE',
+        message: 'Only administrative accounts (State, District, Division, Pincode Admins) have permissions to onboard agents.'
+      });
+    }
+
+    // 2. Reject if requested level does not match caller's permitted administrative level
+    if (!isSuperAdmin && req.body.level) {
+      const requestedNorm = normalizeLevel(req.body.level);
+      if (requestedNorm !== permittedLevel) {
+        return res.status(403).json({
+          success: false,
+          code: 'UNAUTHORIZED_LEVEL',
+          message: `Unauthorized level. ${req.user.role || 'Your role'} can only onboard ${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agents.`
+        });
+      }
+    }
+
+    // 3. Resolve caller's trusted territory
+    const callerState = (req.user?.state || req.user?.assignedState || '').trim();
+    const callerDistrict = (req.user?.district || req.user?.assignedDistrict || '').trim();
+    const callerDivision = (req.user?.division || req.user?.assignedDivision || '').trim();
+    const callerPincode = String(req.user?.pincode || req.user?.assignedPincode || '').trim();
+    const callerStateId = req.user?.stateId ? String(req.user.stateId).trim() : null;
+    const callerDistrictId = req.user?.districtId ? String(req.user.districtId).trim() : null;
+    const callerDivisionId = req.user?.divisionId ? String(req.user.divisionId).trim() : null;
+    const callerPincodeId = req.user?.pincodeId ? String(req.user.pincodeId).trim() : null;
+
+    const { state: reqState, district: reqDistrict, division: reqDivision, pincode: reqPincode, stateId: reqStateId, districtId: reqDistrictId, divisionId: reqDivisionId, pincodeId: reqPincodeId } = req.body;
+
+    // 4. Territory authorization checks (reject spoofed / manipulated payload territories)
+    if (!isSuperAdmin) {
+      // State Admin
+      if (permittedLevel === 'state') {
+        if (reqState && callerState && callerState.toLowerCase() !== 'all india' && reqState.toLowerCase().trim() !== callerState.toLowerCase()) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. State Admins cannot onboard agents outside their assigned state.'
+          });
+        }
+        if (reqStateId && callerStateId && String(reqStateId).trim() !== callerStateId) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. State ID mismatch.'
+          });
+        }
+      }
+      // District Admin
+      else if (permittedLevel === 'district') {
+        if (reqState && callerState && callerState.toLowerCase() !== 'all india' && reqState.toLowerCase().trim() !== callerState.toLowerCase()) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. District Admins cannot onboard agents outside their assigned state.'
+          });
+        }
+        if (reqDistrict && callerDistrict && callerDistrict.toLowerCase() !== 'all districts' && reqDistrict.toLowerCase().trim() !== callerDistrict.toLowerCase()) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. District Admins cannot onboard agents outside their assigned district.'
+          });
+        }
+        if (reqDistrictId && callerDistrictId && String(reqDistrictId).trim() !== callerDistrictId) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. District ID mismatch.'
+          });
+        }
+      }
+      // Division Admin
+      else if (permittedLevel === 'division') {
+        if (reqState && callerState && callerState.toLowerCase() !== 'all india' && reqState.toLowerCase().trim() !== callerState.toLowerCase()) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. Division Admins cannot onboard agents outside their assigned state.'
+          });
+        }
+        if (reqDistrict && callerDistrict && callerDistrict.toLowerCase() !== 'all districts' && reqDistrict.toLowerCase().trim() !== callerDistrict.toLowerCase()) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. Division Admins cannot onboard agents outside their assigned district.'
+          });
+        }
+        if (reqDivision && callerDivision && callerDivision.toLowerCase() !== 'all divisions' && !divisionMatches(reqDivision, callerDivision)) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. Division Admins cannot onboard agents outside their assigned division.'
+          });
+        }
+        if (reqDivisionId && callerDivisionId && String(reqDivisionId).trim() !== callerDivisionId) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. Division ID mismatch.'
+          });
+        }
+      }
+      // Pincode Admin
+      else if (permittedLevel === 'pincode') {
+        if (reqPincode && callerPincode && callerPincode !== 'all' && String(reqPincode).trim() !== callerPincode) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. Pincode Admins cannot onboard agents outside their assigned pincode.'
+          });
+        }
+        if (reqPincodeId && callerPincodeId && String(reqPincodeId).trim() !== callerPincodeId) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_TERRITORY',
+            message: 'Unauthorized territory. Pincode ID mismatch.'
+          });
+        }
+      }
+    }
+
+    // 5. Server-side authoritative territory assignment (never trust raw frontend values)
+    let assignedState = isSuperAdmin ? (reqState || 'Tamil Nadu') : callerState;
+    let assignedDistrict = isSuperAdmin ? (reqDistrict || null) : (permittedLevel === 'state' ? null : callerDistrict);
+    let assignedDivision = isSuperAdmin ? (reqDivision || null) : ((permittedLevel === 'division' || permittedLevel === 'pincode') ? callerDivision : null);
+    let assignedPincode = isSuperAdmin ? (reqPincode ? String(reqPincode).trim() : null) : (permittedLevel === 'pincode' ? callerPincode : null);
+
+    // If pincode is set but district/division/state are missing, resolve from db.pincodes
+    if (assignedPincode && (!assignedState || !assignedDistrict || !assignedDivision) && db.pincodes) {
+      const pinDoc = Array.from(db.pincodes || []).find(p => String(p.code || p.pincode) === assignedPincode);
+      if (pinDoc) {
+        if (!assignedState && pinDoc.state) assignedState = pinDoc.state;
+        if (!assignedDistrict && pinDoc.district) assignedDistrict = pinDoc.district;
+        if (!assignedDivision && pinDoc.division) assignedDivision = pinDoc.division;
+      }
+    }
+
+    // Lookup stable territory IDs from database
+    let stateId = callerStateId;
+    let districtId = callerDistrictId;
+    let divisionId = callerDivisionId;
+    let pincodeId = callerPincodeId;
+
+    if (!stateId && assignedState && db.states) {
+      const sDoc = Array.from(db.states || []).find(s => s.name?.toLowerCase() === assignedState.toLowerCase());
+      if (sDoc) stateId = String(sDoc._id || sDoc.id || sDoc.stateId);
+    }
+    if (!districtId && assignedDistrict && db.districts) {
+      const dDoc = Array.from(db.districts || []).find(d => d.name?.toLowerCase() === assignedDistrict.toLowerCase());
+      if (dDoc) districtId = String(dDoc._id || dDoc.id || dDoc.districtId);
+    }
+    if (!divisionId && assignedDivision && db.divisions) {
+      const vDoc = Array.from(db.divisions || []).find(d => divisionMatches(d.name, assignedDivision));
+      if (vDoc) divisionId = String(vDoc._id || vDoc.id || vDoc.divisionId);
+    }
+    if (!pincodeId && assignedPincode && db.pincodes) {
+      const pDoc = Array.from(db.pincodes || []).find(p => String(p.code || p.pincode) === assignedPincode);
+      if (pDoc) pincodeId = String(pDoc._id || pDoc.id || pDoc.pincodeId);
+    }
+
+    // 6. Validate baseline agent fields
+    const { name, mobile, phone, email } = req.body;
+    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({ success: false, message: 'Valid agent name (at least 2 characters) is required.' });
+    }
+
+    const rawMobile = String(mobile || phone || '').replace(/\D/g, '');
+    if (!rawMobile || rawMobile.length !== 10) {
+      return res.status(400).json({ success: false, message: 'A valid 10-digit mobile number is required.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || typeof email !== 'string' || !emailRegex.test(email.trim())) {
+      return res.status(400).json({ success: false, message: 'A valid email address is required.' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanMobile = rawMobile;
+
+    // 7. Check for duplicate agent or user
+    const isDupAgent = Array.from(db.agents || []).some(a =>
+      (a.email && a.email.toLowerCase().trim() === cleanEmail) ||
+      (a.phone && a.phone.replace(/\D/g, '') === cleanMobile) ||
+      (a.mobile && a.mobile.replace(/\D/g, '') === cleanMobile)
+    );
+    const isDupUser = Array.from(db.users || []).some(u =>
+      (u.email && u.email.toLowerCase().trim() === cleanEmail) ||
+      (u.mobile && String(u.mobile).replace(/\D/g, '') === cleanMobile)
+    );
+
+    if (isDupAgent || isDupUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'An agent with this mobile number or email already exists in the system.'
+      });
+    }
+
+    // 8. Generate IDs and create agent record
+    const randPart = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const newId = `AGT-${Date.now().toString().slice(-6)}${randPart}`;
+    const regId = `REG-AGT-${Date.now().toString().slice(-6)}`;
+    const now = new Date().toISOString();
+
+    const newAgent = {
+      _id: newId,
+      id: newId,
+      name: name.trim(),
+      applicantName: name.trim(),
+      email: cleanEmail,
+      phone: cleanMobile,
+      mobile: cleanMobile,
+      role: `${permittedLevel}_agent`,
+      level: permittedLevel,
+      roleTitle: `${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agent`,
+      registrationId: regId,
+      territory: {
+        state: assignedState,
+        district: assignedDistrict || null,
+        division: assignedDivision || null,
+        pincode: assignedPincode || null
+      },
+      state: assignedState,
+      district: assignedDistrict || null,
+      division: assignedDivision || null,
+      pincode: assignedPincode || null,
+      stateId: stateId || null,
+      districtId: districtId || null,
+      divisionId: divisionId || null,
+      pincodeId: pincodeId || null,
+      status: 'pending',
+      adminApprovalStatus: 'pending',
+      kycStatus: 'pending_verification',
+      isActive: false,
+      isApproved: false,
+      requiresApproval: true,
+      isFullyApproved: false,
+      onboardedBy: req.user.name || req.user.email,
+      onboardedById: req.user.id || req.user._id,
+      onboardedByRole: req.user.role,
+      totalReferrals: 0,
+      vendorOnboardings: 0,
+      walletBalance: 0,
+      totalEarned: 0,
+      reviewHistory: [
+        {
+          action: 'ONBOARDED',
+          status: 'pending',
+          reviewerId: req.user.id || req.user._id,
+          reviewerName: req.user.name || req.user.email,
+          reviewerRole: req.user.role,
+          reviewedAt: now,
+          notes: `Agent onboarded by ${req.user.role} "${req.user.name || req.user.email}". Awaiting territory approval.`
+        }
+      ],
+      createdAt: now,
+      updatedAt: now
+    };
+
+    if (db.agents && typeof db.agents.initMongo === 'function' && !db.agents._mongoCol) {
+      try {
+        const { getMongoDb } = require('../config/mongo');
+        const mdb = await getMongoDb();
+        if (mdb) {
+          await db.agents.initMongo(mdb);
+        }
+      } catch (err) {
+        // silent fallback
+      }
+    }
+
+    if (db.agents) {
+      await db.agents.insertOne(newAgent);
+    }
+
+    if (db.users) {
+      await db.users.insertOne({
+        _id: newId,
+        id: newId,
+        name: name.trim(),
+        email: cleanEmail,
+        mobile: cleanMobile,
+        role: `${permittedLevel}_agent`,
+        level: permittedLevel,
+        state: assignedState,
+        district: assignedDistrict || null,
+        division: assignedDivision || null,
+        pincode: assignedPincode || null,
+        stateId: stateId || null,
+        districtId: districtId || null,
+        divisionId: divisionId || null,
+        pincodeId: pincodeId || null,
+        status: 'pending',
+        adminApprovalStatus: 'pending',
+        kycStatus: 'pending_verification',
+        isActive: false,
+        isApproved: false,
+        requiresApproval: true,
+        createdAt: now,
+        updatedAt: now
+      }).catch(() => {});
+    }
+
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        id: `AUD-${Date.now()}`,
+        userId: req.user.id || req.user._id,
+        userName: req.user.name || req.user.email,
+        userRole: req.user.role,
+        action: 'AGENT_ONBOARDED',
+        module: 'Agents',
+        details: `${req.user.role} "${req.user.name || req.user.email}" onboarded ${permittedLevel} agent "${name}" for territory ${[assignedPincode, assignedDivision, assignedDistrict, assignedState].filter(Boolean).join(', ')}.`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      }).catch(() => {});
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: `${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agent onboarded successfully. Awaiting approval.`,
+      agent: newAgent
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to onboard agent', error: error.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
 // GET /operations/agents/hierarchy
 // ─────────────────────────────────────────────────────────────────
 async function getAgentHierarchy(req, res) {
@@ -1658,6 +2013,7 @@ module.exports = {
   getSupportTeam,
   updateTicketStatus,
   getAgents,
+  addAgent,
   getAgentHierarchy,
   getAgentActivities,
   createAgentActivity,

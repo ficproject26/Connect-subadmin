@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { AgentHierarchyBanner } from '../../components/AgentHierarchyBanner';
 import { AgentActivityFlowModal } from '../../components/AgentActivityFlowModal';
 import { AgentDetailsModal } from '../../components/AgentDetailsModal';
+import { AgentOnboardingModal } from '../../components/AgentOnboardingModal';
 import { InitiateVendorOnboardingModal } from '../../components/InitiateVendorOnboardingModal';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { getTerritoryLocking, safeString, safeLowerCase } from '../../utils/territoryHelper';
@@ -59,15 +60,15 @@ const LEVEL_CONFIGS = {
     defaultData: []
   },
   divisional: {
-    title: 'Divisional Agents',
+    title: 'Division Agents',
     subtitle: 'Cluster coordinators supervising multiple pincodes, field executives, and merchant onboardings.',
-    breadcrumb: 'Divisional Agent',
-    badge: 'Divisional Agent',
+    breadcrumb: 'Division Agent',
+    badge: 'Division Agent',
     badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60',
     icon: Layers,
-    tableTitle: 'Divisional Agent Roster',
+    tableTitle: 'Division Agent Roster',
     tableSubtitle: 'Cluster supervisory agents managing ground activations, pincode agents & KYC reviews',
-    exportFile: 'divisional_agents.csv',
+    exportFile: 'division_agents.csv',
     defaultData: []
   },
   pincode: {
@@ -152,6 +153,7 @@ export function DistrictAgents({ level = 'district' }) {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
 
   // Fetch agents and activities
   const loadData = async () => {
@@ -449,6 +451,14 @@ export function DistrictAgents({ level = 'district' }) {
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
             type="button"
+            onClick={() => setShowAddAgentModal(true)}
+            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add {isDivisionalAdmin ? 'Division Agent' : (config.badge || 'District Agent')}</span>
+          </button>
+          <button
+            type="button"
             onClick={loadData}
             title="Refresh Data"
             className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
@@ -649,6 +659,18 @@ export function DistrictAgents({ level = 'district' }) {
             setShowOnboardModal(false);
             loadData();
           }}
+        />
+      )}
+
+      {/* Agent Onboard Modal */}
+      {showAddAgentModal && (
+        <AgentOnboardingModal
+          isOpen={showAddAgentModal}
+          onClose={() => setShowAddAgentModal(false)}
+          onSuccess={() => {
+            loadData();
+          }}
+          level={isDivisionalAdmin ? 'division' : 'district'}
         />
       )}
     </div>

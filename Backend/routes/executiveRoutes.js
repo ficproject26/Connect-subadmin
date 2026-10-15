@@ -11,6 +11,7 @@ router.get('/executives', executiveController.getExecutives);
 router.get('/support-team', executiveController.getSupportTeam);
 router.patch('/support-team/:id', executiveController.updateTicketStatus);
 router.get('/agents', executiveController.getAgents);
+router.post('/agents', executiveController.addAgent);
 router.get('/agents/requests', executiveController.getAgentRequests);
 router.post('/agents/:id/approve', executiveController.approveAgent);
 router.post('/agents/:id/reject', executiveController.rejectAgent);

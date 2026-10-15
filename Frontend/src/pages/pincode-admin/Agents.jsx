@@ -5,6 +5,7 @@ import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { InitiateVendorOnboardingModal } from '../../components/InitiateVendorOnboardingModal';
 import { AgentActivityFlowModal } from '../../components/AgentActivityFlowModal';
+import { AgentOnboardingModal } from '../../components/AgentOnboardingModal';
 import { 
   UserPlus, 
   Phone, 
@@ -25,6 +26,7 @@ export function PincodeAgents() {
   const [activeTab, setActiveTab] = useState('roster');
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
 
   const pincode = user?.pincode || '';
 
@@ -157,8 +159,18 @@ export function PincodeAgents() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Ground Agents{pincode ? ` (PIN: ${pincode})` : ''}</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Field sales, customer acquisition, and vendor onboarding.</p>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Pincode Agents{pincode ? ` (PIN: ${pincode})` : ''}</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Hyper-local pincode service agents, door-to-door customer onboarding, and neighborhood liaisons.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAddAgentModal(true)}
+            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add Pincode Agent</span>
+          </button>
         </div>
       </div>
 
@@ -230,6 +242,15 @@ export function PincodeAgents() {
         onClose={() => setShowOnboardModal(false)}
         onSuccess={handleCreateOnboarding}
         defaultPincode={pincode}
+      />
+
+      <AgentOnboardingModal
+        isOpen={showAddAgentModal}
+        onClose={() => setShowAddAgentModal(false)}
+        onSuccess={() => {
+          loadData();
+        }}
+        level="pincode"
       />
     </div>
   );

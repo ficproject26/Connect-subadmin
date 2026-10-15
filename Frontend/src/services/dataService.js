@@ -306,6 +306,10 @@ export const dataService = {
     const qs = new URLSearchParams(params).toString();
     return apiRequest(`/operations/agents${qs ? `?${qs}` : ''}`);
   },
+  addAgent: (data) => apiRequest('/operations/agents', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
   getAgentRequests: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return apiRequest(`/operations/agents/requests${qs ? `?${qs}` : ''}`);
