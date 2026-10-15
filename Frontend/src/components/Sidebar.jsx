@@ -79,11 +79,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
       },
       {
         title: 'Agents',
-        items: role === 'State Admin' ? [
-          { name: 'State Agents', path: '/state-admin/agents/state', icon: Award },
-          { name: 'Agent Requests', path: '/state-admin/agents/requests', icon: UserPlus },
-          { name: 'Agents Payment', path: '/state-admin/agent-payments', icon: IndianRupee },
-        ] : [
+        items: [
           { name: 'State Agents', path: '/state-admin/agents/state', icon: Award },
           { name: 'District Agents', path: '/state-admin/agents/district', icon: Building2 },
           { name: 'Division Agents', path: '/state-admin/agents/divisional', icon: Layers },
@@ -168,6 +164,8 @@ export function Sidebar({ isOpen, setIsOpen }) {
         title: 'Agents',
         items: [
           { name: 'District Agents', path: '/district-admin/agents/district', icon: Building2 },
+          { name: 'Division Agents', path: '/district-admin/agents/divisional', icon: Layers },
+          { name: 'Pincode Agents', path: '/district-admin/agents/pincode', icon: MapPin },
           { name: 'Agent Requests', path: '/district-admin/agents/requests', icon: UserPlus },
           { name: 'Agents Payment', path: '/district-admin/agent-payments', icon: IndianRupee },
         ]
@@ -246,6 +244,7 @@ export function Sidebar({ isOpen, setIsOpen }) {
         title: 'Agents',
         items: [
           { name: 'Division Agents', path: '/divisional-admin/agents/divisional', icon: Layers },
+          { name: 'Pincode Agents', path: '/divisional-admin/agents/pincode', icon: MapPin },
           { name: 'Agent Requests', path: '/divisional-admin/agents/requests', icon: UserPlus },
           { name: 'Agents Payment', path: '/divisional-admin/agent-payments', icon: IndianRupee },
         ]
