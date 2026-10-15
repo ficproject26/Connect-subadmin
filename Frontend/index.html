@@ -11,50 +11,64 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
       (function () {
+        function extractString(val) {
+          if (val === null || val === undefined) return '';
+          if (typeof val === 'string') return val;
+          if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+          let res = '';
+          try {
+            if (val.name) res += ' ' + val.name;
+            if (val.message) res += ' ' + val.message;
+            if (val.stack) res += ' ' + val.stack;
+            if (val.sourceFile) res += ' ' + val.sourceFile;
+            if (val.blockedURI) res += ' ' + val.blockedURI;
+            if (val.violatedDirective) res += ' ' + val.violatedDirective;
+            if (val.sample) res += ' ' + val.sample;
+            if (val.reason) res += ' ' + extractString(val.reason);
+            if (val.error) res += ' ' + extractString(val.error);
+            res += ' ' + String(val);
+            try {
+              res += ' ' + JSON.stringify(val);
+            } catch (_) {}
+          } catch (_) {
+            res += ' ' + String(val);
+          }
+          return res;
+        }
+
         const isIgnorableNoise = (msg) => {
           if (!msg) return false;
-          let str = '';
-          if (typeof msg === 'string') {
-            str = msg;
-          } else if (msg instanceof Error) {
-            str = `${msg.name} ${msg.message} ${msg.stack}`;
-          } else if (typeof msg === 'object') {
-            try {
-              str = `${msg.message || ''} ${msg.stack || ''} ${msg.name || ''} ${JSON.stringify(msg) || ''}`;
-            } catch (e) {
-              str = String(msg);
-            }
-          } else {
-            str = String(msg);
-          }
+          const str = extractString(msg).toLowerCase();
           return (
-            str.includes('A listener indicated an asynchronous response') ||
+            str.includes('a listener indicated an asynchronous response') ||
             str.includes('message channel closed') ||
-            str.includes('runtime.lastError') ||
-            str.includes('Evaluating a string as JavaScript violates') ||
-            str.includes('Content Security Policy') ||
+            str.includes('runtime.lasterror') ||
+            str.includes('evaluating a string as javascript violates') ||
+            str.includes('content security policy') ||
             str.includes('unsafe-eval') ||
             str.includes('content.js') ||
-            str.includes('chrome-extension://')
+            str.includes('chrome-extension')
           );
         };
 
         const filterMethod = (origFn) => {
           return function (...args) {
-            const combined = args.map((a) => {
-              if (typeof a === 'string') return a;
-              try { return JSON.stringify(a); } catch { return String(a); }
-            }).join(' ');
-            if (isIgnorableNoise(combined) || args.some(isIgnorableNoise)) return;
+            for (let i = 0; i < args.length; i++) {
+              if (isIgnorableNoise(args[i])) return;
+            }
+            const combined = args.map(extractString).join(' ');
+            if (isIgnorableNoise(combined)) return;
             origFn.apply(console, args);
           };
         };
 
         console.error = filterMethod(console.error);
         console.warn = filterMethod(console.warn);
+        console.info = filterMethod(console.info);
+        console.debug = filterMethod(console.debug);
 
         window.addEventListener('unhandledrejection', function (e) {
-          if (isIgnorableNoise(e?.reason) || isIgnorableNoise(e?.reason?.message) || isIgnorableNoise(e?.reason?.stack)) {
+          if (isIgnorableNoise(e) || isIgnorableNoise(e?.reason)) {
             e.preventDefault();
             e.stopPropagation();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
@@ -62,12 +76,34 @@
         }, true);
 
         window.addEventListener('error', function (e) {
-          if (isIgnorableNoise(e?.error) || isIgnorableNoise(e?.message) || isIgnorableNoise(e?.error?.stack)) {
+          if (isIgnorableNoise(e) || isIgnorableNoise(e?.error) || isIgnorableNoise(e?.message)) {
             e.preventDefault();
             e.stopPropagation();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
           }
         }, true);
+
+        const handleCSP = function (e) {
+          if (isIgnorableNoise(e) || isIgnorableNoise(e?.blockedURI) || isIgnorableNoise(e?.sourceFile) || isIgnorableNoise(e?.violatedDirective)) {
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+            if (typeof e.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          }
+        };
+        window.addEventListener('securitypolicyviolation', handleCSP, true);
+        document.addEventListener('securitypolicyviolation', handleCSP, true);
+
+        try {
+          if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
+            const drainLastError = () => {
+              try {
+                if (window.chrome.runtime.lastError) {}
+              } catch (_) {}
+            };
+            drainLastError();
+            setInterval(drainLastError, 250);
+          }
+        } catch (_) {}
       })();
     </script>
     <script>

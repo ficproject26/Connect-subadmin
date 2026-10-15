@@ -7,6 +7,10 @@ const https = require('https');
 const { URL } = require('url');
 const zlib = require('zlib');
 
+// Persistent connection pools with keep-alive for high throughput to AWS EC2 backend
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100, keepAliveMsecs: 60000 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100, keepAliveMsecs: 60000 });
+
 const BACKEND_URL = (
   process.env.BACKEND_API_URL ||
   process.env.VITE_API_BASE_URL ||
@@ -53,6 +57,7 @@ module.exports = async function handler(req, res) {
     const targetUrl = new URL(`${BACKEND_URL}${subPath}`);
     const isHttps = targetUrl.protocol === 'https:';
     const client = isHttps ? https : http;
+    const agent = isHttps ? httpsAgent : httpAgent;
 
     const requestHeaders = { ...req.headers };
     delete requestHeaders.host;
@@ -90,7 +95,8 @@ module.exports = async function handler(req, res) {
       {
         method: req.method,
         headers: requestHeaders,
-        timeout: 15000
+        agent,
+        timeout: 50000
       },
       (proxyRes) => {
         res.statusCode = proxyRes.statusCode || 200;

@@ -70,37 +70,57 @@ export function buildPostalDataFromHierarchy(hierarchyArray) {
   return tree;
 }
 
+let inFlightSyncPromise = null;
+
 /**
  * Fetch latest active hierarchy from Admin Territory API
  */
-export async function syncTerritoryFromAdmin() {
+export async function syncTerritoryFromAdmin(force = false) {
   const token = typeof window !== 'undefined' ? (localStorage.getItem('ams_token') || localStorage.getItem('agent_mgr_token')) : null;
-  if (!token) return;
+  if (!token) return INDIA_POSTAL_DATA;
 
-  const hierarchyEndpoints = [
-    '/admin/hierarchy',
-    '/territory/hierarchy',
-    '/hierarchy'
-  ];
+  if (!force && Object.keys(INDIA_POSTAL_DATA).length > 0) {
+    return INDIA_POSTAL_DATA;
+  }
 
-  for (const endpoint of hierarchyEndpoints) {
+  if (inFlightSyncPromise) {
+    return inFlightSyncPromise;
+  }
+
+  inFlightSyncPromise = (async () => {
     try {
-      const json = await apiRequest(endpoint);
-      const hierarchy = json?.hierarchy || json?.states || (Array.isArray(json) ? json : null);
-      if (hierarchy && Array.isArray(hierarchy) && hierarchy.length > 0) {
-        const built = buildPostalDataFromHierarchy(hierarchy);
-        if (Object.keys(built).length > 0) {
-          INDIA_POSTAL_DATA = built;
-          ALL_INDIAN_STATES = Object.keys(built).sort();
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('territory_updated', { detail: built }));
+      const hierarchyEndpoints = [
+        '/territory/hierarchy',
+        '/hierarchy'
+      ];
+
+      for (const endpoint of hierarchyEndpoints) {
+        try {
+          const json = await apiRequest(endpoint);
+          const hierarchy = json?.hierarchy || json?.states || (Array.isArray(json) ? json : null);
+          if (hierarchy && Array.isArray(hierarchy) && hierarchy.length > 0) {
+            const built = buildPostalDataFromHierarchy(hierarchy);
+            if (Object.keys(built).length > 0) {
+              INDIA_POSTAL_DATA = built;
+              ALL_INDIAN_STATES = Object.keys(built).sort();
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('territory_updated', { detail: built }));
+              }
+              return built;
+            }
           }
-          return built;
+        } catch (e) {
+          // Continue to next endpoint
         }
       }
-    } catch (e) {
-      // Continue to next endpoint
+    } finally {
+      inFlightSyncPromise = null;
     }
+  })();
+
+  const result = await inFlightSyncPromise;
+  if (result && Object.keys(result).length > 0) {
+    return result;
   }
 
   // Fallback: If hierarchy endpoint did not populate, query individual territory endpoints

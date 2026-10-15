@@ -247,7 +247,8 @@ export function StateManagers({ level }) {
   const [expandedDivisions, setExpandedDivisions] = useState({});
   const [expandedPincodes, setExpandedPincodes] = useState({});
 
-  const loadTerritoryTree = async () => {
+  const loadTerritoryTree = async (force = false) => {
+    if (!force && territoryTree && territoryTree.length > 0) return;
     setTerritoryLoading(true);
     try {
       let tree = [];
@@ -299,6 +300,18 @@ export function StateManagers({ level }) {
     }
   }, [locking]);
 
+  const loadAllManagers = async (force = false) => {
+    if (!force && allManagers && allManagers.length > 0) return;
+    try {
+      const allRes = await dataService.getManagers({ status: 'active' });
+      if (allRes?.success && Array.isArray(allRes.subordinates || allRes.data || allRes.managers)) {
+        setAllManagers(allRes.subordinates || allRes.data || allRes.managers || []);
+      }
+    } catch (err) {
+      console.error('Failed to load all managers for hierarchy/requests:', err);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -313,26 +326,16 @@ export function StateManagers({ level }) {
       if (reqDivision) qParams.division = reqDivision;
       if (reqPincode) qParams.pincode = reqPincode;
 
-      const [res, allRes] = await Promise.all([
-        dataService.getManagers(qParams),
-        dataService.getManagers({ status: 'active' })
-      ]);
+      const res = await dataService.getManagers(qParams);
 
       if (res?.success && Array.isArray(res.subordinates || res.data || res.managers)) {
         setManagers(res.subordinates || res.data || res.managers || []);
       } else {
         setManagers([]);
       }
-
-      if (allRes?.success && Array.isArray(allRes.subordinates || allRes.data || allRes.managers)) {
-        setAllManagers(allRes.subordinates || allRes.data || allRes.managers || []);
-      } else {
-        setAllManagers([]);
-      }
     } catch (err) {
       console.error('Failed to load managers directory:', err);
       setManagers([]);
-      setAllManagers([]);
     } finally {
       setLoading(false);
     }
@@ -340,8 +343,19 @@ export function StateManagers({ level }) {
 
   useEffect(() => {
     loadData();
-    loadTerritoryTree();
+    if (territoryTree.length === 0) {
+      loadTerritoryTree();
+    }
   }, [activeLevel, location.search, locking]);
+
+  useEffect(() => {
+    if (viewTab === 'hierarchy' || viewTab === 'requests') {
+      loadAllManagers();
+      if (territoryTree.length === 0) {
+        loadTerritoryTree();
+      }
+    }
+  }, [viewTab]);
 
   // Filtered managers based on status tab and hierarchy query
   // Manager Directory strictly shows ONLY approved and activated managers.

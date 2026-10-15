@@ -1,6 +1,11 @@
 import { apiRequest } from './api';
 import { realtimeClient } from '../realtime/websocketClient';
 
+let territoryHierarchyCache = null;
+let territoryHierarchyInFlight = null;
+let territoryHierarchyTimestamp = 0;
+const HIERARCHY_CLIENT_TTL = 3 * 60 * 1000; // 3 minutes client cache
+
 export const dataService = {
   // Reports & Summaries
   getDashboardSummary: () => apiRequest('/reports/dashboard-summary'),
@@ -32,8 +37,34 @@ export const dataService = {
   },
 
   // Hierarchy & Geo
-  getHierarchy: () => apiRequest('/admin/hierarchy'),
-  getTerritoryHierarchy: () => apiRequest('/territory/hierarchy'),
+  getHierarchy: () => dataService.getTerritoryHierarchy(),
+  getTerritoryHierarchy: async (force = false) => {
+    const now = Date.now();
+    if (!force && territoryHierarchyCache && (now - territoryHierarchyTimestamp < HIERARCHY_CLIENT_TTL)) {
+      return territoryHierarchyCache;
+    }
+    if (territoryHierarchyInFlight) {
+      return territoryHierarchyInFlight;
+    }
+    territoryHierarchyInFlight = (async () => {
+      try {
+        const res = await apiRequest('/territory/hierarchy');
+        if (res && res.success) {
+          territoryHierarchyCache = res;
+          territoryHierarchyTimestamp = Date.now();
+        }
+        return res;
+      } finally {
+        territoryHierarchyInFlight = null;
+      }
+    })();
+    return territoryHierarchyInFlight;
+  },
+  invalidateTerritoryCache: () => {
+    territoryHierarchyCache = null;
+    territoryHierarchyTimestamp = 0;
+    territoryHierarchyInFlight = null;
+  },
   getSubordinateAdmins: () => apiRequest('/admin/subordinates'),
   getStates: async () => {
     const res = await apiRequest('/admin/states');

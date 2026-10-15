@@ -3,11 +3,13 @@ const { db } = require('../config/db');
 // In-memory cache for the complete hierarchy tree to prevent repeated heavy Atlas scans
 let cachedHierarchy = null;
 let lastHierarchyBuild = 0;
-const HIERARCHY_CACHE_TTL = 60 * 1000; // 60 seconds
+let inFlightHierarchyPromise = null;
+const HIERARCHY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 function invalidateHierarchyCache() {
   cachedHierarchy = null;
   lastHierarchyBuild = 0;
+  inFlightHierarchyPromise = null;
 }
 
 // Reload territory collections live from MongoDB Atlas if connected
@@ -22,128 +24,144 @@ async function reloadTerritoryCollections(force = false) {
   }
 }
 
-// Build complete hierarchical tree: State -> District -> Division -> Pincode
-async function buildCompleteHierarchy(scopeUser = null, assignedOnly = false) {
+// Internal raw hierarchy builder with single-flight promise sharing
+async function getRawHierarchy() {
   const now = Date.now();
-  let fullHierarchy;
-
   if (cachedHierarchy && (now - lastHierarchyBuild < HIERARCHY_CACHE_TTL)) {
-    fullHierarchy = cachedHierarchy;
-  } else {
-    await reloadTerritoryCollections(false);
-
-    const rawStates = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
-    const rawDistricts = Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
-    const rawDivisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
-    const rawPincodes = Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
-
-    // Pre-group pincodes by divisionId and division name for fast O(1) retrieval
-    const pinByDivision = new Map();
-  for (const p of rawPincodes) {
-    const kId = String(p.divisionId || p.division_id || '');
-    const kName = (p.division || '').toLowerCase().trim();
-    if (kId) {
-      if (!pinByDivision.has(kId)) pinByDivision.set(kId, []);
-      pinByDivision.get(kId).push(p);
-    }
-    if (kName && kName !== kId) {
-      if (!pinByDivision.has(kName)) pinByDivision.set(kName, []);
-      pinByDivision.get(kName).push(p);
-    }
+    return cachedHierarchy;
+  }
+  if (inFlightHierarchyPromise) {
+    return inFlightHierarchyPromise;
   }
 
-  // Pre-group divisions by districtId and district name
-  const divByDistrict = new Map();
-  for (const v of rawDivisions) {
-    const kId = String(v.districtId || v.district_id || '');
-    const kName = (v.district || '').toLowerCase().trim();
-    if (kId) {
-      if (!divByDistrict.has(kId)) divByDistrict.set(kId, []);
-      divByDistrict.get(kId).push(v);
-    }
-    if (kName && kName !== kId) {
-      if (!divByDistrict.has(kName)) divByDistrict.set(kName, []);
-      divByDistrict.get(kName).push(v);
-    }
-  }
+  inFlightHierarchyPromise = (async () => {
+    try {
+      await reloadTerritoryCollections(false);
 
-  // Pre-group districts by stateId and state name
-  const distByState = new Map();
-  for (const d of rawDistricts) {
-    const kId = String(d.stateId || d.state_id || '');
-    const kName = (d.state || '').toLowerCase().trim();
-    if (kId) {
-      if (!distByState.has(kId)) distByState.set(kId, []);
-      distByState.get(kId).push(d);
-    }
-    if (kName && kName !== kId) {
-      if (!distByState.has(kName)) distByState.set(kName, []);
-      distByState.get(kName).push(d);
-    }
-  }
+      const rawStates = Array.from(db.states || []).filter(s => (s.status || 'Active').toLowerCase() === 'active');
+      const rawDistricts = Array.from(db.districts || []).filter(d => (d.status || 'Active').toLowerCase() === 'active');
+      const rawDivisions = Array.from(db.divisions || []).filter(v => (v.status || 'Active').toLowerCase() === 'active');
+      const rawPincodes = Array.from(db.pincodes || []).filter(p => (p.status || 'Active').toLowerCase() === 'active');
 
-  fullHierarchy = rawStates.map(s => {
-    const sId = String(s._id || s.id || s.stateId);
-    const sName = (s.name || '').trim();
+      // Pre-group pincodes by divisionId and division name for fast O(1) retrieval
+      const pinByDivision = new Map();
+      for (const p of rawPincodes) {
+        const kId = String(p.divisionId || p.division_id || '');
+        const kName = (p.division || '').toLowerCase().trim();
+        if (kId) {
+          if (!pinByDivision.has(kId)) pinByDivision.set(kId, []);
+          pinByDivision.get(kId).push(p);
+        }
+        if (kName && kName !== kId) {
+          if (!pinByDivision.has(kName)) pinByDivision.set(kName, []);
+          pinByDivision.get(kName).push(p);
+        }
+      }
 
-    const distList = distByState.get(sId) || distByState.get(sName.toLowerCase()) || [];
+      // Pre-group divisions by districtId and district name
+      const divByDistrict = new Map();
+      for (const v of rawDivisions) {
+        const kId = String(v.districtId || v.district_id || '');
+        const kName = (v.district || '').toLowerCase().trim();
+        if (kId) {
+          if (!divByDistrict.has(kId)) divByDistrict.set(kId, []);
+          divByDistrict.get(kId).push(v);
+        }
+        if (kName && kName !== kId) {
+          if (!divByDistrict.has(kName)) divByDistrict.set(kName, []);
+          divByDistrict.get(kName).push(v);
+        }
+      }
 
-    return {
-      id: sId,
-      _id: sId,
-      stateId: s.stateId || sId,
-      name: sName,
-      code: s.code || sName.slice(0, 2).toUpperCase(),
-      status: s.status || 'Active',
-      districts: distList.map(d => {
-        const dId = String(d._id || d.id || d.districtId);
-        const dName = (d.name || '').trim();
+      // Pre-group districts by stateId and state name
+      const distByState = new Map();
+      for (const d of rawDistricts) {
+        const kId = String(d.stateId || d.state_id || '');
+        const kName = (d.state || '').toLowerCase().trim();
+        if (kId) {
+          if (!distByState.has(kId)) distByState.set(kId, []);
+          distByState.get(kId).push(d);
+        }
+        if (kName && kName !== kId) {
+          if (!distByState.has(kName)) distByState.set(kName, []);
+          distByState.get(kName).push(d);
+        }
+      }
 
-        const divList = divByDistrict.get(dId) || divByDistrict.get(dName.toLowerCase()) || [];
+      const built = rawStates.map(s => {
+        const sId = String(s._id || s.id || s.stateId);
+        const sName = (s.name || '').trim();
+
+        const distList = distByState.get(sId) || distByState.get(sName.toLowerCase()) || [];
 
         return {
-          id: dId,
-          _id: dId,
-          districtId: d.districtId || dId,
-          stateId: sId,
-          stateName: sName,
-          name: dName,
-          code: d.code || dName.slice(0, 3).toUpperCase(),
-          status: d.status || 'Active',
-          divisions: divList.map(v => {
-            const vId = String(v._id || v.id || v.divisionId);
-            const vName = (v.name || '').trim();
+          id: sId,
+          _id: sId,
+          stateId: s.stateId || sId,
+          name: sName,
+          code: s.code || sName.slice(0, 2).toUpperCase(),
+          status: s.status || 'Active',
+          districts: distList.map(d => {
+            const dId = String(d._id || d.id || d.districtId);
+            const dName = (d.name || '').trim();
 
-            const pinList = pinByDivision.get(vId) || pinByDivision.get(vName.toLowerCase()) || [];
+            const divList = divByDistrict.get(dId) || divByDistrict.get(dName.toLowerCase()) || [];
 
             return {
-              id: vId,
-              _id: vId,
-              divisionId: v.divisionId || vId,
-              districtId: dId,
-              districtName: dName,
+              id: dId,
+              _id: dId,
+              districtId: d.districtId || dId,
               stateId: sId,
               stateName: sName,
-              name: vName,
-              code: v.code || vName.slice(0, 3).toUpperCase(),
-              status: v.status || 'Active',
-              pincodes: pinList.map(p => String(p.code || p.pincode).trim()).filter(Boolean),
-              rawPincodes: pinList.map(p => ({
-                id: String(p._id || p.id),
-                _id: String(p._id || p.id),
-                code: String(p.code || p.pincode).trim(),
-                name: p.name || p.area || p.postOffice || String(p.code || p.pincode),
-                status: p.status || 'Active'
-              }))
+              name: dName,
+              code: d.code || dName.slice(0, 3).toUpperCase(),
+              status: d.status || 'Active',
+              divisions: divList.map(v => {
+                const vId = String(v._id || v.id || v.divisionId);
+                const vName = (v.name || '').trim();
+
+                const pinList = pinByDivision.get(vId) || pinByDivision.get(vName.toLowerCase()) || [];
+
+                return {
+                  id: vId,
+                  _id: vId,
+                  divisionId: v.divisionId || vId,
+                  districtId: dId,
+                  districtName: dName,
+                  stateId: sId,
+                  stateName: sName,
+                  name: vName,
+                  code: v.code || vName.slice(0, 3).toUpperCase(),
+                  status: v.status || 'Active',
+                  pincodes: pinList.map(p => String(p.code || p.pincode).trim()).filter(Boolean),
+                  rawPincodes: pinList.map(p => ({
+                    id: String(p._id || p.id),
+                    _id: String(p._id || p.id),
+                    code: String(p.code || p.pincode).trim(),
+                    name: p.name || p.area || p.postOffice || String(p.code || p.pincode),
+                    status: p.status || 'Active'
+                  }))
+                };
+              })
             };
           })
         };
-      })
-    };
-  });
-  cachedHierarchy = fullHierarchy;
-  lastHierarchyBuild = now;
-  }
+      });
+
+      cachedHierarchy = built;
+      lastHierarchyBuild = Date.now();
+      return built;
+    } finally {
+      inFlightHierarchyPromise = null;
+    }
+  })();
+
+  return inFlightHierarchyPromise;
+}
+
+// Build complete hierarchical tree: State -> District -> Division -> Pincode
+async function buildCompleteHierarchy(scopeUser = null, assignedOnly = false) {
+  let fullHierarchy = await getRawHierarchy();
 
   // Apply User Territory Scoping
   if (scopeUser && scopeUser.role) {
@@ -522,5 +540,6 @@ module.exports = {
   getDistricts,
   getDivisions,
   getPincodes,
-  buildCompleteHierarchy
+  buildCompleteHierarchy,
+  invalidateHierarchyCache
 };
