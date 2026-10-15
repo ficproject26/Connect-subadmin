@@ -97,6 +97,13 @@ export function Login() {
         (!status && (errMsg.includes('connect') || errMsg.includes('network') || errMsg.includes('fetch') || errMsg.includes('timeout') || errMsg.includes('failed')))
       ) {
         setError('Unable to connect to the server. Please try again.');
+      } else if (
+        err?.code === 'UNAUTHORIZED_APPLICATION_ROLE' ||
+        errMsg.includes('not authorized') ||
+        errMsg.includes('role') ||
+        errMsg === 'invalid credentials'
+      ) {
+        setError('Invalid credentials');
       } else if (status === 403 || errMsg.includes('pending') || errMsg.includes('inactive') || errMsg.includes('suspended')) {
         setError(err.message || 'Account access is not permitted. Please contact administrator.');
       } else {

@@ -363,7 +363,7 @@ const login = async (req, res) => {
       return res.status(403).json({
         success: false,
         code: 'UNAUTHORIZED_APPLICATION_ROLE',
-        message: `Access denied: Accounts with role '${attemptedRole}' are not authorized to access the Sub-Admin Management system.`
+        message: 'Invalid credentials'
       });
     }
 
@@ -399,7 +399,7 @@ const login = async (req, res) => {
       return res.status(403).json({
         success: false,
         code: 'UNAUTHORIZED_APPLICATION_ROLE',
-        message: `Access denied: Accounts with role '${user.role}' are not authorized for this application.`
+        message: 'Invalid credentials'
       });
     }
 
