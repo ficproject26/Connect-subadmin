@@ -36,6 +36,20 @@ export function sanitizeErrorMessage(message, status) {
 
   const lower = message.toLowerCase();
 
+  // If role authorization denial, cross-app role rejection, or credential mismatch -> generic "Invalid credentials"
+  if (
+    lower.includes('not authorized') ||
+    lower.includes('accounts with role') ||
+    lower.includes('unauthorized_application_role') ||
+    lower.includes('state_manager') ||
+    lower.includes('division_manager') ||
+    lower.includes('pincode_manager') ||
+    lower.includes('district_manager') ||
+    lower.includes('access denied: accounts')
+  ) {
+    return 'Invalid credentials';
+  }
+
   // If Vercel router error, gateway error, or connection error
   if (
     lower.includes('router_external_target_connection_error') ||
@@ -247,7 +261,9 @@ async function executeFetch(endpoint, options, headers) {
   const cleanMsg = sanitizeErrorMessage(lastError?.message || '', lastError?.status);
   const cleanError = new Error(cleanMsg);
   cleanError.status = lastError?.status;
-  console.error(`API Error [${endpoint}]:`, cleanMsg);
+  if (cleanMsg !== 'Invalid credentials') {
+    console.error(`API Error [${endpoint}]:`, cleanMsg);
+  }
   throw cleanError;
 }
 

@@ -10,6 +10,67 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
+      (function () {
+        const isIgnorableNoise = (msg) => {
+          if (!msg) return false;
+          let str = '';
+          if (typeof msg === 'string') {
+            str = msg;
+          } else if (msg instanceof Error) {
+            str = `${msg.name} ${msg.message} ${msg.stack}`;
+          } else if (typeof msg === 'object') {
+            try {
+              str = `${msg.message || ''} ${msg.stack || ''} ${msg.name || ''} ${JSON.stringify(msg) || ''}`;
+            } catch (e) {
+              str = String(msg);
+            }
+          } else {
+            str = String(msg);
+          }
+          return (
+            str.includes('A listener indicated an asynchronous response') ||
+            str.includes('message channel closed') ||
+            str.includes('runtime.lastError') ||
+            str.includes('Evaluating a string as JavaScript violates') ||
+            str.includes('Content Security Policy') ||
+            str.includes('unsafe-eval') ||
+            str.includes('content.js') ||
+            str.includes('chrome-extension://')
+          );
+        };
+
+        const filterMethod = (origFn) => {
+          return function (...args) {
+            const combined = args.map((a) => {
+              if (typeof a === 'string') return a;
+              try { return JSON.stringify(a); } catch { return String(a); }
+            }).join(' ');
+            if (isIgnorableNoise(combined) || args.some(isIgnorableNoise)) return;
+            origFn.apply(console, args);
+          };
+        };
+
+        console.error = filterMethod(console.error);
+        console.warn = filterMethod(console.warn);
+
+        window.addEventListener('unhandledrejection', function (e) {
+          if (isIgnorableNoise(e?.reason) || isIgnorableNoise(e?.reason?.message) || isIgnorableNoise(e?.reason?.stack)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function (e) {
+          if (isIgnorableNoise(e?.error) || isIgnorableNoise(e?.message) || isIgnorableNoise(e?.error?.stack)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+    <script>
       (function() {
         try {
           var saved = localStorage.getItem('ams_theme') || 'light';
