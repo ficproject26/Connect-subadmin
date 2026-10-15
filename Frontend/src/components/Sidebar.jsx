@@ -35,6 +35,7 @@ import {
   CircleHelp,
   Receipt,
   ClipboardCheck,
+  Award,
   Bell,
   X
 } from 'lucide-react';
