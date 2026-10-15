@@ -547,16 +547,18 @@ export function StateAgents({ level = 'state' }) {
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">{config.title}</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{config.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAddAgentModal(true)}
-            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Add {config.badge || 'State Agent'}</span>
-          </button>
-        </div>
+        {activeLevel === 'state' && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAddAgentModal(true)}
+              className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Add State Agent</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Active Hierarchical Parent Filter Breadcrumb */}
@@ -698,14 +700,16 @@ export function StateAgents({ level = 'state' }) {
         onSuccess={handleCreateOnboarding}
       />
 
-      <AgentOnboardingModal
-        isOpen={showAddAgentModal}
-        onClose={() => setShowAddAgentModal(false)}
-        onSuccess={() => {
-          loadData();
-        }}
-        level={activeLevel}
-      />
+      {showAddAgentModal && activeLevel === 'state' && (
+        <AgentOnboardingModal
+          isOpen={showAddAgentModal}
+          onClose={() => setShowAddAgentModal(false)}
+          onSuccess={() => {
+            loadData();
+          }}
+          level="state"
+        />
+      )}
     </div>
   );
 }

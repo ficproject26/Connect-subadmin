@@ -5,7 +5,6 @@ import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { useTheme } from '../../context/ThemeContext';
-import { AgentHierarchyBanner } from '../../components/AgentHierarchyBanner';
 import { AgentActivityFlowModal } from '../../components/AgentActivityFlowModal';
 import { AgentDetailsModal } from '../../components/AgentDetailsModal';
 import { AgentOnboardingModal } from '../../components/AgentOnboardingModal';
@@ -91,7 +90,19 @@ export function DistrictAgents({ level = 'district' }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isDivisionalAdmin = user?.role === 'Divisional Admin' || user?.role === 'Division Admin' || location.pathname.startsWith('/divisional-admin');
+  const userRole = String(user?.role || '').toLowerCase();
+  const isDivisionalAdmin = userRole.includes('division') || userRole.includes('divisional') || location.pathname.startsWith('/divisional-admin');
+  const isDistrictAdmin = userRole.includes('district');
+  const isStateAdmin = userRole.includes('state');
+  const isPincodeAdmin = userRole.includes('pincode');
+
+  // Role-based permitted onboarding level: each administrator can onboard agents only at their own administrative level
+  let permittedAgentLevel = null;
+  if (isStateAdmin) permittedAgentLevel = 'state';
+  else if (isDistrictAdmin) permittedAgentLevel = 'district';
+  else if (isDivisionalAdmin) permittedAgentLevel = 'divisional';
+  else if (isPincodeAdmin) permittedAgentLevel = 'pincode';
+
   const basePath = isDivisionalAdmin ? '/divisional-admin' : '/district-admin';
 
   const district = user?.district || '-';
@@ -110,6 +121,9 @@ export function DistrictAgents({ level = 'district' }) {
   else if (location.pathname.endsWith('/agents')) activeLevel = isDivisionalAdmin ? 'divisional' : 'district';
 
   const config = LEVEL_CONFIGS[activeLevel] || (isDivisionalAdmin ? LEVEL_CONFIGS.divisional : LEVEL_CONFIGS.district);
+
+  // Can onboard agents only at own administrative level. All other agent levels are read-only.
+  const canAddAgent = Boolean(permittedAgentLevel && activeLevel === permittedAgentLevel);
 
   // Deriving role-based territory locking
   const locking = useMemo(() => getTerritoryLocking(user), [user]);
@@ -451,14 +465,16 @@ export function DistrictAgents({ level = 'district' }) {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setShowAddAgentModal(true)}
-            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Add {isDivisionalAdmin ? 'Division Agent' : (config.badge || 'District Agent')}</span>
-          </button>
+          {canAddAgent && (
+            <button
+              type="button"
+              onClick={() => setShowAddAgentModal(true)}
+              className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Add {permittedAgentLevel === 'divisional' ? 'Division Agent' : (config.badge || 'District Agent')}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={loadData}
@@ -469,9 +485,6 @@ export function DistrictAgents({ level = 'district' }) {
           </button>
         </div>
       </div>
-
-      {/* 4-Tier Agent Hierarchy Banner scoped to District Admin */}
-      <AgentHierarchyBanner activeLevel={activeLevel} basePath={basePath} />
 
       {/* Active Hierarchical Parent Filter Breadcrumb */}
       {divisionFilterParam && (
@@ -665,14 +678,14 @@ export function DistrictAgents({ level = 'district' }) {
       )}
 
       {/* Agent Onboard Modal */}
-      {showAddAgentModal && (
+      {showAddAgentModal && canAddAgent && (
         <AgentOnboardingModal
           isOpen={showAddAgentModal}
           onClose={() => setShowAddAgentModal(false)}
           onSuccess={() => {
             loadData();
           }}
-          level={isDivisionalAdmin ? 'division' : 'district'}
+          level={permittedAgentLevel === 'divisional' ? 'division' : permittedAgentLevel}
         />
       )}
     </div>

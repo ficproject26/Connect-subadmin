@@ -212,9 +212,16 @@ function getHierarchicalScopedAgents(allAgents, user) {
     if (!userPincode) return [];
     return allAgents.filter(a => {
       const aLevel = normalizeLevel(getAgentLevel(a));
-      if (aLevel !== 'pincode') return false;
       const t = getAgentTerritory(a);
-      return Boolean(t.pincode && t.pincode === userPincode);
+      // Pincode Agent: strictly within own pincode
+      if (aLevel === 'pincode') return Boolean(t.pincode && t.pincode === userPincode);
+      // Division Agent: within own division
+      if (aLevel === 'division') return Boolean(userDivision && divisionMatches(t.division, userDivision));
+      // District Agent: within own district
+      if (aLevel === 'district') return Boolean(userDistrict && t.district && t.district.toLowerCase() === userDistrict);
+      // State Agent: within own state
+      if (aLevel === 'state') return Boolean(userState && t.state && t.state.toLowerCase() === userState);
+      return false;
     });
   }
 
@@ -223,13 +230,23 @@ function getHierarchicalScopedAgents(allAgents, user) {
     if (!userDivision) return [];
     return allAgents.filter(a => {
       const aLevel = normalizeLevel(getAgentLevel(a));
-      // STRICT: Division Admin can ONLY see division and pincode agents
-      if (aLevel !== 'division' && aLevel !== 'pincode') return false;
       const t = getAgentTerritory(a);
-      const matchesDiv = divisionMatches(t.division, userDivision);
-      const matchesDist = !userDistrict || (t.district && t.district.toLowerCase() === userDistrict);
-      const matchesState = !userState || (t.state && t.state.toLowerCase() === userState);
-      return matchesDiv && matchesDist && matchesState;
+      // Division & Pincode Agents: within own division
+      if (aLevel === 'division' || aLevel === 'pincode') {
+        const matchesDiv = divisionMatches(t.division, userDivision);
+        const matchesDist = !userDistrict || (t.district && t.district.toLowerCase() === userDistrict);
+        const matchesState = !userState || (t.state && t.state.toLowerCase() === userState);
+        return matchesDiv && matchesDist && matchesState;
+      }
+      // District Agent: within own district (view-only)
+      if (aLevel === 'district') {
+        return Boolean(userDistrict && t.district && t.district.toLowerCase() === userDistrict);
+      }
+      // State Agent: within own state (view-only)
+      if (aLevel === 'state') {
+        return Boolean(userState && t.state && t.state.toLowerCase() === userState);
+      }
+      return false;
     });
   }
 
@@ -238,12 +255,18 @@ function getHierarchicalScopedAgents(allAgents, user) {
     if (!userDistrict) return [];
     return allAgents.filter(a => {
       const aLevel = normalizeLevel(getAgentLevel(a));
-      // STRICT: District Admin can ONLY see district, division, and pincode agents (NEVER state agents)
-      if (aLevel !== 'district' && aLevel !== 'division' && aLevel !== 'pincode') return false;
       const t = getAgentTerritory(a);
-      const matchesDist = Boolean(t.district && t.district.toLowerCase() === userDistrict);
-      const matchesState = !userState || (t.state && t.state.toLowerCase() === userState);
-      return matchesDist && matchesState;
+      // District, Division, and Pincode Agents: within own district
+      if (aLevel === 'district' || aLevel === 'division' || aLevel === 'pincode') {
+        const matchesDist = Boolean(t.district && t.district.toLowerCase() === userDistrict);
+        const matchesState = !userState || (t.state && t.state.toLowerCase() === userState);
+        return matchesDist && matchesState;
+      }
+      // State Agent: within own state (view-only)
+      if (aLevel === 'state') {
+        return Boolean(userState && t.state && t.state.toLowerCase() === userState);
+      }
+      return false;
     });
   }
 
@@ -307,15 +330,8 @@ async function getAgents(req, res) {
           });
         }
       }
-      // District Admin: cannot access State agents or data outside their assigned district
+      // District Admin: cannot access data outside their assigned district
       else if (userRole.includes('district')) {
-        if (level && normalizeLevel(level) === 'state') {
-          return res.status(403).json({
-            success: false,
-            code: 'UNAUTHORIZED_LEVEL',
-            message: 'Unauthorized level access. District Admins cannot access State Agents.'
-          });
-        }
         if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
           return res.status(403).json({
             success: false,
@@ -331,16 +347,8 @@ async function getAgents(req, res) {
           });
         }
       }
-      // Divisional Admin: cannot access State/District agents or data outside their assigned division
+      // Divisional Admin: cannot access data outside their assigned division
       else if (userRole.includes('division') || userRole.includes('divisional')) {
-        const normLvl = level ? normalizeLevel(level) : '';
-        if (normLvl === 'state' || normLvl === 'district') {
-          return res.status(403).json({
-            success: false,
-            code: 'UNAUTHORIZED_LEVEL',
-            message: 'Unauthorized level access. Divisional Admins cannot access State or District Agents.'
-          });
-        }
         if (state && userState && userState !== 'all india' && state.toLowerCase().trim() !== userState) {
           return res.status(403).json({
             success: false,
@@ -363,16 +371,8 @@ async function getAgents(req, res) {
           });
         }
       }
-      // Pincode Admin: cannot access higher levels or data outside their assigned pincode
+      // Pincode Admin: cannot access data outside their assigned pincode
       else if (userRole.includes('pincode')) {
-        const normLvl = level ? normalizeLevel(level) : '';
-        if (normLvl && normLvl !== 'pincode') {
-          return res.status(403).json({
-            success: false,
-            code: 'UNAUTHORIZED_LEVEL',
-            message: 'Unauthorized level access. Pincode Admins can only access Pincode Agents.'
-          });
-        }
         if (pincode && userPincode && userPincode !== 'all' && String(pincode).trim() !== userPincode) {
           return res.status(403).json({
             success: false,
@@ -550,6 +550,7 @@ async function addAgent(req, res) {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
+    req.body = req.body || {};
 
     const userRole = String(req.user.role || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
     const adminUserRole = String(req.user.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
@@ -810,6 +811,16 @@ async function addAgent(req, res) {
       onboardedBy: req.user.name || req.user.email,
       onboardedById: req.user.id || req.user._id,
       onboardedByRole: req.user.role,
+      creatorId: req.user.id || req.user._id,
+      creatorRole: req.user.role,
+      creatorTerritory: {
+        state: callerState || null,
+        district: callerDistrict || null,
+        division: callerDivision || null,
+        pincode: callerPincode || null
+      },
+      onboardingSource: 'sub_admin_portal',
+      registrationDate: now,
       totalReferrals: 0,
       vendorOnboardings: 0,
       walletBalance: 0,

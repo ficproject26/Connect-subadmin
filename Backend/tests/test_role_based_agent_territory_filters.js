@@ -13,11 +13,12 @@ console.log('🧪 VERIFYING ROLE-BASED AGENT TABS & TERRITORY FILTERS (ACCEPTANC
 console.log('========================================================================');
 
 // Helper to mock express req/res
-function createMockReqRes({ user, query = {}, params = {} }) {
+function createMockReqRes({ user, query = {}, params = {}, body = {} }) {
   const req = {
     user,
     query,
     params,
+    body,
     headers: {}
   };
 
@@ -271,14 +272,23 @@ async function runTests() {
   {
     const distAdminUser = { id: 'ADM_DT_01', role: 'District Admin', state: 'Tamil Nadu', district: 'Namakkal' };
 
-    // 6.1 Direct request for State Agents -> MUST be 403
+    // 6.1 Request for State Agents -> 200 OK (View-only mode)
     const { req: req1, res: res1 } = createMockReqRes({
       user: distAdminUser,
       query: { level: 'state' }
     });
     await executiveController.getAgents(req1, res1);
-    assert.strictEqual(res1.getStatusCode(), 403, 'District Admin requesting state level must return 403');
-    console.log('  ✅ District Admin request for State Agent level rejected with 403 Forbidden');
+    assert.strictEqual(res1.getStatusCode(), 200, 'District Admin viewing state level must return 200 (View-only mode)');
+    console.log('  ✅ District Admin request for State Agent level returns 200 OK (View-only mode)');
+
+    // 6.1b Creation attempt for State Agent -> MUST be 403
+    const { req: reqCreate, res: resCreate } = createMockReqRes({
+      user: distAdminUser,
+      body: { name: 'Unauthorized State Agent', mobile: '9876543210', email: 'unauth@test.com', level: 'state' }
+    });
+    await executiveController.addAgent(reqCreate, resCreate);
+    assert.strictEqual(resCreate.getStatusCode(), 403, 'District Admin onboarding state agent must return 403');
+    console.log('  ✅ District Admin onboarding State Agent rejected with 403 Forbidden');
 
     // 6.2 Direct request for another district -> MUST be 403
     const { req: req2, res: res2 } = createMockReqRes({
@@ -309,14 +319,14 @@ async function runTests() {
   {
     const divAdminUser = { id: 'ADM_DV_01', role: 'Divisional Admin', state: 'Tamil Nadu', district: 'Namakkal', division: 'Namakkal' };
 
-    // 7.1 Direct request for District Agent level -> MUST be 403
+    // 7.1 Direct request for District Agent level -> View-only mode for authorized district (200 OK)
     const { req: req1, res: res1 } = createMockReqRes({
       user: divAdminUser,
       query: { level: 'district' }
     });
     await executiveController.getAgents(req1, res1);
-    assert.strictEqual(res1.getStatusCode(), 403);
-    console.log('  ✅ Divisional Admin request for District Agent level rejected with 403 Forbidden');
+    assert.strictEqual(res1.getStatusCode(), 200);
+    console.log('  ✅ Divisional Admin request for District Agent level returns 200 OK (View-only mode)');
 
     // 7.2 Direct request for another division -> MUST be 403
     const { req: req2, res: res2 } = createMockReqRes({
@@ -342,14 +352,14 @@ async function runTests() {
   {
     const pinAdminUser = { id: 'ADM_PIN_01', role: 'Pincode Admin', state: 'Tamil Nadu', district: 'Namakkal', division: 'Namakkal', pincode: '637001' };
 
-    // 8.1 Requesting higher level -> MUST be 403
+    // 8.1 Requesting higher level -> View-only mode for authorized territory (200 OK)
     const { req: req1, res: res1 } = createMockReqRes({
       user: pinAdminUser,
       query: { level: 'divisional' }
     });
     await executiveController.getAgents(req1, res1);
-    assert.strictEqual(res1.getStatusCode(), 403);
-    console.log('  ✅ Pincode Admin request for higher level rejected with 403 Forbidden');
+    assert.strictEqual(res1.getStatusCode(), 200);
+    console.log('  ✅ Pincode Admin request for higher level returns 200 OK (View-only mode)');
 
     // 8.2 Requesting another pincode -> MUST be 403
     const { req: req2, res: res2 } = createMockReqRes({
