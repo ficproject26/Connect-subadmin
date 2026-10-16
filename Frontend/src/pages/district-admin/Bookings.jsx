@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge, CardTierIcon } from '../../components/Badge';
 import { BookingDetailsModal } from '../../components/BookingDetailsModal';
 import { useTheme } from '../../context/ThemeContext';
-import { CalendarCheck } from 'lucide-react';
+import { CalendarCheck, Filter, Building2 } from 'lucide-react';
 
 export function DistrictBookings() {
   const { user } = useAuth();
@@ -15,6 +15,7 @@ export function DistrictBookings() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All Categories');
 
   const loadData = async () => {
     setLoading(true);
@@ -40,6 +41,19 @@ export function DistrictBookings() {
     loadData();
   }, []);
 
+  // Client-side instant category filtering across Services, Stay, Travel, and All Categories
+  const filteredBookings = useMemo(() => {
+    if (categoryFilter === 'All Categories') return bookings;
+    const catLower = categoryFilter.toLowerCase();
+    return bookings.filter(b => {
+      const bType = (b.bookingType || b.type || b.category || '').toLowerCase().trim();
+      if (catLower === 'services') return bType === 'services' || bType === 'service';
+      if (catLower === 'stay') return bType === 'stay';
+      if (catLower === 'travel') return bType === 'travel';
+      return bType === catLower;
+    });
+  }, [bookings, categoryFilter]);
+
   const columns = [
     {
       header: 'Booking Number',
@@ -53,9 +67,24 @@ export function DistrictBookings() {
       )
     },
     {
-      header: 'Service Type',
-      accessor: 'service',
-      render: (row) => <span className="font-semibold text-indigo-600 dark:text-indigo-300 text-xs">{row.service}</span>
+      header: 'Service / Offering',
+      accessor: (row) => `${row.service} ${row.vendorBusinessName || row.vendorName || ''}`,
+      render: (row) => {
+        const vendor = row.vendorBusinessName || row.vendorName;
+        return (
+          <div className="space-y-0.5">
+            <span className="font-semibold text-indigo-600 dark:text-indigo-300 text-xs">{row.service}</span>
+            {vendor && vendor !== 'Not provided' ? (
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Building2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="font-medium text-slate-700 dark:text-slate-300">{vendor}</span>
+              </div>
+            ) : (
+              <div className="text-[10px] text-slate-400 italic">Provider unassigned</div>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Location',
@@ -134,11 +163,37 @@ export function DistrictBookings() {
         </div>
       )}
 
+      {/* Main Category Filter Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1 flex items-center gap-1">
+            <Filter className="w-3.5 h-3.5 text-slate-400" /> Category:
+          </span>
+          {['All Categories', 'Services', 'Stay', 'Travel'].map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategoryFilter(cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                categoryFilter === cat
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+        <div className="text-xs text-slate-400 font-medium">
+          Showing <span className="font-bold text-slate-700 dark:text-slate-300">{filteredBookings.length}</span> {categoryFilter === 'All Categories' ? 'total' : categoryFilter.toLowerCase()} bookings
+        </div>
+      </div>
+
       <DataTable
         title="District Service Bookings"
         subtitle="Tracking technician dispatch and execution"
         columns={columns}
-        data={bookings}
+        data={filteredBookings}
         loading={loading}
         onRefresh={loadData}
         emptyMessage={errorMessage || "No bookings found under this territory."}
