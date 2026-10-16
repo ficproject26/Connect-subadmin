@@ -82,16 +82,16 @@ export function DistrictJobs() {
     },
     {
       header: 'Job Title',
-      accessor: (row) => `${row.jobTitle || row.title} ${row.vendorName || ''}`,
+      accessor: (row) => `${row.jobTitle || row.title} ${row.vendorBusinessName || row.vendorName || row.company || ''}`,
       render: (row) => (
         <div>
           <div className="font-semibold text-slate-900 dark:text-white text-xs">
             {row.jobTitle || row.title}
           </div>
-          {row.vendorName && (
+          {(row.vendorBusinessName || row.vendorName || row.company) && (
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
               <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
-              <span>{row.vendorName}</span>
+              <span>{row.vendorBusinessName || row.vendorName || row.company}</span>
             </div>
           )}
           {row.jobType && (

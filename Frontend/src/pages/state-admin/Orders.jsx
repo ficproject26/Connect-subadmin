@@ -4,7 +4,7 @@ import { DataTable } from '../../components/DataTable';
 import { StatusBadge, TierBadge, CardTierIcon } from '../../components/Badge';
 import { OrderDetailsModal } from '../../components/OrderDetailsModal';
 import { useTheme } from '../../context/ThemeContext';
-import { ShoppingBag, Users, CreditCard, TrendingUp, MapPin, Eye } from 'lucide-react';
+import { ShoppingBag, Users, CreditCard, TrendingUp, MapPin, Eye, Store } from 'lucide-react';
 
 export function StateOrders() {
   const { isDark } = useTheme();
@@ -117,17 +117,34 @@ export function StateOrders() {
       render: (row) => (
         <div className="min-w-[240px]">
           {row.items && row.items.length > 0 ? (
-            <div className="space-y-1">
-              {row.items.map((item, idx) => (
-                <div key={idx} className="text-xs flex items-center gap-1.5 whitespace-nowrap">
-                  <span className={`font-medium ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                    {item.name}
-                  </span>
-                  <span className="text-[11px] font-semibold text-blue-600 dark:text-indigo-400 shrink-0 font-mono">
-                    (x{item.qty})
-                  </span>
-                </div>
-              ))}
+            <div className="space-y-1.5">
+              {row.items.map((item, idx) => {
+                const itemVendor = item.vendorBusinessName || item.vendorName || row.vendorBusinessName || row.vendorName;
+                const itemLoc = item.vendorLocation || row.vendorLocation || '';
+                return (
+                  <div key={idx} className="text-xs space-y-0.5">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                        {item.name}
+                      </span>
+                      <span className="text-[11px] font-semibold text-blue-600 dark:text-indigo-400 shrink-0 font-mono">
+                        (x{item.qty})
+                      </span>
+                    </div>
+                    {itemVendor && itemVendor !== 'Vendor unavailable' ? (
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                        <Store className="w-3 h-3 text-indigo-500 shrink-0" />
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{itemVendor}</span>
+                        {itemLoc && itemLoc !== '-' && (
+                          <span className="truncate max-w-[150px] text-slate-400 dark:text-slate-500" title={itemLoc}>• {itemLoc}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-slate-400 italic">Seller unassigned</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>-</span>
@@ -142,13 +159,30 @@ export function StateOrders() {
       render: (row) => {
         const dist = row.district || row.deliveryDistrict || '';
         const div = row.division || row.deliveryDivision || '';
-        const locLabel = dist && div ? `${dist} / ${div}` : (dist || div || row.state || 'Tamil Nadu');
+        const state = row.state || '';
+        const pin = row.pincode || '';
+
+        const territoryParts = [dist, div].filter(Boolean);
+        const locLabel = territoryParts.length > 0 ? territoryParts.join(' / ') : (state || '');
+
+        if (!locLabel && !pin) {
+          return (
+            <div className="text-xs text-slate-400 italic">Location unavailable</div>
+          );
+        }
+
         return (
           <div className="whitespace-nowrap">
-            <div className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{locLabel}</div>
-            <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3 h-3 shrink-0" /> PIN: {row.pincode || '-'}
+            <div className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+              {locLabel || state || 'Location recorded'}
             </div>
+            {pin ? (
+              <div className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                <MapPin className="w-3 h-3 shrink-0" /> PIN: {pin}
+              </div>
+            ) : (
+              <div className="text-[10px] text-slate-400 italic mt-0.5">PIN unavailable</div>
+            )}
           </div>
         );
       }

@@ -233,23 +233,44 @@ export function BookingDetailsModal({ booking, isOpen, onClose }) {
 
               <div>
                 <div className="font-bold text-sm text-navy dark:text-white">
-                  {representativeName}
+                  {booking.vendorBusinessName || booking.vendorName || representativeName}
                 </div>
+                {booking.vendorBusinessName && booking.vendorName && booking.vendorBusinessName !== booking.vendorName && (
+                  <div className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                    Vendor: {booking.vendorName}
+                  </div>
+                )}
                 <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                   <ShieldCheck className="w-3 h-3 text-indigo-500 shrink-0" />
-                  <span className="font-medium text-slate-700 dark:text-slate-300">{representativeRole}</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    {booking.vendorBusinessName ? 'Registered Business Partner' : representativeRole}
+                  </span>
                 </div>
+                {(booking.vendorLocation || booking.vendorDistrict) && (
+                  <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span>{booking.vendorLocation || [booking.vendorDistrict, booking.vendorDivision, booking.vendorState].filter(Boolean).join(', ')}</span>
+                    {booking.vendorPincode && (
+                      <span className="font-mono">• PIN: {booking.vendorPincode}</span>
+                    )}
+                  </div>
+                )}
                 {isStay && (
                   <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 space-y-0.5">
                     <div>Room Type: <strong className="text-indigo-600 dark:text-indigo-400">{booking.roomName || 'Deluxe Room'}</strong></div>
                     <div>Room Number: <span className="font-mono">{booking.roomNumber || 'Not assigned'}</span></div>
                   </div>
                 )}
+                {!isStay && representativeName && representativeName !== 'Not assigned' && representativeName !== (booking.vendorBusinessName || booking.vendorName) && (
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                    {representativeRole}: <strong>{representativeName}</strong>
+                  </div>
+                )}
               </div>
 
               <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-0.5">
                 <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                <span>Contact: <span className="font-medium text-navy-secondary dark:text-slate-200">{repPhone}</span></span>
+                <span>Contact: <span className="font-medium text-navy-secondary dark:text-slate-200">{booking.vendorPhone && booking.vendorPhone !== 'Not provided' ? booking.vendorPhone : repPhone}</span></span>
               </div>
             </div>
           </div>

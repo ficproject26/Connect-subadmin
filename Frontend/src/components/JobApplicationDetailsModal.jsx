@@ -30,11 +30,12 @@ export function JobApplicationDetailsModal({ application, isOpen, onClose, onVie
   const candidateName = application.customerName || 'Candidate';
   const appId = application.id || '-';
   const jobTitle = application.jobTitle || application.title || '-';
-  const vendorName = application.vendorName || '-';
+  const vendorName = application.vendorBusinessName || application.vendorName || application.company || '-';
+  const vendorTerritory = application.vendorLocation || [application.vendorDistrict, application.vendorDivision, application.vendorPincode ? `PIN: ${application.vendorPincode}` : ''].filter(Boolean).join(', ');
   const jobType = application.jobType || 'Full-time';
   const appliedDate = application.applicationDate || application.createdAt || '-';
-  const email = application.customerEmail || '-';
-  const phone = application.customerPhone || '-';
+  const email = application.customerEmail || application.candidateEmail || application.email || '-';
+  const phone = application.customerPhone || application.candidatePhone || application.phone || '-';
   const locationText = application.district ? `${application.district}${application.division ? `, ${application.division}` : ''}` : '-';
   const pincode = application.pincode || '-';
   const experience = application.experience || '-';
@@ -222,6 +223,12 @@ export function JobApplicationDetailsModal({ application, isOpen, onClose, onVie
                 <div className="text-xs font-medium text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1">
                   <span>{vendorName}</span>
                 </div>
+                {vendorTerritory && (
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span>{vendorTerritory}</span>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 space-y-1 text-xs">

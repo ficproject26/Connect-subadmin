@@ -232,6 +232,22 @@ export const validatePasswordMatch = (password, confirmPassword) => {
   return { isValid: true, message: '' };
 };
 
+export const getPasswordValidationState = (password = '') => {
+  const pwd = String(password || '');
+  const minLength = pwd.length >= 6;
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasNumber = /[0-9]/.test(pwd);
+  const hasSpecial = /[^A-Za-z0-9\s]/.test(pwd);
+  const isValid = minLength && hasUpper && hasNumber && hasSpecial;
+  return {
+    isValid,
+    minLength,
+    hasUpper,
+    hasNumber,
+    hasSpecial
+  };
+};
+
 // ==============================================================================
 // 5. AADHAAR NUMBER VALIDATION & MASKING
 // ==============================================================================
@@ -557,5 +573,67 @@ export const validatePincode = (val, isRequired = true) => {
 
 export const handlePincodeInput = (val) => {
   return (val || '').replace(/\D/g, '').slice(0, 6);
+};
+
+export const cleanAccountNumber = cleanBankAccount;
+export const cleanPincode = (val) => (val || '').replace(/\D/g, '').slice(0, 6);
+
+/**
+ * Validates address details step form across Admin registration/management wizards.
+ * Returns null if valid, or a descriptive error message string if invalid.
+ */
+export const validateAddressDetails = (form = {}, options = {}) => {
+  const requiresDistrict = options.requiresDistrict !== undefined ? options.requiresDistrict : true;
+  if (!form.doorStreet || !String(form.doorStreet).trim()) {
+    return 'Please enter Door No / Street.';
+  }
+  if (!form.area || !String(form.area).trim()) {
+    return 'Please enter Village / Area / Locality.';
+  }
+  if (requiresDistrict && (!form.district || !String(form.district).trim())) {
+    return 'Please select or enter the District.';
+  }
+  if (form.state !== undefined && !String(form.state).trim()) {
+    return 'Please select the State.';
+  }
+  if (!form.pincode || !String(form.pincode).trim()) {
+    return 'Please enter the 6-digit Pincode.';
+  }
+  const cleanPin = String(form.pincode).replace(/\D/g, '');
+  if (cleanPin.length !== 6 || !/^[1-9][0-9]{5}$/.test(cleanPin)) {
+    return 'Pincode must be a valid 6-digit Indian postal code.';
+  }
+  return null;
+};
+
+/**
+ * Validates bank details step form across Admin registration/management wizards.
+ * Returns null if valid, or a descriptive error message string if invalid.
+ */
+export const validateBankDetails = (form = {}) => {
+  if (!form.accountHolderName || !String(form.accountHolderName).trim()) {
+    return 'Please enter Account Holder Name.';
+  }
+  if (!form.bankName || !String(form.bankName).trim()) {
+    return 'Please enter Bank Name.';
+  }
+  if (!form.accountNumber || !String(form.accountNumber).trim()) {
+    return 'Please enter Bank Account Number.';
+  }
+  const accRes = validateBankAccount(form.accountNumber, form.bankName);
+  if (!accRes.isValid) {
+    return accRes.message;
+  }
+  if (!form.ifscCode || !String(form.ifscCode).trim()) {
+    return 'Please enter IFSC Code.';
+  }
+  const ifscRes = validateIFSC(form.ifscCode);
+  if (!ifscRes.isValid) {
+    return ifscRes.message;
+  }
+  if (form.branchName !== undefined && !String(form.branchName).trim()) {
+    return 'Please enter Branch Name.';
+  }
+  return null;
 };
 
