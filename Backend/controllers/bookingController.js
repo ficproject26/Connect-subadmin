@@ -48,7 +48,7 @@ function normalizeBooking(item, pinMap, vendorMap, historyMap, matchedVendorArg)
   const vendorKey = String(item.vendor_id || item.vendorId || '').trim();
   const matchedVendor = matchedVendorArg || (vendorKey ? (vendorMap instanceof Map ? (vendorMap.get(vendorKey) || vendorMap.get(vendorKey.toLowerCase())) : null) : null);
 
-  const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName) : (item.vendorBusinessName || item.vendorName || item.hotelName || item.businessName || 'Merchant Enterprise');
+  const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName) : (item.vendorBusinessName || item.vendorName || item.hotelName || item.businessName || 'Not provided');
   const vendorName = matchedVendor ? (matchedVendor.vendorName || matchedVendor.name || vendorBusinessName) : (item.vendorName || vendorBusinessName);
   const vendorId = matchedVendor ? (matchedVendor.vendorId || matchedVendor.registrationId || matchedVendor._id || matchedVendor.id) : (vendorKey || 'Not provided');
   const vendorPhone = matchedVendor ? matchedVendor.phone : (item.vendorPhone || '');
@@ -188,13 +188,15 @@ function normalizeBooking(item, pinMap, vendorMap, historyMap, matchedVendorArg)
     vendorEmail,
     bookingType,
     type: bookingType,
+    category: bookingType,
     service: roomName,
     roomName,
     roomNumber,
     hotelName,
     propertyName: hotelName,
     vendorName,
-    businessName: hotelName,
+    vendorBusinessName,
+    businessName: vendorBusinessName,
     vendorId,
     numberOfRooms,
     numberOfGuests,
@@ -287,8 +289,27 @@ function getBookings(req, res) {
     // 4. Strictly enforce territory-based access control based on user jurisdiction (Part 9, 10)
     let scoped = normalizedBookings.filter(b => isEntityInAdminTerritory(b, territory));
 
-    const { search, status, type } = req.query;
+    const { search, status, type, category } = req.query;
     let filtered = scoped;
+
+    const catParam = category || type;
+    if (catParam && catParam.toLowerCase() !== 'all' && catParam.toLowerCase() !== 'all categories') {
+      const qCat = catParam.toLowerCase().trim();
+      filtered = filtered.filter(b => {
+        const bType = (b.bookingType || b.type || '').toLowerCase().trim();
+        const bCat = (b.category || '').toLowerCase().trim();
+        if (qCat === 'services' || qCat === 'service') {
+          return bType === 'services' || bType === 'service' || bCat === 'services' || bCat === 'service';
+        }
+        if (qCat === 'stay') {
+          return bType === 'stay' || bCat === 'stay';
+        }
+        if (qCat === 'travel') {
+          return bType === 'travel' || bCat === 'travel';
+        }
+        return bType === qCat || bCat === qCat;
+      });
+    }
 
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
@@ -296,6 +317,7 @@ function getBookings(req, res) {
         (b.bookingNumber && b.bookingNumber.toLowerCase().includes(q)) ||
         (b.customerName && b.customerName.toLowerCase().includes(q)) ||
         (b.vendorName && b.vendorName.toLowerCase().includes(q)) ||
+        (b.vendorBusinessName && b.vendorBusinessName.toLowerCase().includes(q)) ||
         (b.service && b.service.toLowerCase().includes(q)) ||
         (b.pincode && b.pincode.includes(q)) ||
         (b.district && b.district.toLowerCase().includes(q)) ||
@@ -305,10 +327,6 @@ function getBookings(req, res) {
 
     if (status && status !== 'all') {
       filtered = filtered.filter(b => (b.status || '').toLowerCase() === status.toLowerCase());
-    }
-
-    if (type && type !== 'all') {
-      filtered = filtered.filter(b => (b.bookingType || b.type || '').toLowerCase() === type.toLowerCase());
     }
 
     // 5. Stable newest-first sorting by creation/booking date with secondary sort on identifier

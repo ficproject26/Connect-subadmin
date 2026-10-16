@@ -58,7 +58,7 @@ function normalizeJob(item, pinMap, vendorDir) {
 
   const vendorName = matchedVendor
     ? (matchedVendor.businessName || matchedVendor.name || matchedVendor.vendorBusinessName)
-    : (item.vendorName || item.company || 'Enterprise Partner');
+    : (item.company || item.vendorName || item.vendorBusinessName || 'Unassigned');
 
   const vendorId = matchedVendor
     ? (matchedVendor._id || matchedVendor.id || matchedVendor.vendorId)

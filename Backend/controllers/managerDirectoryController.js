@@ -322,14 +322,19 @@ const populateManager = async (m, relation, user) => {
 
   const s = (status || '').toLowerCase();
   const admApp = (adminApprovalStatus || '').toLowerCase();
+  const subAdmApp = (m.subAdminApprovalStatus || '').toLowerCase();
+  const mainAdmApp = (m.mainAdminApprovalStatus || '').toLowerCase();
+  const appStage = (m.approvalStage || '').toLowerCase();
   const kycStat = (m.kycStatus || '').toLowerCase();
   let workflowStage = 'Awaiting Territory Approval';
-  if (s === 'rejected' || admApp === 'rejected') {
+  if (s === 'rejected' || admApp === 'rejected' || subAdmApp === 'rejected' || appStage === 'rejected') {
     workflowStage = 'Territory Rejected';
   } else if (kycStat === 'rejected') {
     workflowStage = 'KYC Rejected';
-  } else if ((s === 'active' || s === 'approved') && admApp === 'approved' && (kycStat === 'verified' || kycStat === 'approved')) {
+  } else if ((s === 'active' || s === 'approved') && (kycStat === 'verified' || kycStat === 'approved' || m.isActive)) {
     workflowStage = 'Activated';
+  } else if (s === 'pending_main_admin_approval' || subAdmApp === 'approved' || appStage === 'mainadmin_review' || (admApp === 'approved' && mainAdmApp === 'pending')) {
+    workflowStage = 'Awaiting Main Admin Review';
   } else if (s === 'pending_kyc' || s === 'pending_kyc_approval' || admApp === 'approved') {
     workflowStage = 'Awaiting KYC Review';
   } else if (s === 'active' || s === 'approved') {
@@ -914,6 +919,27 @@ const getManagerRequests = async (req, res) => {
       scopedRequests = scopedRequests.filter(m => m.role === targetRole || String(m.level) === String(level));
     }
 
+    // Strict Role-Level Boundary Enforcement:
+    if (roleLower.includes('pincode')) {
+      scopedRequests = scopedRequests.filter(m => {
+        const r = String(m.role || '').toLowerCase();
+        const l = String(m.level || '').toLowerCase();
+        return r === 'pincode_manager' || l === 'pincode' || l === '4';
+      });
+    } else if (roleLower.includes('division') || roleLower.includes('divisional')) {
+      scopedRequests = scopedRequests.filter(m => {
+        const r = String(m.role || '').toLowerCase();
+        const l = String(m.level || '').toLowerCase();
+        return r === 'division_manager' || r === 'pincode_manager' || ['division', 'divisional', 'pincode', '3', '4'].includes(l);
+      });
+    } else if (roleLower.includes('district')) {
+      scopedRequests = scopedRequests.filter(m => {
+        const r = String(m.role || '').toLowerCase();
+        const l = String(m.level || '').toLowerCase();
+        return !r.includes('state') && l !== 'state' && l !== '1';
+      });
+    }
+
     if (state || stateId) {
       scopedRequests = scopedRequests.filter(m => {
         if (stateId && String(m.stateId || m.assignedStateId || '').toLowerCase() === String(stateId).toLowerCase()) return true;
@@ -963,14 +989,17 @@ const getManagerRequests = async (req, res) => {
       const statusLower = status.toLowerCase();
       scopedRequests = scopedRequests.filter(m => {
         const s = (m.status || 'pending').toLowerCase();
+        const admApp = (m.adminApprovalStatus || '').toLowerCase();
+        const subAdmApp = (m.subAdminApprovalStatus || '').toLowerCase();
+        const mainAdmApp = (m.mainAdminApprovalStatus || '').toLowerCase();
         if (statusLower === 'pending' || statusLower === 'under_review') {
-          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
+          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval' || s === 'pending_main_admin_approval' || mainAdmApp === 'pending';
         }
         if (statusLower === 'approved') {
-          return s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'approved' || s === 'active';
+          return s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'approved' || s === 'active' || admApp === 'approved' || subAdmApp === 'approved' || s === 'pending_main_admin_approval';
         }
         if (statusLower === 'rejected') {
-          return s === 'rejected' || s === 'rejected_by_sub_admin' || s === 'kyc_rejected';
+          return s === 'rejected' || s === 'rejected_by_sub_admin' || s === 'kyc_rejected' || admApp === 'rejected' || subAdmApp === 'rejected';
         }
         return s === statusLower;
       });
@@ -1049,29 +1078,56 @@ const approveManager = async (req, res) => {
       });
     }
 
+    const adminRoleLower = (req.user.role || '').toLowerCase().replace(/_/g, ' ');
+    const isGlobalSuper = adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || (adminRoleLower === 'admin' && (!req.user.state || req.user.state.toLowerCase() === 'all india'));
+
     const now = new Date().toISOString();
-    // Persist territory approval, move to KYC team review queue (account remains restricted pending KYC)
-    const approveUpdates = {
-      status: 'PENDING_MAIN_ADMIN_APPROVAL',
-      overallRegistrationStatus: 'PENDING_MAIN_ADMIN_APPROVAL',
-      subAdminApprovalStatus: 'approved',
-      mainAdminApprovalStatus: manager.mainAdminApprovalStatus || 'pending',
-      kycVerificationStatus: manager.kycVerificationStatus || 'not_started',
-      adminApprovalStatus: 'approved',
-      isActive: false,
-      requiresApproval: true,
-      isFullyApproved: false,
-      subAdminApprovedBy: req.user.name || req.user.email,
-      subAdminApprovedById: req.user.id || req.user._id,
-      subAdminApprovedByRole: req.user.role,
-      subAdminApprovedAt: now,
-      adminApprovedBy: req.user.name || req.user.email,
-      adminApprovedById: req.user.id || req.user._id,
-      adminApprovedByRole: req.user.role,
-      adminApprovedAt: now,
-      rejectionReason: null,
-      updatedAt: now
-    };
+    let approveUpdates;
+    if (isGlobalSuper) {
+      // Main Admin final approval -> activates manager account
+      approveUpdates = {
+        status: 'active',
+        overallRegistrationStatus: 'active',
+        subAdminApprovalStatus: manager.subAdminApprovalStatus || 'approved',
+        mainAdminApprovalStatus: 'approved',
+        adminApprovalStatus: 'approved',
+        isActive: true,
+        requiresApproval: false,
+        isFullyApproved: true,
+        mainadminApprovedBy: req.user.id || req.user._id,
+        mainadminApprovedByName: req.user.name || req.user.email,
+        mainadminApprovedAt: now,
+        adminApprovedBy: req.user.name || req.user.email,
+        adminApprovedById: req.user.id || req.user._id,
+        adminApprovedByRole: req.user.role,
+        adminApprovedAt: now,
+        rejectionReason: null,
+        updatedAt: now
+      };
+    } else {
+      // Sub Admin territory approval -> forwards to Main Admin review
+      approveUpdates = {
+        status: 'PENDING_MAIN_ADMIN_APPROVAL',
+        overallRegistrationStatus: 'PENDING_MAIN_ADMIN_APPROVAL',
+        subAdminApprovalStatus: 'approved',
+        mainAdminApprovalStatus: manager.mainAdminApprovalStatus || 'pending',
+        kycVerificationStatus: manager.kycVerificationStatus || 'not_started',
+        adminApprovalStatus: 'approved',
+        isActive: false,
+        requiresApproval: true,
+        isFullyApproved: false,
+        subAdminApprovedBy: req.user.name || req.user.email,
+        subAdminApprovedById: req.user.id || req.user._id,
+        subAdminApprovedByRole: req.user.role,
+        subAdminApprovedAt: now,
+        adminApprovedBy: req.user.name || req.user.email,
+        adminApprovedById: req.user.id || req.user._id,
+        adminApprovedByRole: req.user.role,
+        adminApprovedAt: now,
+        rejectionReason: null,
+        updatedAt: now
+      };
+    }
     Object.assign(manager, approveUpdates);
 
     await db.users.findByIdAndUpdate(manager._id || manager.id, approveUpdates);
@@ -1093,18 +1149,21 @@ const approveManager = async (req, res) => {
         if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
         if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
 
-        await mongoDb.collection('managerrequests').updateMany(
+        const updateResult = await mongoDb.collection('managerrequests').updateMany(
           { $or: orClauses },
           {
             $set: {
-              status: 'Pending',
-              approvalStage: 'mainadmin_review',
-              overallRegistrationStatus: 'PENDING_MAIN_ADMIN_APPROVAL',
+              status: isGlobalSuper ? 'Approved' : 'Pending',
+              approvalStage: isGlobalSuper ? 'approved' : 'mainadmin_review',
+              overallRegistrationStatus: isGlobalSuper ? 'active' : 'PENDING_MAIN_ADMIN_APPROVAL',
               subAdminApprovalStatus: 'approved',
-              mainAdminApprovalStatus: 'pending',
-              subadminApprovedBy: req.user.id || req.user._id,
-              subadminApprovedByName: req.user.name || req.user.email,
-              subadminApprovedAt: new Date(),
+              mainAdminApprovalStatus: isGlobalSuper ? 'approved' : 'pending',
+              subadminApprovedBy: isGlobalSuper ? (manager.subadminApprovedBy || req.user.id || req.user._id) : (req.user.id || req.user._id),
+              subadminApprovedByName: isGlobalSuper ? (manager.subadminApprovedByName || req.user.name || req.user.email) : (req.user.name || req.user.email),
+              subadminApprovedAt: isGlobalSuper ? (manager.subadminApprovedAt || new Date()) : new Date(),
+              mainadminApprovedBy: isGlobalSuper ? (req.user.id || req.user._id) : null,
+              mainadminApprovedByName: isGlobalSuper ? (req.user.name || req.user.email) : null,
+              mainadminApprovedAt: isGlobalSuper ? new Date() : null,
               subAdminApproval: {
                 status: 'approved',
                 reviewerId: req.user.id || req.user._id,
@@ -1116,6 +1175,42 @@ const approveManager = async (req, res) => {
             }
           }
         );
+
+        if (updateResult.matchedCount === 0) {
+          await mongoDb.collection('managerrequests').insertOne({
+            requestId: manager.requestId || `REQ-MGR-${(manager.role||'pincode').substring(0,3).toUpperCase()}-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(Math.floor(1000 + Math.random() * 9000))}`,
+            name: manager.name,
+            email: manager.email,
+            phone: manager.mobile || manager.phone,
+            altPhone: manager.altPhone || '',
+            level: manager.level ? String(manager.level).replace('_manager', '') : (manager.role ? manager.role.replace('_manager', '') : 'pincode'),
+            role: manager.role || 'pincode_manager',
+            assignedState: manager.state || manager.assignedState || '',
+            assignedDistrict: manager.district || manager.assignedDistrict || '',
+            assignedDivision: manager.division || manager.assignedDivision || '',
+            assignedPincode: manager.pincode || manager.assignedPincode || '',
+            address: typeof manager.address === 'string' ? manager.address : (manager.address?.fullAddress || ''),
+            userId: mgrIdStr,
+            status: isGlobalSuper ? 'Approved' : 'Pending',
+            approvalStage: isGlobalSuper ? 'approved' : 'mainadmin_review',
+            overallRegistrationStatus: isGlobalSuper ? 'active' : 'PENDING_MAIN_ADMIN_APPROVAL',
+            subAdminApprovalStatus: 'approved',
+            mainAdminApprovalStatus: isGlobalSuper ? 'approved' : 'pending',
+            subadminApprovedBy: req.user.id || req.user._id,
+            subadminApprovedByName: req.user.name || req.user.email,
+            subadminApprovedAt: new Date(),
+            subAdminApproval: {
+              status: 'approved',
+              reviewerId: req.user.id || req.user._id,
+              reviewerName: req.user.name || req.user.email,
+              reviewerRole: req.user.role,
+              reviewedAt: now
+            },
+            documents: manager.documents || {},
+            createdAt: manager.createdAt || now,
+            updatedAt: now
+          });
+        }
       }
     } catch (mReqErr) {
       console.error('[Sub-Admin] Error syncing managerrequests on approve:', mReqErr.message);
@@ -1250,7 +1345,7 @@ const rejectManager = async (req, res) => {
         if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
         if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
 
-        await mongoDb.collection('managerrequests').updateMany(
+        const updateResult = await mongoDb.collection('managerrequests').updateMany(
           { $or: orClauses },
           {
             $set: {
@@ -1263,6 +1358,32 @@ const rejectManager = async (req, res) => {
             }
           }
         );
+
+        if (updateResult.matchedCount === 0) {
+          await mongoDb.collection('managerrequests').insertOne({
+            requestId: manager.requestId || `REQ-MGR-${(manager.role||'pincode').substring(0,3).toUpperCase()}-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(Math.floor(1000 + Math.random() * 9000))}`,
+            name: manager.name,
+            email: manager.email,
+            phone: manager.mobile || manager.phone,
+            altPhone: manager.altPhone || '',
+            level: manager.level ? String(manager.level).replace('_manager', '') : (manager.role ? manager.role.replace('_manager', '') : 'pincode'),
+            role: manager.role || 'pincode_manager',
+            assignedState: manager.state || manager.assignedState || '',
+            assignedDistrict: manager.district || manager.assignedDistrict || '',
+            assignedDivision: manager.division || manager.assignedDivision || '',
+            assignedPincode: manager.pincode || manager.assignedPincode || '',
+            address: typeof manager.address === 'string' ? manager.address : (manager.address?.fullAddress || ''),
+            userId: mgrIdStr,
+            status: 'Rejected',
+            approvalStage: 'rejected',
+            overallRegistrationStatus: 'REJECTED_BY_SUB_ADMIN',
+            subAdminApprovalStatus: 'rejected',
+            rejectionReason,
+            documents: manager.documents || {},
+            createdAt: manager.createdAt || now,
+            updatedAt: now
+          });
+        }
       }
     } catch (mReqErr) {
       console.error('[Sub-Admin] Error syncing managerrequests on reject:', mReqErr.message);
@@ -1411,7 +1532,7 @@ const keepPendingManager = async (req, res) => {
         if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
         if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
 
-        await mongoDb.collection('managerrequests').updateMany(
+        const updateResult = await mongoDb.collection('managerrequests').updateMany(
           { $or: orClauses },
           {
             $set: {
@@ -1433,6 +1554,39 @@ const keepPendingManager = async (req, res) => {
             }
           }
         );
+
+        if (updateResult.matchedCount === 0) {
+          await mongoDb.collection('managerrequests').insertOne({
+            requestId: manager.requestId || `REQ-MGR-${(manager.role||'pincode').substring(0,3).toUpperCase()}-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(Math.floor(1000 + Math.random() * 9000))}`,
+            name: manager.name,
+            email: manager.email,
+            phone: manager.mobile || manager.phone,
+            altPhone: manager.altPhone || '',
+            level: manager.level ? String(manager.level).replace('_manager', '') : (manager.role ? manager.role.replace('_manager', '') : 'pincode'),
+            role: manager.role || 'pincode_manager',
+            assignedState: manager.state || manager.assignedState || '',
+            assignedDistrict: manager.district || manager.assignedDistrict || '',
+            assignedDivision: manager.division || manager.assignedDivision || '',
+            assignedPincode: manager.pincode || manager.assignedPincode || '',
+            address: typeof manager.address === 'string' ? manager.address : (manager.address?.fullAddress || ''),
+            userId: mgrIdStr,
+            status: 'Pending',
+            approvalStage: 'subadmin_pending',
+            overallRegistrationStatus: 'PENDING_SUB_ADMIN_APPROVAL',
+            subAdminApprovalStatus: 'pending',
+            pendingReason,
+            adminNotes: pendingReason,
+            reviewerReason: pendingReason,
+            reviewedBy: req.user.id || req.user._id,
+            requestingAdminName: req.user.name || req.user.email,
+            requestingAdminRole: req.user.role,
+            reviewedAt: new Date(),
+            reviewHistory: [reviewEntry],
+            documents: manager.documents || {},
+            createdAt: manager.createdAt || now,
+            updatedAt: now
+          });
+        }
       }
     } catch (mReqErr) {
       console.error('[Sub-Admin] Error syncing managerrequests on keepPending:', mReqErr.message);

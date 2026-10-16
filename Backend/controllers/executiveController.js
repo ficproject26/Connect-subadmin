@@ -1518,7 +1518,61 @@ async function getAgentRequests(req, res) {
 
     const visibleAgents = candidateAgents.filter(a => canAdminViewAgent(req.user, a));
 
-    const formatted = visibleAgents.map(a => {
+    let filteredAgents = visibleAgents;
+    const reqLevel = req.query.level ? String(req.query.level).toLowerCase().trim() : '';
+    if (reqLevel && reqLevel !== 'all') {
+      const targetLevel = (reqLevel === 'divisional') ? 'division' : reqLevel;
+      filteredAgents = filteredAgents.filter(a => {
+        const lvl = normalizeLevel(getAgentLevel(a));
+        return lvl === targetLevel;
+      });
+    }
+
+    // Role-specific level enforcement
+    if (userRole.includes('pincode')) {
+      filteredAgents = filteredAgents.filter(a => normalizeLevel(getAgentLevel(a)) === 'pincode');
+    } else if (userRole.includes('division') || userRole.includes('divisional')) {
+      filteredAgents = filteredAgents.filter(a => {
+        const lvl = normalizeLevel(getAgentLevel(a));
+        return lvl === 'division' || lvl === 'pincode';
+      });
+    } else if (userRole.includes('district')) {
+      filteredAgents = filteredAgents.filter(a => {
+        const lvl = normalizeLevel(getAgentLevel(a));
+        return lvl === 'district' || lvl === 'division' || lvl === 'pincode';
+      });
+    }
+
+    if (req.query.state) {
+      const qState = req.query.state.toLowerCase().trim();
+      filteredAgents = filteredAgents.filter(a => {
+        const t = getAgentTerritory(a);
+        return t.state && t.state.toLowerCase().trim() === qState;
+      });
+    }
+    if (req.query.district) {
+      const qDist = req.query.district.toLowerCase().trim();
+      filteredAgents = filteredAgents.filter(a => {
+        const t = getAgentTerritory(a);
+        return t.district && t.district.toLowerCase().trim() === qDist;
+      });
+    }
+    if (req.query.division) {
+      const qDiv = req.query.division.toLowerCase().trim();
+      filteredAgents = filteredAgents.filter(a => {
+        const t = getAgentTerritory(a);
+        return t.division && (t.division.toLowerCase().trim() === qDiv || divisionMatches(t.division, req.query.division));
+      });
+    }
+    if (req.query.pincode) {
+      const qPin = String(req.query.pincode).trim();
+      filteredAgents = filteredAgents.filter(a => {
+        const t = getAgentTerritory(a);
+        return t.pincode && String(t.pincode).trim() === qPin;
+      });
+    }
+
+    const formatted = filteredAgents.map(a => {
       const normLevel = normalizeLevel(getAgentLevel(a));
       const terr = getAgentTerritory(a);
       const rawId = a.id || a._id;

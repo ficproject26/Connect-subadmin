@@ -46,7 +46,52 @@ export function ManagerRequestsPage() {
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Pending' | 'Approved' | 'Rejected'
-  const [selectedRoleLevel, setSelectedRoleLevel] = useState('All'); // 'All' | 'state' | 'district' | 'divisional' | 'pincode'
+
+  // Role-specific level options based on locking.tier:
+  // - State Admin / Super: All Levels, State, District, Division, Pincode
+  // - District Admin: District, Division, Pincode (remove All Levels and State)
+  // - Divisional Admin: Division, Pincode (remove All Levels, State, and District)
+  // - Pincode Admin: None (entire level control removed)
+  const availableLevels = useMemo(() => {
+    if (locking.tier === 'pincode') return [];
+    if (locking.tier === 'division') {
+      return [
+        { id: 'divisional', label: 'Division' },
+        { id: 'pincode', label: 'Pincode' }
+      ];
+    }
+    if (locking.tier === 'district') {
+      return [
+        { id: 'district', label: 'District' },
+        { id: 'divisional', label: 'Division' },
+        { id: 'pincode', label: 'Pincode' }
+      ];
+    }
+    return [
+      { id: 'All', label: 'All Levels' },
+      { id: 'state', label: 'State' },
+      { id: 'district', label: 'District' },
+      { id: 'divisional', label: 'Division' },
+      { id: 'pincode', label: 'Pincode' }
+    ];
+  }, [locking.tier]);
+
+  const [selectedRoleLevel, setSelectedRoleLevel] = useState(() => {
+    if (locking.tier === 'pincode') return 'pincode';
+    if (locking.tier === 'division') return 'divisional';
+    if (locking.tier === 'district') return 'district';
+    return 'All';
+  });
+
+  useEffect(() => {
+    if (locking.tier === 'pincode') {
+      setSelectedRoleLevel('pincode');
+    } else if (locking.tier === 'division' && selectedRoleLevel !== 'divisional' && selectedRoleLevel !== 'pincode') {
+      setSelectedRoleLevel('divisional');
+    } else if (locking.tier === 'district' && !['district', 'divisional', 'pincode'].includes(selectedRoleLevel)) {
+      setSelectedRoleLevel('district');
+    }
+  }, [locking.tier]);
 
   const [selectedFilterState, setSelectedFilterState] = useState(locking.defaultState || '');
   const [selectedFilterDistrict, setSelectedFilterDistrict] = useState(locking.defaultDistrict || '');
@@ -225,9 +270,9 @@ export function ManagerRequestsPage() {
       if (statusFilter !== 'All') {
         const s = (item.status || 'pending').toLowerCase();
         if (statusFilter === 'Pending') {
-          if (s !== 'pending' && s !== 'under_review' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval') return false;
+          if (s !== 'pending' && s !== 'under_review' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval' && s !== 'pending_main_admin_approval') return false;
         } else if (statusFilter === 'Approved') {
-          if (s !== 'approved' && s !== 'active' && s !== 'pending_kyc' && s !== 'pending_kyc_approval') return false;
+          if (s !== 'approved' && s !== 'active' && s !== 'pending_kyc' && s !== 'pending_kyc_approval' && s !== 'pending_main_admin_approval') return false;
         } else if (statusFilter === 'Rejected') {
           if (s !== 'rejected') return false;
         }
@@ -662,30 +707,26 @@ export function ManagerRequestsPage() {
           ))}
         </div>
 
-        {/* Role Level Filters */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Level:</span>
-          {[
-            { id: 'All', label: 'All Levels' },
-            { id: 'state', label: 'State' },
-            { id: 'district', label: 'District' },
-            { id: 'divisional', label: 'Division' },
-            { id: 'pincode', label: 'Pincode' }
-          ].map((lvl) => (
-            <button
-              key={lvl.id}
-              type="button"
-              onClick={() => setSelectedRoleLevel(lvl.id)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
-                selectedRoleLevel === lvl.id
-                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-              }`}
-            >
-              {lvl.label}
-            </button>
-          ))}
-        </div>
+        {/* Role Level Filters - conditionally rendered based on role permissions */}
+        {availableLevels.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Level:</span>
+            {availableLevels.map((lvl) => (
+              <button
+                key={lvl.id}
+                type="button"
+                onClick={() => setSelectedRoleLevel(lvl.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  selectedRoleLevel === lvl.id
+                    ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                }`}
+              >
+                {lvl.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Error state */}

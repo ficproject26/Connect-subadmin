@@ -1,3 +1,4 @@
+import { formatName, validateName } from '../utils/formValidation.js';
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Store, MapPin, User, Phone, Layers, Building2, CheckCircle2 } from 'lucide-react';
@@ -59,6 +60,10 @@ export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defa
       return;
     }
 
+    if (name === 'vendorName') {
+      setFormData(prev => ({ ...prev, vendorName: formatName(value) }));
+      return;
+    }
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -67,8 +72,9 @@ export function InitiateVendorOnboardingModal({ isOpen, onClose, onSuccess, defa
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.vendorName.trim()) {
-      setError('Vendor business name is required');
+    const nameVal = validateName(formData.vendorName, 'Vendor business name', true);
+    if (!nameVal.isValid) {
+      setError(nameVal.message);
       return;
     }
     if (!formData.pincode.trim() || formData.pincode.length !== 6) {

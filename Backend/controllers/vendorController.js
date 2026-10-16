@@ -443,8 +443,15 @@ const getVendors = async (req, res) => {
     const user = req.user || {};
     const allVendors = Array.from(db.vendors);
 
-    // Apply location filtering matching caller's scope
-    let scoped = filterByLocation(allVendors, user);
+    // PRE-POPULATE geo/location fields BEFORE filtering so filterByLocation
+    // and territory query params can match against resolved district/division/state/pincode.
+    // Without this step, vendors whose location comes from pincodeId or divisionId
+    // have blank string fields and are dropped by location filtering (the "0 vendors" bug).
+    const lookupCtx = buildVendorLookupContext();
+    const enrichedVendors = allVendors.map(v => populateVendorLocations(v, lookupCtx));
+
+    // Apply location filtering matching caller's scope (now works on enriched data)
+    let scoped = filterByLocation(enrichedVendors, user);
 
     // Extract query parameters
     const {
@@ -476,8 +483,8 @@ const getVendors = async (req, res) => {
         const matchesMobile = (v.mobile || v.phone || '').includes(q);
         const matchesPin = (v.pincode || '').includes(q);
         const matchesCat = (v.category || '').toLowerCase().includes(q);
-        const matchesDist = (v.district || '').toLowerCase().includes(q);
-        const matchesDiv = (v.division || '').toLowerCase().includes(q);
+        const matchesDist = (v.district || v.districtName || '').toLowerCase().includes(q);
+        const matchesDiv = (v.division || v.divisionName || '').toLowerCase().includes(q);
 
         if (!matchesName && !matchesBiz && !matchesContact && !matchesMobile && !matchesPin && !matchesCat && !matchesDist && !matchesDiv) {
           return false;
@@ -485,7 +492,11 @@ const getVendors = async (req, res) => {
       }
 
       // 2. Category & Subcategory
-      if (category && category !== 'All' && (v.category || '').toLowerCase() !== category.toLowerCase()) return false;
+      if (category && category !== 'All') {
+        const cat = (v.category || '').toLowerCase();
+        const cats = Array.isArray(v.categories) ? v.categories.map(c => c.toLowerCase()) : [];
+        if (cat !== category.toLowerCase() && !cats.includes(category.toLowerCase())) return false;
+      }
       if (subCategory && subCategory !== 'All' && (v.subCategory || '').toLowerCase() !== subCategory.toLowerCase()) return false;
 
       // 3. Status filter
@@ -493,6 +504,7 @@ const getVendors = async (req, res) => {
       if (kycStatus && kycStatus !== 'All' && (v.kycStatus || '').toLowerCase() !== kycStatus.toLowerCase()) return false;
 
       // 4. Sub-location territory filters (strictly within authorized caller scope)
+      // Case-insensitive + whitespace-normalized matching on resolved geo fields
       if (state && state !== 'All') {
         const sNorm = state.trim().toLowerCase();
         const vState = (v.state || v.stateName || '').trim().toLowerCase();
@@ -543,16 +555,13 @@ const getVendors = async (req, res) => {
 
     const totalPages = Math.ceil(totalVendors / (pageSize || 1)) || 1;
 
-    // Populate vendors using fast O(1) pre-indexed context
-    const lookupCtx = buildVendorLookupContext();
-    const populated = pagedVendors.map(v => populateVendorLocations(v, lookupCtx));
-
+    // Vendors are already pre-populated (enrichedVendors above) — no second pass needed
     return res.json({
       success: true,
       count: totalVendors,
       total: totalVendors,
-      vendors: populated,   // Sub_Admin_Management portal expects `vendors`
-      data: populated,      // Manager portal expects `data`
+      vendors: pagedVendors,   // Sub_Admin_Management portal expects `vendors`
+      data: pagedVendors,      // Manager portal expects `data`
       pagination: {
         total: totalVendors,
         page: currentPage,

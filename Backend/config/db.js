@@ -857,7 +857,7 @@ function extractEntityGeo(item, pinLookup) {
   }
 
   // If pincode missing, search address and message text
-  const rawAddr = String(item.address || item.fullAddress || item.customer_address || addr0.address || item.message || item.desc || item.title || '');
+  const rawAddr = String(item.delivery_address || item.deliveryAddress || item.customer_address || item.customerAddress || item.shipping_address || item.shippingAddress || item.address || item.fullAddress || addr0.address || item.message || item.desc || item.title || '');
   if (!pincode && rawAddr) {
     const m = rawAddr.match(/\b\d{6}\b/);
     if (m) pincode = m[0];

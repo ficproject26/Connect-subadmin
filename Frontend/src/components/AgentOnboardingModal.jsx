@@ -1,3 +1,4 @@
+import { formatName, validateName, validateEmail, cleanIndianMobile, validateIndianMobile } from '../utils/formValidation.js';
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
@@ -104,8 +105,12 @@ export function AgentOnboardingModal({ isOpen, onClose, onSuccess, level }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'mobile') {
-      const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
-      setFormData(prev => ({ ...prev, mobile: digitsOnly }));
+      const cleaned = cleanIndianMobile(value);
+      setFormData(prev => ({ ...prev, mobile: cleaned }));
+      return;
+    }
+    if (name === 'name') {
+      setFormData(prev => ({ ...prev, name: formatName(value) }));
       return;
     }
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -116,19 +121,21 @@ export function AgentOnboardingModal({ isOpen, onClose, onSuccess, level }) {
     setError('');
     setSuccessMsg('');
 
-    if (!formData.name.trim() || formData.name.trim().length < 2) {
-      setError('Please provide a valid agent full name (at least 2 characters).');
+    const nameCheck = validateName(formData.name, 'Agent Full Name', true);
+    if (!nameCheck.isValid) {
+      setError(nameCheck.message);
       return;
     }
 
-    if (!formData.mobile || formData.mobile.length !== 10) {
-      setError('Please provide a valid 10-digit mobile number.');
+    const mobileCheck = validateIndianMobile(formData.mobile, true, 'Mobile number');
+    if (!mobileCheck.isValid) {
+      setError(mobileCheck.message);
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!formData.email.trim() || !emailRegex.test(formData.email.trim())) {
-      setError('Please enter a valid email address.');
+    const emailCheck = validateEmail(formData.email, true);
+    if (!emailCheck.isValid) {
+      setError(emailCheck.message);
       return;
     }
 

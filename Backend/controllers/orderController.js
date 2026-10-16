@@ -38,22 +38,51 @@ function getPincodeDirectory() {
   return pinMap;
 }
 
-function normalizeOrder(order, pinMap, vendorMap, historyMap) {
+function normalizeOrder(order, pinMap, vendorMap, historyMap, productMap, customerMap) {
   if (!order) return null;
 
   const orderId = String(order.id || order._id || '');
   const orderNumber = order.order_number || order.orderNumber || order.id || order._id || '-';
 
-  // Extract address and pincode
-  const customerAddress = order.customer_address || order.customerAddress || order.deliveryAddress || order.address || '';
-  let pincode = String(order.pincode || order.deliveryPincode || '').trim();
+  // Extract address and pincode with comprehensive fallback across all schema conventions
+  let rawAddr = order.delivery_address || order.deliveryAddress || order.customer_address || order.customerAddress || order.shipping_address || order.shippingAddress || order.address || '';
+  let customerAddress = '';
+  let pincode = String(order.pincode || order.deliveryPincode || order.delivery_pincode || order.postal_code || order.postalCode || order.pin_code || order.pin || '').trim();
+
+  if (typeof rawAddr === 'object' && rawAddr !== null) {
+    if (!pincode) pincode = String(rawAddr.pincode || rawAddr.postal_code || rawAddr.zipCode || rawAddr.zip || '').trim();
+    customerAddress = Object.values(rawAddr).filter(v => typeof v === 'string' && v.trim()).join(', ');
+  } else {
+    customerAddress = String(rawAddr || '').trim();
+  }
+
   if (!pincode && customerAddress) {
     const pinMatch = customerAddress.match(/\b\d{6}\b/);
     if (pinMatch) pincode = pinMatch[0];
   }
 
+  // Cross-reference customer directory if pincode or address is incomplete
+  if ((!pincode || !customerAddress || customerAddress.length < 15) && customerMap) {
+    const cId = String(order.customerId || order.customerDisplayId || order.memberId || '').trim().toLowerCase();
+    const cPhone = String(order.customer_phone || order.customerPhone || order.phone || '').trim();
+    const cName = String(order.customer_name || order.customerName || order.memberName || '').trim().toLowerCase();
+
+    const matchedCustomer = (cId && customerMap.get(cId)) ||
+                            (cPhone && customerMap.get(cPhone)) ||
+                            (cName && customerMap.get(cName));
+
+    if (matchedCustomer) {
+      if (!pincode && matchedCustomer.pincode) {
+        pincode = String(matchedCustomer.pincode).trim();
+      }
+      if (!customerAddress || customerAddress.length < 15) {
+        customerAddress = matchedCustomer.address || customerAddress;
+      }
+    }
+  }
+
   // Resolve geographic hierarchy from pincode or customer address
-  const pinGeo = pinMap.get(pincode) || {};
+  const pinGeo = (pincode && pinMap) ? (pinMap.get(pincode) || {}) : {};
   let state = order.state || order.stateName || pinGeo.state || '';
   let district = order.district || order.districtName || order.deliveryDistrict || pinGeo.district || '';
   let division = order.division || order.divisionName || order.deliveryDivision || pinGeo.division || '';
@@ -68,6 +97,9 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
     else if (addrUpper.includes('NAMAKKAL')) district = 'Namakkal';
     else if (addrUpper.includes('TIRUPPUR') || addrUpper.includes('TIRUPUR')) district = 'Tiruppur';
     else if (addrUpper.includes('COIMBATORE')) district = 'Coimbatore';
+    else if (addrUpper.includes('BANGALORE') || addrUpper.includes('BENGALURU')) district = 'Bengaluru Urban';
+    else if (addrUpper.includes('CHENNAI')) district = 'Chennai';
+    else if (addrUpper.includes('MADURAI')) district = 'Madurai';
   }
 
   if (!division && customerAddress) {
@@ -77,55 +109,28 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
     else if (addrUpper.includes('SALEM NORTH')) division = 'Salem North';
     else if (addrUpper.includes('SALEM SOUTH')) division = 'Salem South';
     else if (addrUpper.includes('HOSUR')) division = 'Hosur';
+    else if (addrUpper.includes('HARUR')) division = 'Harur';
+    else if (addrUpper.includes('NAGARBHAVI') || addrUpper.includes('BOMMANAHALLI') || addrUpper.includes('PAPAREDDYPALYA')) division = 'Bengaluru South';
   }
 
-  if (!state) {
-    state = customerAddress.toLowerCase().includes('karnataka') ? 'Karnataka' : 'Tamil Nadu';
+  if (!state && (district || customerAddress || pincode)) {
+    const addrLower = (customerAddress || '').toLowerCase();
+    const distLower = (district || '').toLowerCase();
+    if (addrLower.includes('karnataka') || distLower.includes('bengaluru') || distLower.includes('bangalore') || String(pincode).startsWith('560')) {
+      state = 'Karnataka';
+    } else if (addrLower.includes('kerala') || distLower.includes('thrissur') || String(pincode).startsWith('680')) {
+      state = 'Kerala';
+    } else {
+      state = 'Tamil Nadu';
+    }
   }
-
-  // Items normalization
-  let items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
-  if (items.length === 0 && order.product_details) {
-    items = [{
-      productId: order.productId || 'PRD-01',
-      name: order.product_details,
-      quantity: 1,
-      qty: 1,
-      price: order.amount || order.totalAmount || 0,
-      category: order.type || 'Products'
-    }];
-  }
-
-  const normalizedItems = items.map(item => {
-    const qty = Number(item.quantity || item.qty || 1);
-    const price = Number(item.price || item.unitPrice || 0);
-    return {
-      productId: item.productId || item.id || '-',
-      name: item.name || item.productName || item.title || order.product_details || 'Product Item',
-      quantity: qty,
-      qty: qty,
-      price: price,
-      unitPrice: price,
-      category: item.category || order.type || 'Products',
-      variant: item.variant || item.variantName || null,
-      image: item.image || item.imageUrl || null
-    };
-  });
-
-  // Calculate financials
-  const rawSubtotal = Number(order.amount || order.subtotal || 0);
-  const rawTotal = Number(order.totalAmount || order.finalAmount || order.amount || 0);
-  const discountAmount = Number(order.discountAmount || order.discount || 0);
-  const deliveryFee = Number(order.deliveryFee || order.delivery_fee || order.shippingFee || 0);
-  const tax = Number(order.tax || order.taxAmount || 0);
-  const netPayable = rawTotal || (rawSubtotal - discountAmount + deliveryFee + tax);
 
   // Vendor Enrichment from comprehensive vendor directory (vendors, users, businesses, settlements)
   const vendorKey = String(order.vendor_id || order.vendorId || '').trim();
-  const matchedVendor = vendorKey ? (vendorMap.get(vendorKey) || vendorMap.get(vendorKey.toLowerCase())) : null;
+  const matchedVendor = (vendorKey && vendorMap) ? (vendorMap.get(vendorKey) || vendorMap.get(vendorKey.toLowerCase())) : null;
 
-  const vendorName = matchedVendor ? (matchedVendor.vendorName || matchedVendor.businessName || 'Vendor Merchant') : (order.vendorName && order.vendorName !== 'Unassigned' ? order.vendorName : (vendorKey ? 'Vendor information unavailable' : 'Unassigned'));
-  const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorName || 'Merchant Enterprise') : (order.vendorBusinessName || vendorName);
+  const vendorName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorName || matchedVendor.name || 'Vendor Merchant') : (order.vendorBusinessName || order.vendorName || (vendorKey ? 'Vendor information unavailable' : 'Unassigned'));
+  const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorName || vendorName) : (order.vendorBusinessName || vendorName);
   const vendorId = matchedVendor ? (matchedVendor.vendorId || matchedVendor.registrationId || matchedVendor._id || matchedVendor.id) : (vendorKey || '-');
   const vendorCategory = matchedVendor ? (matchedVendor.businessType || matchedVendor.category || matchedVendor.subCategory || '-') : (order.vendorCategory || '-');
   const vendorPhone = matchedVendor ? (matchedVendor.phone || matchedVendor.mobile || '-') : (order.vendorPhone || '-');
@@ -147,6 +152,84 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
   } else if (order.vendorLocation && order.vendorLocation !== 'Not provided') {
     vendorLocation = order.vendorLocation;
   }
+
+  // Items normalization with individual item vendor identification
+  let items = Array.isArray(order.items) && order.items.length > 0 ? order.items : [];
+  if (items.length === 0 && order.product_details) {
+    items = [{
+      productId: order.productId || 'PRD-01',
+      name: order.product_details,
+      quantity: 1,
+      qty: 1,
+      price: order.amount || order.totalAmount || 0,
+      category: order.type || 'Products'
+    }];
+  }
+
+  const normalizedItems = items.map(item => {
+    const qty = Number(item.quantity || item.qty || 1);
+    const price = Number(item.price || item.unitPrice || 0);
+    const pId = String(item.productId || item.id || '').trim();
+    const matchedProduct = (pId && productMap) ? (productMap.get(pId) || productMap.get(pId.toLowerCase())) : null;
+
+    // Resolve individual item vendor
+    const itemVendorKey = String(
+      item.vendorId ||
+      item.vendor_id ||
+      item.sellerId ||
+      matchedProduct?.vendorId ||
+      matchedProduct?.vendor_id ||
+      order.vendor_id ||
+      order.vendorId ||
+      ''
+    ).trim();
+
+    const itemVendor = (itemVendorKey && vendorMap)
+      ? (vendorMap.get(itemVendorKey) || vendorMap.get(itemVendorKey.toLowerCase()))
+      : matchedVendor;
+
+    const itemVendorName = itemVendor
+      ? (itemVendor.businessName || itemVendor.vendorName || itemVendor.name)
+      : (order.vendorBusinessName || order.vendorName || (itemVendorKey ? 'Vendor Merchant' : 'Vendor unavailable'));
+
+    const itemVendorLocation = itemVendor
+      ? (itemVendor.fullAddress || itemVendor.address || [itemVendor.district, itemVendor.state].filter(Boolean).join(', '))
+      : (order.vendorLocation || 'Tamil Nadu');
+
+    const itemVendorDistrict = itemVendor?.district || '';
+    const itemVendorDivision = itemVendor?.division || '';
+    const itemVendorState = itemVendor?.state || 'Tamil Nadu';
+    const itemVendorPincode = itemVendor?.pincode || '';
+
+    return {
+      productId: item.productId || item.id || '-',
+      name: item.name || item.productName || item.title || order.product_details || 'Product Item',
+      quantity: qty,
+      qty: qty,
+      price: price,
+      unitPrice: price,
+      category: item.category || order.type || 'Products',
+      variant: item.variant || item.variantName || null,
+      image: item.image || item.imageUrl || null,
+      vendorId: itemVendorKey || vendorId,
+      vendorName: itemVendorName,
+      vendorBusinessName: itemVendorName,
+      vendorLocation: itemVendorLocation,
+      vendorDistrict: itemVendorDistrict,
+      vendorDivision: itemVendorDivision,
+      vendorState: itemVendorState,
+      vendorPincode: itemVendorPincode
+    };
+  });
+
+  // Calculate financials
+  const rawSubtotal = Number(order.amount || order.subtotal || 0);
+  const rawTotal = Number(order.totalAmount || order.finalAmount || order.amount || 0);
+  const discountAmount = Number(order.discountAmount || order.discount || 0);
+  const deliveryFee = Number(order.deliveryFee || order.delivery_fee || order.shippingFee || 0);
+  const tax = Number(order.tax || order.taxAmount || 0);
+  const netPayable = rawTotal || (rawSubtotal - discountAmount + deliveryFee + tax);
+
 
   // Build Real Timeline from delivery_status_history
   const rawHist = (historyMap && (historyMap.get(orderId) || historyMap.get(orderNumber) || historyMap.get(String(order._id)))) || [];
@@ -236,8 +319,44 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap) {
 async function getOrders(req, res) {
   try {
     const rawOrders = Array.from(db.orders || []);
-    // Scope geographically according to user role
-    let scoped = filterByLocation(rawOrders, req.user);
+    const pinMap = getPincodeDirectory();
+    const vendorDirectory = getComprehensiveVendorDirectory();
+    const vendorMap = vendorDirectory.vendorMap;
+
+    // Build status history lookup map
+    const historyMap = new Map();
+    Array.from(db.deliveryStatusHistory || []).forEach(h => {
+      const oId = String(h.order_id || h.order_number || '');
+      if (oId) {
+        if (!historyMap.has(oId)) historyMap.set(oId, []);
+        historyMap.get(oId).push(h);
+      }
+    });
+
+    // Build product lookup map for item-level vendor identification
+    const productMap = new Map();
+    Array.from(db.products || []).forEach(p => {
+      const pid = String(p._id || p.id || p.productId || '').trim();
+      if (pid) productMap.set(pid, p);
+      if (pid.toLowerCase() !== pid) productMap.set(pid.toLowerCase(), p);
+    });
+
+    // Build customer lookup map to recover pincodes from customer directory
+    const customerMap = new Map();
+    Array.from(db.customers || []).forEach(c => {
+      const cId = String(c._id || c.id || c.customerId || c.customerDisplayId || c.memberId || '').trim().toLowerCase();
+      const cPhone = String(c.phone || c.mobile || '').trim();
+      const cName = String(c.name || c.fullName || '').trim().toLowerCase();
+      if (cId) customerMap.set(cId, c);
+      if (cPhone) customerMap.set(cPhone, c);
+      if (cName) customerMap.set(cName, c);
+    });
+
+    // Normalize and enrich all raw orders with full resolved addresses, pincodes, and item vendors first
+    const normalizedAll = rawOrders.map(o => normalizeOrder(o, pinMap, vendorMap, historyMap, productMap, customerMap)).filter(Boolean);
+
+    // Scope geographically according to user role on fully-resolved territory coordinates
+    let scoped = filterByLocation(normalizedAll, req.user);
 
     // ORDER CATEGORY CLASSIFICATION:
     // Orders = product, daily_need, daily needs, food (commerce/physical goods)
@@ -273,21 +392,7 @@ async function getOrders(req, res) {
       });
     }
 
-    const pinMap = getPincodeDirectory();
-    const vendorDirectory = getComprehensiveVendorDirectory();
-    const vendorMap = vendorDirectory.vendorMap;
-
-    // Build status history lookup map
-    const historyMap = new Map();
-    Array.from(db.deliveryStatusHistory || []).forEach(h => {
-      const oId = String(h.order_id || h.order_number || '');
-      if (oId) {
-        if (!historyMap.has(oId)) historyMap.set(oId, []);
-        historyMap.get(oId).push(h);
-      }
-    });
-
-    const normalizedOrders = scoped.map(o => normalizeOrder(o, pinMap, vendorMap, historyMap)).filter(Boolean);
+    const normalizedOrders = scoped;
 
     const { search, status, pincode, district, division } = req.query;
     let filtered = normalizedOrders;
