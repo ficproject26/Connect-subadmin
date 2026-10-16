@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { dataService } from '../../services/dataService';
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge, CardTierIcon } from '../../components/Badge';
 import { BookingDetailsModal } from '../../components/BookingDetailsModal';
 import { useTheme } from '../../context/ThemeContext';
+import { CalendarCheck, Filter, Building2 } from 'lucide-react';
 
 export function DivisionalBookings() {
   const { user } = useAuth();
@@ -14,6 +15,7 @@ export function DivisionalBookings() {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All Categories');
 
   const loadData = async () => {
     setLoading(true);
@@ -39,6 +41,19 @@ export function DivisionalBookings() {
     loadData();
   }, []);
 
+  // Client-side instant category filtering across Services, Stay, Travel, and All Categories
+  const filteredBookings = useMemo(() => {
+    if (categoryFilter === 'All Categories') return bookings;
+    const catLower = categoryFilter.toLowerCase();
+    return bookings.filter(b => {
+      const bType = (b.bookingType || b.type || b.category || '').toLowerCase().trim();
+      if (catLower === 'services') return bType === 'services' || bType === 'service';
+      if (catLower === 'stay') return bType === 'stay';
+      if (catLower === 'travel') return bType === 'travel';
+      return bType === catLower;
+    });
+  }, [bookings, categoryFilter]);
+
   const columns = [
     {
       header: 'Booking Number',
@@ -52,9 +67,24 @@ export function DivisionalBookings() {
       )
     },
     {
-      header: 'Service Type',
-      accessor: 'service',
-      render: (row) => <span className="font-semibold text-indigo-600 dark:text-indigo-300 text-xs">{row.service}</span>
+      header: 'Service / Offering',
+      accessor: (row) => `${row.service} ${row.vendorBusinessName || row.vendorName || ''}`,
+      render: (row) => {
+        const vendor = row.vendorBusinessName || row.vendorName;
+        return (
+          <div className="space-y-0.5">
+            <span className="font-semibold text-indigo-600 dark:text-indigo-300 text-xs">{row.service}</span>
+            {vendor && vendor !== 'Not provided' ? (
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Building2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="font-medium text-slate-700 dark:text-slate-300">{vendor}</span>
+              </div>
+            ) : (
+              <div className="text-[10px] text-slate-400 italic">Provider unassigned</div>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: 'Location',
