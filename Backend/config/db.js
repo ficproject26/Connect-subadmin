@@ -44,6 +44,24 @@ class Collection extends Array {
       selfie: 0,
       educationalCertificates: 0,
       bankProof: 0
+    } : (this.name === 'shop_visits' || this.mongoName === 'fieldvisits') ? {
+      shopPhoto: 0,
+      storefrontPhoto: 0,
+      voiceNote: 0
+    } : (this.name === 'submitted_reports' || this.mongoName === 'reports') ? {
+      'shopVisits.shopPhoto': 0,
+      'shopVisits.storefrontPhoto': 0,
+      'shopVisits.voiceNote': 0
+    } : (this.name === 'qc_tasks' || this.mongoName === 'tasks') ? {
+      'completionDetails.completionPhoto': 0,
+      'completionDetails.completionPhotos': 0,
+      'completionDetails.completionAudio': 0,
+      'completionDetails.voiceNote': 0,
+      'completionDetails.photos': 0,
+      history: 0,
+      photos: 0,
+      voiceNote: 0,
+      shopPhoto: 0
     } : {};
     const docs = await this._mongoCol.find({}, { projection }).toArray();
     this.length = 0;
@@ -74,6 +92,24 @@ class Collection extends Array {
         selfie: 0,
         educationalCertificates: 0,
         bankProof: 0
+      } : (this.name === 'shop_visits' || this.mongoName === 'fieldvisits') ? {
+        shopPhoto: 0,
+        storefrontPhoto: 0,
+        voiceNote: 0
+      } : (this.name === 'submitted_reports' || this.mongoName === 'reports') ? {
+        'shopVisits.shopPhoto': 0,
+        'shopVisits.storefrontPhoto': 0,
+        'shopVisits.voiceNote': 0
+      } : (this.name === 'qc_tasks' || this.mongoName === 'tasks') ? {
+        'completionDetails.completionPhoto': 0,
+        'completionDetails.completionPhotos': 0,
+        'completionDetails.completionAudio': 0,
+        'completionDetails.voiceNote': 0,
+        'completionDetails.photos': 0,
+        history: 0,
+        photos: 0,
+        voiceNote: 0,
+        shopPhoto: 0
       } : {};
       const docs = await this._mongoCol.find({}, { projection }).toArray();
       this.length = 0;

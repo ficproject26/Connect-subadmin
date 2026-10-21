@@ -87,7 +87,7 @@ export default async function handler(req, res) {
       {
         method: req.method,
         headers: requestHeaders,
-        timeout: 15000
+        timeout: 60000
       },
       (proxyRes) => {
         res.statusCode = proxyRes.statusCode || 200;
