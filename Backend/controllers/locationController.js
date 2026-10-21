@@ -12,9 +12,17 @@ function invalidateHierarchyCache() {
   inFlightHierarchyPromise = null;
 }
 
-// Reload territory collections live from MongoDB Atlas if connected
+// Reload territory collections live from MongoDB Atlas if connected (throttled to 10 min to prevent Atlas socket bottlenecks)
+let lastTerritoryReload = 0;
+const TERRITORY_RELOAD_TTL = 10 * 60 * 1000;
+
 async function reloadTerritoryCollections(force = false) {
+  const now = Date.now();
+  if (!force && lastTerritoryReload > 0 && (now - lastTerritoryReload < TERRITORY_RELOAD_TTL)) {
+    return;
+  }
   if (db.states && db.states.reloadFromMongo) {
+    lastTerritoryReload = now;
     await Promise.all([
       db.states.reloadFromMongo(force).catch(() => {}),
       db.districts.reloadFromMongo(force).catch(() => {}),
