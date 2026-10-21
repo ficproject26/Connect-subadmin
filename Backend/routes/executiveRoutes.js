@@ -16,6 +16,7 @@ router.get('/agents/requests', executiveController.getAgentRequests);
 router.post('/agents/:id/approve', executiveController.approveAgent);
 router.post('/agents/:id/reject', executiveController.rejectAgent);
 router.post('/agents/:id/pending', executiveController.keepPendingAgent);
+router.patch('/agents/:id/status', executiveController.updateAgentStatus);
 router.get('/agents/hierarchy', executiveController.getAgentHierarchy);
 router.get('/agents/activities', executiveController.getAgentActivities);
 router.post('/agents/activities', executiveController.createAgentActivity);

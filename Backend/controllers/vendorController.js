@@ -4,6 +4,8 @@ const { resolveResponsibleAdmin, isUserAuthorizedForVendor } = require('../utils
 const { getScopeFilter, isVendorInScope } = require('../middleware/scopeMiddleware');
 const notificationService = require('../services/notificationService');
 const bcrypt = require('bcryptjs');
+const { getMongoDb } = require('../config/mongo');
+const { isFullyOnboardedVendor } = require('../utils/vendorOnboardingHelper');
 
 // Mask sensitive identifiers for public / lower view
 const maskPan = (pan) => {
@@ -470,8 +472,21 @@ const getVendors = async (req, res) => {
       page,
       limit,
       sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortOrder = 'desc',
+      onboardedOnly,
+      includeIncomplete
     } = req.query;
+
+    const callerRole = String(user.role || '').toLowerCase();
+    const isSubAdmin = callerRole.includes('state') || callerRole.includes('district') || callerRole.includes('division') || callerRole.includes('divis') || callerRole.includes('pincode');
+
+    // Sub-Admin vendors listings must strictly show only fully onboarded vendors.
+    // Backward-compatible for internal/admin tools via explicit includeIncomplete=true or onboardedOnly=false.
+    const shouldFilterOnboardedOnly = onboardedOnly === 'true' || (includeIncomplete !== 'true' && (isSubAdmin || onboardedOnly !== 'false'));
+
+    if (shouldFilterOnboardedOnly) {
+      scoped = scoped.filter(v => isFullyOnboardedVendor(v, { allowSuspended: true, allowDeleted: true }));
+    }
 
     let filtered = scoped.filter(v => {
       // 1. Search filter
@@ -500,7 +515,25 @@ const getVendors = async (req, res) => {
       if (subCategory && subCategory !== 'All' && (v.subCategory || '').toLowerCase() !== subCategory.toLowerCase()) return false;
 
       // 3. Status filter
-      if (status && status !== 'All' && (v.status || '').toLowerCase() !== status.toLowerCase()) return false;
+      if (status && status !== 'All') {
+        const sTarget = status.toLowerCase();
+        const vStat = (v.status || '').toLowerCase();
+        if (sTarget === 'active') {
+          if (vStat !== 'active' && vStat !== 'approved') return false;
+          if (v.isDeleted === true || vStat === 'deleted' || vStat === 'suspended') return false;
+        } else if (sTarget === 'suspended') {
+          if (vStat !== 'suspended') return false;
+        } else if (sTarget === 'deleted') {
+          if (vStat !== 'deleted' && !v.isDeleted) return false;
+        } else if (vStat !== sTarget) {
+          return false;
+        }
+      } else {
+        // Exclude deleted accounts from general listing unless explicitly selected
+        if (v.status === 'Deleted' || v.isDeleted === true) {
+          return false;
+        }
+      }
       if (kycStatus && kycStatus !== 'All' && (v.kycStatus || '').toLowerCase() !== kycStatus.toLowerCase()) return false;
 
       // 4. Sub-location territory filters (strictly within authorized caller scope)
@@ -736,6 +769,42 @@ const createVendor = async (req, res) => {
 
     const saved = await db.vendors.insertOne(newVendor);
 
+    // Sync corresponding vendor user record into db.users for unified account & auth resolution
+    if (db.users && saved) {
+      const existingUser = await db.users.findOne({ email: saved.email });
+      if (!existingUser) {
+        await db.users.insertOne({
+          _id: saved._id,
+          id: saved._id,
+          name: saved.contactPerson || saved.name,
+          email: saved.email,
+          phone: saved.phone || saved.mobile,
+          mobile: saved.phone || saved.mobile,
+          role: 'vendor',
+          level: 4,
+          status: saved.status || 'Under Review',
+          adminApprovalStatus: 'pending',
+          kycStatus: 'pending_verification',
+          isActive: false,
+          requiresApproval: true,
+          isFullyApproved: false,
+          state: saved.state,
+          district: saved.district,
+          division: saved.division,
+          pincode: saved.pincode,
+          stateId: saved.stateId || null,
+          districtId: saved.districtId || null,
+          divisionId: saved.divisionId || null,
+          pincodeId: saved.pincodeId || null,
+          address: saved.address,
+          registrationSource: saved.createdByRole?.toLowerCase().includes('agent') ? 'Agent Onboarding' : 'Manager Onboarding',
+          source: saved.createdByRole?.toLowerCase().includes('agent') ? 'Agent Onboarding' : 'Manager Onboarding',
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }).catch(() => {});
+      }
+    }
+
     // Audit log
     await db.auditLogs.insertOne({
       action: 'VENDOR_CREATED',
@@ -841,42 +910,162 @@ const updateVendor = async (req, res) => {
 const updateVendorStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, statusNotes } = req.body;
+    const { status, action, reason, statusNotes } = req.body;
 
-    if (!status) {
-      return res.status(400).json({ success: false, message: 'Status is required' });
-    }
-
-    const vendor = await db.vendors.findById(id);
+    const vendor = (await db.vendors.findById(id)) || Array.from(db.vendors).find(v => String(v._id || v.id) === String(id));
     if (!vendor) {
       return res.status(404).json({ success: false, message: 'Vendor not found' });
     }
 
-    const updated = await db.vendors.findByIdAndUpdate(id, {
-      status,
-      statusNotes: statusNotes || vendor.statusNotes
-    });
+    // Territorial authorization check
+    if (!isUserAuthorizedForVendor(req.user, vendor)) {
+      return res.status(403).json({
+        success: false,
+        code: 'UNAUTHORIZED_TERRITORY',
+        message: `Forbidden: You are not authorized to manage vendor accounts for ${vendor.pincode || vendor.district || 'this territory'}.`
+      });
+    }
 
+    let targetStatus = '';
+    const norm = String(action || status || '').toLowerCase().trim();
+    if (norm === 'suspend' || norm === 'suspended') {
+      targetStatus = 'Suspended';
+    } else if (norm === 'activate' || norm === 'active') {
+      targetStatus = 'Active';
+    } else if (norm === 'delete' || norm === 'deleted') {
+      targetStatus = 'Deleted';
+    } else if (status) {
+      targetStatus = status;
+    } else {
+      return res.status(400).json({ success: false, message: 'Valid action (suspend, activate, delete) or status is required' });
+    }
+
+    // For activate: Must not bypass KYC or unapproved state
+    if (targetStatus === 'Active') {
+      const kyc = String(vendor.kycStatus || '').toLowerCase();
+      if (kyc.includes('reject')) {
+        return res.status(400).json({ success: false, message: 'Cannot activate a vendor whose KYC was rejected.' });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const oldStatus = vendor.status || 'Active';
+    const isDeleted = targetStatus === 'Deleted';
+    const isActive = targetStatus === 'Active';
+
+    const updates = {
+      status: targetStatus,
+      isActive,
+      statusNotes: statusNotes || reason || vendor.statusNotes,
+      updatedAt: now
+    };
+
+    if (isDeleted) {
+      updates.isDeleted = true;
+      updates.deletedAt = now;
+      updates.deletedBy = req.user.name || req.user.email;
+      updates.deletedById = req.user.id || req.user._id;
+      updates.deletedByRole = req.user.role;
+      if (reason) updates.deleteReason = reason;
+    } else if (targetStatus === 'Suspended') {
+      updates.isSuspended = true;
+      updates.suspendedAt = now;
+      updates.suspendedBy = req.user.name || req.user.email;
+      updates.suspendedById = req.user.id || req.user._id;
+      updates.suspendedByRole = req.user.role;
+      if (reason) updates.suspendReason = reason;
+    } else if (targetStatus === 'Active') {
+      updates.isSuspended = false;
+      updates.isDeleted = false;
+      updates.activatedAt = now;
+      updates.activatedBy = req.user.name || req.user.email;
+      updates.activatedById = req.user.id || req.user._id;
+      updates.activatedByRole = req.user.role;
+    }
+
+    // Update vendor in db.vendors
+    const updated = await db.vendors.findByIdAndUpdate(vendor._id || vendor.id, updates);
+
+    // Sync to MongoDB Atlas users collection if vendor has login credentials
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const email = (vendor.email || '').toLowerCase().trim();
+        const phone = (vendor.phone || vendor.mobile || '').replace(/[^0-9]/g, '');
+        const query = [];
+        if (email) query.push({ email });
+        if (phone) {
+          query.push({ phone });
+          query.push({ mobile: phone });
+          if (phone.length >= 10) {
+            query.push({ phone: phone.slice(-10) });
+            query.push({ mobile: phone.slice(-10) });
+          }
+        }
+        if (query.length > 0) {
+          await mongoDb.collection('users').updateMany({ $or: query }, {
+            $set: {
+              status: targetStatus,
+              isActive,
+              ...(isDeleted ? { isDeleted: true, deletedAt: now } : {})
+            }
+          });
+        }
+      }
+    } catch (mErr) {
+      console.warn('MongoDB Atlas sync in updateVendorStatus warning:', mErr.message);
+    }
+
+    // Also sync local db.users if present
+    if (db.users) {
+      const vIdStr = String(vendor._id || vendor.id || '');
+      const email = (vendor.email || '').toLowerCase().trim();
+      const phone = (vendor.phone || vendor.mobile || '').replace(/[^0-9]/g, '');
+      const localUsers = Array.from(db.users).filter(u =>
+        (vIdStr && String(u._id || u.id) === vIdStr) ||
+        (email && u.email && u.email.toLowerCase() === email) ||
+        (phone && u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === phone.slice(-10))
+      );
+      localUsers.forEach(u => {
+        u.status = targetStatus;
+        u.isActive = isActive;
+        if (targetStatus === 'Suspended') {
+          u.isSuspended = true;
+          u.suspendedAt = now;
+        } else if (targetStatus === 'Active') {
+          u.isSuspended = false;
+          u.isDeleted = false;
+          u.activatedAt = now;
+        } else if (isDeleted) {
+          u.isDeleted = true;
+          u.deletedAt = now;
+        }
+      });
+    }
+
+    // Audit log
     await db.auditLogs.insertOne({
-      action: 'VENDOR_STATUS_UPDATED',
-      recordId: id,
+      id: `AUD-${Date.now()}`,
+      action: `VENDOR_${targetStatus.toUpperCase()}`,
+      recordId: vendor._id || vendor.id,
       userId: req.user?.id || req.user?._id,
       userName: req.user?.name || 'User',
-      userRole: req.user?.role || 'Manager',
-      details: `Vendor status transitioned from '${vendor.status}' to '${status}'. Notes: ${statusNotes || 'None'}`,
-      ip: req.ip || '127.0.0.1'
-    });
+      userRole: req.user?.role || 'Admin',
+      details: `${req.user?.role || 'Admin'} "${req.user?.name || req.user?.email}" transitioned vendor "${vendor.businessName || vendor.name}" status from '${oldStatus}' to '${targetStatus}'. Reason/Notes: ${reason || statusNotes || 'None'}`,
+      ip: req.ip || '127.0.0.1',
+      timestamp: now
+    }).catch(() => {});
 
-    const populated = await populateVendorLocations(updated);
+    const populated = await populateVendorLocations(updated || { ...vendor, ...updates });
 
     // Dispatch real-time notification
     try {
       notificationService.notifyVendorStatusChange({
         vendor: populated,
-        oldStatus: vendor.status,
-        newStatus: status,
+        oldStatus: oldStatus,
+        newStatus: targetStatus,
         user: req.user,
-        notes: statusNotes
+        notes: statusNotes || reason
       });
     } catch (notifErr) {
       console.error('Failed to trigger vendor status notification:', notifErr.message);
@@ -884,7 +1073,7 @@ const updateVendorStatus = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Vendor status updated to ${status}`,
+      message: `Vendor status updated to ${targetStatus}`,
       vendor: populated,
       data: populated
     });
@@ -1312,19 +1501,29 @@ const kycVerifyVendor = async (req, res) => {
 
 // Resolve vendor onboarding source
 function resolveVendorSource(v) {
-  const regSource = String(v.registrationSource || '').toLowerCase();
-  const createdVia = String(v.createdVia || '').toLowerCase();
+  const regSource = String(v.registrationSource || v.source || '').toLowerCase();
+  const createdVia = String(v.createdVia || v.onboardingSource || '').toLowerCase();
   const addedByRole = String(v.addedBy?.role || '').toLowerCase();
 
-  if (regSource === 'agent' || v.agentId || v.referredBy || v.onboardingAgentId || addedByRole.includes('agent')) {
+  // 1. Direct Registration check has first priority
+  if (
+    regSource.includes('direct') ||
+    createdVia.includes('direct') ||
+    regSource.includes('website') ||
+    regSource.includes('self') ||
+    v.onboardingSource === 'Direct'
+  ) {
     return {
-      type: 'Agent',
-      label: 'Agent Referral',
-      agentId: v.agentId || v.referredBy || v.onboardingAgentId,
-      agentName: v.agentName || v.referredByName || v.onboardingAgent?.name || 'Field Agent'
+      type: 'Direct Registration',
+      label: 'Direct Registration',
+      directSource: v.source || 'Website / Self-Onboarding'
     };
   }
-  if (regSource === 'manager' || createdVia === 'manager' || v.managerId || v.onboardingManagerId || addedByRole.includes('manager')) {
+
+  // 2. Manager Onboarding check
+  const hasValidManagerId = (v.managerId && v.managerId !== '-' && v.managerId !== 'Unassigned') ||
+                           (v.onboardingManagerId && v.onboardingManagerId !== '-' && v.onboardingManagerId !== 'Unassigned');
+  if (regSource === 'manager' || createdVia === 'manager' || hasValidManagerId || addedByRole.includes('manager')) {
     return {
       type: 'Manager',
       label: 'Manager Onboarding',
@@ -1332,6 +1531,20 @@ function resolveVendorSource(v) {
       managerName: v.managerName || v.onboardingManager?.name || 'Field Manager'
     };
   }
+
+  // 3. Agent Referral check
+  const hasValidAgentId = (v.agentId && v.agentId !== '-' && v.agentId !== 'Unassigned') ||
+                         (v.referredBy && v.referredBy !== '-' && v.referredBy !== 'Unassigned') ||
+                         (v.onboardingAgentId && v.onboardingAgentId !== '-' && v.onboardingAgentId !== 'Unassigned');
+  if (regSource === 'agent' || createdVia === 'agent' || hasValidAgentId || addedByRole.includes('agent')) {
+    return {
+      type: 'Agent',
+      label: 'Agent Referral',
+      agentId: v.agentId || v.referredBy || v.onboardingAgentId,
+      agentName: v.agentName || v.referredByName || v.onboardingAgent?.name || 'Field Agent'
+    };
+  }
+
   return {
     type: 'Direct Registration',
     label: 'Direct Registration',
@@ -1361,11 +1574,95 @@ function checkAdminApprovalAuthority(user, vendor) {
 const getVendorRequests = async (req, res) => {
   try {
     const user = req.user;
-    const allVendors = Array.from(db.vendors || []);
     const lookupCtx = buildVendorLookupContext();
 
-    // 1. Scoping according to user jurisdiction
-    const scoped = filterByLocation(allVendors, user);
+    const vendorMap = new Map();
+    // 1. In-memory db.vendors
+    for (const v of (db.vendors || [])) {
+      const k = String(v._id || v.id || v.email || '').toLowerCase().trim();
+      if (k) vendorMap.set(k, v);
+    }
+
+    // 2. Pending vendor users in db.users (e.g. direct registrations or legacy users awaiting vendor record sync)
+    for (const u of (db.users || [])) {
+      const uRole = String(u.role || '').toLowerCase();
+      if (uRole.includes('vendor') || uRole.includes('seller') || uRole.includes('merchant')) {
+        const k = String(u._id || u.id || u.email || '').toLowerCase().trim();
+        if (k && !vendorMap.has(k)) {
+          vendorMap.set(k, {
+            _id: u._id,
+            id: u._id || u.id,
+            userId: u._id,
+            name: u.name,
+            businessName: u.businessName || u.name,
+            contactPerson: u.name,
+            phone: u.mobile || u.phone,
+            mobile: u.mobile || u.phone,
+            email: u.email,
+            category: u.category || 'Retail & Services',
+            address: u.address || `${u.district || ''}, ${u.state || ''} - ${u.pincode || ''}`.trim(),
+            state: u.state,
+            district: u.district,
+            division: u.division,
+            pincode: u.pincode,
+            stateId: u.stateId || null,
+            districtId: u.districtId || null,
+            divisionId: u.divisionId || null,
+            pincodeId: u.pincodeId || null,
+            status: u.status || 'Under Review',
+            approvalStatus: u.adminApprovalStatus === 'pending' ? 'Pending Pincode Admin Approval' : (u.status || 'Under Review'),
+            registrationSource: u.registrationType === 'direct' ? 'Direct Registration' : (u.registrationSource || 'Direct Registration'),
+            source: 'Direct Registration',
+            createdAt: u.createdAt,
+            updatedAt: u.updatedAt
+          });
+        }
+      }
+    }
+
+    // 3. Direct registration submissions from MongoDB Atlas businessrequests collection
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const bReqs = await mongoDb.collection('businessrequests').find({}).toArray();
+        for (const b of bReqs) {
+          const k = String(b.vendorId || b._id || b.vendorEmail || '').toLowerCase().trim();
+          if (k && !vendorMap.has(k)) {
+            vendorMap.set(k, {
+              _id: b._id,
+              id: b.vendorId || String(b._id),
+              userId: b.vendorId || String(b._id),
+              name: b.vendorName || b.businessName,
+              businessName: b.businessName || b.vendorName,
+              contactPerson: b.vendorName,
+              phone: b.vendorPhone || b.phone,
+              mobile: b.vendorPhone || b.phone,
+              email: b.vendorEmail,
+              category: b.businessCategory || b.vendorType || b.subcategory || 'Services',
+              address: b.address,
+              state: b.state,
+              district: b.district,
+              division: b.division || '',
+              pincode: b.pincode,
+              status: b.status || 'Pending Pincode Admin Review',
+              approvalStatus: b.status || 'Pending Pincode Admin Review',
+              registrationSource: 'Direct Registration',
+              source: 'Direct Registration',
+              createdAt: b.submittedDate || b.createdAt,
+              updatedAt: b.updatedAt
+            });
+          }
+        }
+      }
+    } catch (bErr) {
+      console.warn('[getVendorRequests] Atlas businessrequests lookup notice:', bErr.message);
+    }
+
+    const allVendors = Array.from(vendorMap.values());
+
+    // 1. Enrich location fields before scoping so filterByLocation can match districtId/stateId
+    const enrichedVendors = allVendors.map(v => populateVendorLocations(v, lookupCtx));
+    const scoped = filterByLocation(enrichedVendors, user);
 
     // 2. Query filters
     const { status, source, state, district, division, pincode, search } = req.query;
@@ -1506,5 +1803,6 @@ module.exports = {
   kycVerifyVendor,
   resolveVendorSource,
   checkAdminApprovalAuthority,
-  formatActorRole
+  formatActorRole,
+  isFullyOnboardedVendor
 };

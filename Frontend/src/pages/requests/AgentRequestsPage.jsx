@@ -149,6 +149,7 @@ export function AgentRequestsPage() {
       if (reqDistrict) params.district = reqDistrict;
       if (reqDivision) params.division = reqDivision;
       if (reqPincode) params.pincode = reqPincode;
+      if (statusFilter && statusFilter !== 'All') params.status = statusFilter.toLowerCase();
       if (selectedRoleLevel && selectedRoleLevel !== 'All') params.level = selectedRoleLevel;
 
       const res = await dataService.getAgentRequests(params);
@@ -319,12 +320,13 @@ export function AgentRequestsPage() {
       // Status filter
       if (statusFilter !== 'All') {
         const s = (item.status || 'pending').toLowerCase();
+        const admApp = (item.adminApprovalStatus || '').toLowerCase();
         if (statusFilter === 'Pending') {
-          if (s !== 'pending' && s !== 'under_review' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval') return false;
+          if (!s.includes('pending') && !s.includes('review') && s !== 'submitted' && !admApp.includes('pending') && !admApp.includes('review')) return false;
         } else if (statusFilter === 'Approved') {
-          if (s !== 'approved' && s !== 'active' && s !== 'pending_kyc' && s !== 'pending_kyc_approval') return false;
+          if (s !== 'approved' && s !== 'active' && !s.includes('kyc') && admApp !== 'approved') return false;
         } else if (statusFilter === 'Rejected') {
-          if (s !== 'rejected') return false;
+          if (s !== 'rejected' && admApp !== 'rejected') return false;
         }
       }
 

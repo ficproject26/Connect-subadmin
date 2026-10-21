@@ -1521,7 +1521,7 @@ function StatCard({ label, value, icon: Icon, color, subtext }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function QCTaskModule() {
+export function QCTaskModule({ defaultTab = 'tasks' } = {}) {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const roleGroup = userRoleGroup(user);
@@ -1538,8 +1538,8 @@ export function QCTaskModule() {
   const [loadingIssues, setLoadingIssues] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(true);
 
-  // UI state
-  const [activeTab, setActiveTab] = useState(roleGroup === 'manager' ? 'tasks' : 'issues');
+  // UI state - default to 'tasks' for Tasks page
+  const [activeTab, setActiveTab] = useState(roleGroup === 'qc' ? 'issues' : (defaultTab || 'tasks'));
   const [toast, setToast] = useState(null);
 
   // Search / filter

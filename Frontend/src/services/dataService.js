@@ -166,9 +166,10 @@ export const dataService = {
   getCustomerHistory: (id) => apiRequest(`/customers/${id}/history`),
   getCustomerDetails: (id) => apiRequest(`/customers/${id}`),
 
-  // Vendors
+  // Vendors - fetches officially onboarded vendors by default
   getVendors: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
+    const clean = { onboardedOnly: true, ...params };
+    const qs = new URLSearchParams(clean).toString();
     return apiRequest(`/vendors${qs ? `?${qs}` : ''}`);
   },
   getVendorRequests: (params = {}) => {
@@ -195,6 +196,10 @@ export const dataService = {
   }),
   kycVerifyVendor: (id, data) => apiRequest(`/vendors/${id}/kyc-verify`, {
     method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  updateVendorAccountStatus: (id, data) => apiRequest(`/vendors/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
     body: JSON.stringify(data)
   }),
 
@@ -339,6 +344,10 @@ export const dataService = {
     method: 'PATCH',
     body: JSON.stringify(data)
   }),
+  updateAgentAccountStatus: (id, data) => apiRequest(`/operations/agents/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
 
   // Managers & Approvals
   getManagers: (params = {}) => {
@@ -367,6 +376,10 @@ export const dataService = {
     body: JSON.stringify(data)
   }),
   updateManagerDocuments: (id, data) => apiRequest(`/managers/${id}/documents`, {
+    method: 'PATCH',
+    body: JSON.stringify(data)
+  }),
+  updateManagerAccountStatus: (id, data) => apiRequest(`/managers/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     body: JSON.stringify(data)
   }),

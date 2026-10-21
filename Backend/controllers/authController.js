@@ -359,6 +359,21 @@ const login = async (req, res) => {
     if (!user) {
       const nonAdminAccount = matchedUsers[0];
       const attemptedRole = nonAdminAccount?.role || nonAdminAccount?.adminRole || 'User';
+      const nonAdminStatus = String(nonAdminAccount?.status || '').toLowerCase().trim();
+      if (nonAdminStatus === 'suspended') {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_SUSPENDED',
+          message: 'Your account has been suspended. Please contact your administrator for assistance.'
+        });
+      }
+      if (nonAdminStatus === 'deleted' || nonAdminStatus === 'deactivated' || nonAdminAccount?.isDeleted === true) {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_DEACTIVATED',
+          message: 'Your account has been deactivated and access is no longer available. Please contact your administrator if you believe this is an error.'
+        });
+      }
       console.warn(`[AUTH] Cross-Role Access Denied: User '${rawId}' has role '${attemptedRole}' which is not authorized for Sub-Admin portal.`);
       return res.status(403).json({
         success: false,
@@ -403,9 +418,25 @@ const login = async (req, res) => {
       });
     }
 
-    // 6. Strict Account Status Gate (Suspended, Blocked, Revoked, Inactive, Rejected)
+    // 6. Strict Account Status Gate (Suspended, Blocked, Revoked, Inactive, Rejected, Deleted)
     if (isAccountBlockedOrSuspended(user)) {
       const currentStatus = String(user.status || 'inactive').toLowerCase();
+      if (currentStatus === 'suspended') {
+        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' is suspended.`);
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_SUSPENDED',
+          message: 'Your account has been suspended. Please contact your administrator for assistance.'
+        });
+      }
+      if (currentStatus === 'deleted' || currentStatus === 'deactivated' || user.isDeleted === true) {
+        console.warn(`[AUTH] Access denied: User '${user.email || loginId}' is deactivated/deleted.`);
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_DEACTIVATED',
+          message: 'Your account has been deactivated and access is no longer available. Please contact your administrator if you believe this is an error.'
+        });
+      }
       console.warn(`[AUTH] Access denied: User '${user.email || loginId}' account status is '${currentStatus}'.`);
       return res.status(403).json({
         success: false,
@@ -685,12 +716,13 @@ const register = async (req, res) => {
     const normRole = (role || '').trim().toLowerCase().replace(/[\s-]/g, '_');
     const isManagerRole = ['state_manager', 'district_manager', 'division_manager', 'pincode_manager'].includes(normRole);
     const isAgentRole = ['state_agent', 'district_agent', 'division_agent', 'pincode_agent'].includes(normRole) || normRole === 'agent';
+    const isVendorRole = ['vendor', 'seller', 'merchant'].includes(normRole);
     const effectiveRole = isAgentRole && normRole === 'agent'
       ? (pincodeId || pincode ? 'pincode_agent' : divisionId || division ? 'division_agent' : districtId || district ? 'district_agent' : 'state_agent')
-      : normRole;
+      : (isVendorRole ? 'vendor' : normRole);
 
-    if (!isManagerRole && !isAgentRole) {
-      return res.status(400).json({ success: false, message: 'Invalid role selected. Must be a valid Manager or Agent role.' });
+    if (!isManagerRole && !isAgentRole && !isVendorRole) {
+      return res.status(400).json({ success: false, message: 'Invalid role selected. Must be a valid Manager, Agent, or Vendor role.' });
     }
 
     const isStateLevel = effectiveRole === 'state_manager' || effectiveRole === 'state_agent';
@@ -698,6 +730,9 @@ const register = async (req, res) => {
     const isDivisionLevel = effectiveRole === 'division_manager' || effectiveRole === 'division_agent';
     const isPincodeLevel = effectiveRole === 'pincode_manager' || effectiveRole === 'pincode_agent';
 
+    if (isVendorRole && (!stateId && !state && !districtId && !district && !pincodeId && !pincode)) {
+      return res.status(400).json({ success: false, message: 'Location information (State, District, or PIN Code) is required for Vendor registration.' });
+    }
     if (isStateLevel && !stateId && !state) {
       return res.status(400).json({ success: false, message: `State selection is required for ${effectiveRole.replace('_', ' ')}.` });
     }
@@ -789,10 +824,45 @@ const register = async (req, res) => {
          (a.pincode && pincodeCode && String(a.pincode).trim() === String(pincodeCode).trim()) ||
          (a.pincode && pincodeId && pincodeId === `pin_${String(a.pincode).trim()}`))
       );
+    } else if (isVendorRole) {
+      if (pincodeCode || pincodeId) {
+        targetAdminRole = 'Pincode Admin';
+        targetJurisdiction = `PIN: ${pincodeCode || pincodeId}`;
+        relatedAdmin = allAdmins.find(a => 
+          (a.role === 'Pincode Admin' || (a.role || '').toLowerCase().includes('pincode')) &&
+          ((a.pincodeId && pincodeId && String(a.pincodeId).toLowerCase() === String(pincodeId).toLowerCase()) ||
+           (a.pincode && pincodeCode && String(a.pincode).trim() === String(pincodeCode).trim()) ||
+           (a.pincode && pincodeId && pincodeId === `pin_${String(a.pincode).trim()}`))
+        );
+      } else if (divisionName || divisionId) {
+        targetAdminRole = 'Divisional Admin';
+        targetJurisdiction = `Division: ${divisionName || divisionId}, ${districtName || districtId}`;
+        relatedAdmin = allAdmins.find(a => 
+          (a.role === 'Divisional Admin' || a.role === 'Division Admin' || (a.role || '').toLowerCase().includes('division')) &&
+          ((a.divisionId && divisionId && String(a.divisionId).toLowerCase() === String(divisionId).toLowerCase()) ||
+           (a.division && divisionName && a.division.trim().toLowerCase() === divisionName.trim().toLowerCase()))
+        );
+      } else if (districtName || districtId) {
+        targetAdminRole = 'District Admin';
+        targetJurisdiction = `District: ${districtName || districtId}, ${stateName || stateId}`;
+        relatedAdmin = allAdmins.find(a => 
+          (a.role === 'District Admin' || (a.role || '').toLowerCase().includes('district')) &&
+          ((a.districtId && districtId && String(a.districtId).toLowerCase() === String(districtId).toLowerCase()) ||
+           (a.district && districtName && a.district.trim().toLowerCase() === districtName.trim().toLowerCase()))
+        );
+      } else {
+        targetAdminRole = 'State Admin';
+        targetJurisdiction = `State: ${stateName || stateId}`;
+        relatedAdmin = allAdmins.find(a => 
+          (a.role === 'State Admin' || (a.role || '').toLowerCase().includes('state')) &&
+          ((a.stateId && stateId && String(a.stateId).toLowerCase() === String(stateId).toLowerCase()) ||
+           (a.state && stateName && a.state.trim().toLowerCase() === stateName.trim().toLowerCase()))
+        );
+      }
     }
 
     const routingIssue = !relatedAdmin ? `No matching ${targetAdminRole || 'Sub-admin'} found for territory: ${targetJurisdiction || 'unspecified'}` : null;
-    const initialStatus = 'PENDING_SUB_ADMIN_APPROVAL';
+    const initialStatus = isVendorRole ? 'Under Review' : 'PENDING_SUB_ADMIN_APPROVAL';
 
     const newUser = await db.users.insertOne({
       name: name.trim(),
@@ -891,7 +961,7 @@ const register = async (req, res) => {
       await db.agents.insertOne(agentRecord).catch(() => {});
     }
 
-    if (!isAgentRole && db.managers) {
+    if (isManagerRole && db.managers) {
       const managerRecord = {
         _id: newUser._id,
         id: newUser._id,
@@ -930,8 +1000,78 @@ const register = async (req, res) => {
       await db.managers.insertOne(managerRecord).catch(() => {});
     }
 
+    if (isVendorRole && db.vendors) {
+      const vendorRecord = {
+        _id: newUser._id,
+        id: newUser._id,
+        userId: newUser._id,
+        name: newUser.name,
+        businessName: req.body.businessName || req.body.shopName || newUser.name,
+        contactPerson: newUser.name,
+        phone: newUser.mobile,
+        mobile: newUser.mobile,
+        email: newUser.email,
+        category: req.body.category || 'Retail & Services',
+        subCategory: req.body.subCategory || 'General',
+        address: newUser.address || `${districtName || ''}, ${stateName || ''} - ${pincodeCode || ''}`.trim(),
+        state: stateName,
+        district: districtName,
+        division: divisionName,
+        pincode: pincodeCode,
+        stateId: stateId || null,
+        districtId: districtId || null,
+        divisionId: divisionId || null,
+        pincodeId: pincodeId || null,
+        status: 'Under Review',
+        approvalStatus: 'Pending Pincode Admin Approval',
+        kycStatus: 'Pending Verification',
+        registrationSource: 'Direct Registration',
+        onboardingSource: 'Direct',
+        source: 'Direct Registration',
+        targetAdminRole,
+        targetAdminId: relatedAdmin ? (relatedAdmin._id || relatedAdmin.id) : null,
+        targetAdminName: relatedAdmin ? relatedAdmin.name : null,
+        requiresApproval: true,
+        isApproved: false,
+        isFullyApproved: false,
+        documents: newUser.documents,
+        kycDocs: newUser.kycDocs,
+        createdAt: newUser.createdAt,
+        updatedAt: newUser.updatedAt
+      };
+      await db.vendors.insertOne(vendorRecord).catch(() => {});
+
+      if (db.kycRecords) {
+        db.kycRecords.unshift({
+          id: `KYC-${newUser._id}`,
+          vendorId: newUser._id,
+          businessName: vendorRecord.businessName,
+          name: vendorRecord.businessName,
+          vendorName: newUser.name,
+          phone: newUser.mobile,
+          email: newUser.email,
+          category: vendorRecord.category,
+          address: vendorRecord.address,
+          state: stateName,
+          district: districtName,
+          division: divisionName,
+          pincode: pincodeCode,
+          status: 'Pending Pincode Admin Approval',
+          type: 'Vendor',
+          submittedDocuments: [
+            'GST Registration Certificate',
+            'Business PAN Card',
+            'Cancelled Cheque / Bank Passbook'
+          ],
+          submittedDate: new Date().toISOString().split('T')[0],
+          verifiedBy: null,
+          notes: 'Direct vendor registration. Awaiting Sub-Admin approval.'
+        });
+      }
+    }
+
     await db.auditLogs.insertOne({
-      action: isAgentRole ? 'AGENT_DIRECT_REGISTERED_PENDING_ADMIN' : 'MANAGER_DIRECT_REGISTERED_PENDING_ADMIN',
+      action: isAgentRole ? 'AGENT_DIRECT_REGISTERED_PENDING_ADMIN' : isVendorRole ? 'VENDOR_DIRECT_REGISTERED_PENDING_ADMIN' : 'MANAGER_DIRECT_REGISTERED_PENDING_ADMIN',
       userId: newUser._id,
       userName: newUser.name,
       userRole: newUser.role,
@@ -950,7 +1090,7 @@ const register = async (req, res) => {
       requiresApproval: true,
       isFullyApproved: false,
       routingIssue: routingIssue || null,
-      message: `${isAgentRole ? 'Agent' : 'Manager'} registration submitted successfully. Your request has been routed to your designated ${targetAdminRole} (${targetJurisdiction}) for review and approval. Once approved and verified, your account will be activated.`,
+      message: `${isAgentRole ? 'Agent' : isVendorRole ? 'Vendor' : 'Manager'} registration submitted successfully. Your request has been routed to your designated ${targetAdminRole} (${targetJurisdiction}) for review and approval. Once approved and verified, your account will be activated.`,
       user: userProfile
     });
   } catch (err) {

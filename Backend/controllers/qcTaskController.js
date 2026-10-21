@@ -636,6 +636,38 @@ const createTask = async (req, res) => {
   }
 };
 
+// Helper: Check if task falls within Admin hierarchy jurisdiction
+function isTaskInAdminScope(task, user) {
+  if (!task || !user) return false;
+
+  const rawRole = user.role || '';
+  const role = rawRole.toLowerCase().replace(/[_-]/g, ' ');
+  const userAdminRole = (user.adminRole || '').toLowerCase();
+  const isSuper = (role.includes('super admin') || role === 'superadmin' || rawRole === 'super-admin' || role.includes('kyc') || (user.adminLevel && user.adminLevel.toLowerCase() === 'kyc') || (role === 'admin' && !userAdminRole.includes('state') && !userAdminRole.includes('district') && !userAdminRole.includes('division') && !userAdminRole.includes('pincode') && !user.adminLevel)) && (!user.state || user.state.toLowerCase() === 'all india');
+  if (isSuper) return true;
+
+  // 1. Direct location match via filterByLocation
+  if (filterByLocation([task], user).length > 0) return true;
+
+  // 2. Created by this admin
+  const uId = String(user._id || user.id || '').trim();
+  if (uId && (String(task.createdBy || '') === uId || String(task.createdById || '') === uId)) {
+    return true;
+  }
+
+  // 3. Assigned manager belongs to admin's territory
+  const mgrId = String(task.assignedManagerId || '').trim();
+  if (mgrId) {
+    const mgr = (Array.from(db.users || [])).find(u => String(u._id || u.id) === mgrId) ||
+                (Array.from(db.managers || [])).find(m => String(m._id || m.id) === mgrId);
+    if (mgr) {
+      if (filterByLocation([mgr], user).length > 0) return true;
+    }
+  }
+
+  return false;
+}
+
 // GET /api/qc-tasks/tasks — RBAC-scoped task list
 const getTasks = async (req, res) => {
   try {
@@ -643,23 +675,69 @@ const getTasks = async (req, res) => {
     const { status, priority, category, search, issueId } = req.query;
     let allTasks = Array.from(db.qcTasks || []);
 
+    // Enrich task location from pincode directory and assigned manager
+    const pinLookup = new Map();
+    Array.from(db.pincodes || []).forEach(p => {
+      const code = String(p.code || p.pincode || '').trim();
+      if (code) {
+        pinLookup.set(code, {
+          state: p.state || '',
+          district: p.district || '',
+          division: p.division || ''
+        });
+      }
+    });
+
+    const enrichedRawTasks = allTasks.map(t => {
+      let state = t.state || t.stateName || '';
+      let district = t.district || t.districtName || '';
+      let division = t.division || t.divisionName || '';
+      let pincode = String(t.pincode || t.pincodeCode || '').trim();
+
+      if (pincode && pinLookup.has(pincode)) {
+        const pGeo = pinLookup.get(pincode);
+        if (!state && pGeo.state) state = pGeo.state;
+        if (!district && pGeo.district) district = pGeo.district;
+        if (!division && pGeo.division) division = pGeo.division;
+      }
+
+      if (t.assignedManagerId && (!state || !district || !division || !pincode)) {
+        const mgr = (Array.from(db.users || [])).find(u => String(u._id || u.id) === String(t.assignedManagerId)) ||
+                    (Array.from(db.managers || [])).find(m => String(m._id || m.id) === String(t.assignedManagerId));
+        if (mgr) {
+          if (!state) state = mgr.state || mgr.assignedState || '';
+          if (!district) district = mgr.district || mgr.assignedDistrict || '';
+          if (!division) division = mgr.division || mgr.assignedDivision || '';
+          if (!pincode) pincode = String(mgr.pincode || mgr.assignedPincode || '').trim();
+        }
+      }
+
+      return {
+        ...t,
+        state,
+        district,
+        division,
+        pincode
+      };
+    });
+
     if (isManager(user)) {
       // Manager sees only their own tasks matching their authorized territory scope
       const mId1 = String(user._id || '');
       const mId2 = String(user.id || '');
       const mName = (user.name || '').trim().toLowerCase();
-      let managerTasks = allTasks.filter(t => {
+      let managerTasks = enrichedRawTasks.filter(t => {
         const aid = String(t.assignedManagerId || '');
         const aname = (t.assignedManagerName || '').trim().toLowerCase();
         return (mId1 && aid === mId1) || (mId2 && aid === mId2) || (mName && aname === mName);
       });
       allTasks = filterByLocation(managerTasks, user);
     } else if (isAdmin(user)) {
-      // Admin sees tasks in their hierarchy scope via unified filterByLocation
-      allTasks = filterByLocation(allTasks, user);
+      // Admin sees tasks in their hierarchy scope via unified filterByLocation & territory attribution
+      allTasks = enrichedRawTasks.filter(t => isTaskInAdminScope(t, user));
     } else if (isQCTeam(user)) {
       // QC Team sees tasks linked to their issues
-      allTasks = allTasks.filter(t => {
+      allTasks = enrichedRawTasks.filter(t => {
         if (!t.qcIssueId) return false;
         const issue = Array.from(db.qcIssues || []).find(i => (i._id || i.id) === t.qcIssueId);
         return issue && issue.raisedById === (user._id || user.id);

@@ -77,22 +77,34 @@ export function DataTable({
     return filteredData.slice(start, start + itemsPerPage);
   }, [filteredData, currentPage, itemsPerPage]);
 
+  // Reset currentPage if filtered data shrinks below current page
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
   const handleExportCSV = () => {
     if (filteredData.length === 0) return;
     const headers = columns.map(c => c.header).join(',');
     const rows = filteredData.map((item, idx) => {
       return columns.map(c => {
         let val;
-        if (typeof c.accessor === 'function') {
+        const hClean = (c.header || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const isSNo = hClean === 'sno' || hClean === 'slno' || c.header === '#';
+        if (isSNo) {
+          val = idx + 1;
+        } else if (typeof c.accessor === 'function') {
           val = c.accessor(item, idx);
         } else if (c.accessor) {
           val = item[c.accessor];
-        } else if (c.header && (c.header.toLowerCase() === 's.no' || c.header.toLowerCase() === '#' || c.header.toLowerCase() === 'sl.no')) {
-          val = idx + 1;
         } else {
           val = '';
         }
-        return `"${String(val || '').replace(/"/g, '""')}"`;
+        if (typeof val === 'object' && val !== null) {
+          val = c.accessor && typeof c.accessor === 'string' ? item[c.accessor] : '';
+        }
+        return `"${String(val ?? '').replace(/"/g, '""')}"`;
       }).join(',');
     });
 

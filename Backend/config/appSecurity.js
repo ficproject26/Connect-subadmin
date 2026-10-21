@@ -73,7 +73,7 @@ const isAccountApproved = (user) => {
   return isStatusApproved && isAdminApproved && isKycApproved;
 };
 
-// Check if account is suspended, blocked, revoked, or rejected
+// Check if account is suspended, blocked, revoked, deleted, or rejected
 const isAccountBlockedOrSuspended = (user) => {
   if (!user) return true;
   const status = String(user.status || '').toLowerCase().trim();
@@ -86,6 +86,9 @@ const isAccountBlockedOrSuspended = (user) => {
     status === 'revoked' ||
     status === 'inactive' ||
     status === 'rejected' ||
+    status === 'deleted' ||
+    status === 'deactivated' ||
+    user.isDeleted === true ||
     adminApprovalStatus === 'rejected' ||
     kycStatus === 'rejected'
   );

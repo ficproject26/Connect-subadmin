@@ -9,6 +9,7 @@ import { AgentActivityFlowModal } from '../../components/AgentActivityFlowModal'
 import { AgentDetailsModal } from '../../components/AgentDetailsModal';
 import { AgentOnboardingModal } from '../../components/AgentOnboardingModal';
 import { InitiateVendorOnboardingModal } from '../../components/InitiateVendorOnboardingModal';
+import { AccountActionModal } from '../../components/AccountActionModal';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { getTerritoryLocking, safeString, safeLowerCase } from '../../utils/territoryHelper';
 import { 
@@ -30,7 +31,10 @@ import {
   Plus,
   ShieldCheck,
   Clock,
-  Eye
+  Eye,
+  UserCheck,
+  UserX,
+  Trash2
 } from 'lucide-react';
 
 const LEVEL_CONFIGS = {
@@ -162,6 +166,7 @@ export function DistrictAgents({ level = 'district' }) {
   // Filters for activities
   const [stageFilter, setStageFilter] = useState('');
   const [divisionFilter, setDivisionFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   // Modals state
   const [selectedActivity, setSelectedActivity] = useState(null);
@@ -169,11 +174,60 @@ export function DistrictAgents({ level = 'district' }) {
   const [showOnboardModal, setShowOnboardModal] = useState(false);
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
 
+  // Account Action State (Suspend / Activate / Delete)
+  const [accountActionState, setAccountActionState] = useState({
+    isOpen: false,
+    actionType: 'suspend', // 'suspend' | 'activate' | 'delete'
+    account: null,
+    loading: false,
+    error: ''
+  });
+
+  const handleTriggerAccountAction = (account, actionType) => {
+    setAccountActionState({
+      isOpen: true,
+      actionType,
+      account: {
+        id: account.id || account._id,
+        name: account.name || account.fullName || 'Agent',
+        role: 'agent',
+        status: account.status || 'Active',
+        identifier: account.phone || account.mobile || account.email || account.agentId || account.id
+      },
+      loading: false,
+      error: ''
+    });
+  };
+
+  const handleConfirmAccountAction = async (payload) => {
+    if (!accountActionState.account) return;
+    setAccountActionState(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const id = accountActionState.account.id;
+      const res = await dataService.updateAgentAccountStatus(id, {
+        action: accountActionState.actionType,
+        reason: payload.reason || ''
+      });
+      if (res?.success) {
+        setAccountActionState(prev => ({ ...prev, isOpen: false, loading: false, account: null }));
+        await loadData();
+      } else {
+        setAccountActionState(prev => ({ ...prev, loading: false, error: res?.message || 'Failed to update agent status' }));
+      }
+    } catch (err) {
+      setAccountActionState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.response?.data?.message || err.message || 'Error updating agent status'
+      }));
+    }
+  };
+
   // Fetch agents and activities
   const loadData = async () => {
     setLoading(true);
     try {
-      const params = { level: activeLevel };
+      const params = { level: activeLevel, status: 'all' };
       const reqState = locking.stateLocked ? locking.defaultState : selectedFilterState;
       if (reqState) params.state = reqState;
 
@@ -244,6 +298,16 @@ export function DistrictAgents({ level = 'district' }) {
       const s = (a.status || '').toLowerCase().trim();
       return s !== 'rejected' && s !== 'pending' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval' && s !== 'pending_kyc';
     });
+
+    if (statusFilter && statusFilter !== 'all') {
+      const sf = statusFilter.toLowerCase();
+      if (sf === 'deleted') {
+        list = list.filter(a => (a.status || '').toLowerCase() === 'deleted' || a.isDeleted);
+      } else {
+        list = list.filter(a => (a.status || '').toLowerCase() === sf && !a.isDeleted);
+      }
+    }
+
     const effState = locking.stateLocked ? locking.defaultState : selectedFilterState;
     const effDistrict = locking.districtLocked ? locking.defaultDistrict : selectedFilterDistrict;
     const effDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || divisionFilterParam);
@@ -254,7 +318,7 @@ export function DistrictAgents({ level = 'district' }) {
     if (effDivision && (activeLevel === 'divisional' || activeLevel === 'pincode')) list = list.filter(a => safeLowerCase(a.division || a.assignedDivision || a.divisionName) === safeLowerCase(effDivision));
     if (effPincode && activeLevel === 'pincode') list = list.filter(a => safeString(a.pincode || a.assignedPincode || a.pincodeCode) === safeString(effPincode));
     return list;
-  }, [agents, activeLevel, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, divisionFilterParam]);
+  }, [agents, statusFilter, activeLevel, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, divisionFilterParam]);
 
   // Filtered activities
   const filteredActivities = useMemo(() => {
@@ -387,10 +451,59 @@ export function DistrictAgents({ level = 'district' }) {
           <button
             type="button"
             onClick={() => setSelectedAgent(row)}
-            className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
+            className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer px-1.5 py-1"
           >
             <Eye className="w-3 h-3" /> Profile
           </button>
+
+          {((row.status || '').toLowerCase() === 'deleted' || row.isDeleted) ? (
+            <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">
+              Deactivated
+            </span>
+          ) : (
+            <>
+              {(row.status || '').toLowerCase() === 'suspended' ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTriggerAccountAction(row, 'activate');
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                  title="Activate Agent"
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Activate</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTriggerAccountAction(row, 'suspend');
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition cursor-pointer"
+                  title="Suspend Agent"
+                >
+                  <UserX className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Suspend</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTriggerAccountAction(row, 'delete');
+                }}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800 transition cursor-pointer"
+                title="Delete Agent (Soft Delete)"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                <span>Delete</span>
+              </button>
+            </>
+          )}
         </div>
       )
     }
@@ -606,6 +719,14 @@ export function DistrictAgents({ level = 'district' }) {
             data={filteredAgents}
             loading={loading}
             onRefresh={loadData}
+            filterOptions={[
+              { label: `All (${agents.length})`, value: 'all' },
+              { label: `Active (${agents.filter(a => (a.status || '').toLowerCase() === 'active' && !a.isDeleted).length})`, value: 'active' },
+              { label: `Suspended (${agents.filter(a => (a.status || '').toLowerCase() === 'suspended' && !a.isDeleted).length})`, value: 'suspended' },
+              { label: `Deleted (${agents.filter(a => (a.status || '').toLowerCase() === 'deleted' || a.isDeleted).length})`, value: 'deleted' }
+            ]}
+            activeFilter={statusFilter}
+            onFilterChange={setStatusFilter}
             searchPlaceholder={`Search ${config.title.toLowerCase()} by name, email, phone...`}
             exportFileName={config.exportFile}
           />
@@ -676,6 +797,17 @@ export function DistrictAgents({ level = 'district' }) {
           }}
         />
       )}
+
+      {/* Account Action Modal (Suspend / Activate / Soft-Delete) */}
+      <AccountActionModal
+        isOpen={accountActionState.isOpen}
+        onClose={() => setAccountActionState(prev => ({ ...prev, isOpen: false, error: '' }))}
+        onConfirm={handleConfirmAccountAction}
+        actionType={accountActionState.actionType}
+        account={accountActionState.account}
+        loading={accountActionState.loading}
+        error={accountActionState.error}
+      />
 
       {/* Agent Onboard Modal */}
       {showAddAgentModal && canAddAgent && (

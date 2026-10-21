@@ -77,6 +77,10 @@ export function StatusBadge({ status, className = '' }) {
 
   if (['active', 'delivered', 'approved', 'verified', 'resolved', 'available', 'shortlisted', 'selected', 'selected / offer', 'completed', 'kyc approved'].includes(s)) {
     colorStyles = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-500/30';
+  } else if (s === 'suspended') {
+    colorStyles = 'bg-amber-100/80 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-600/40';
+  } else if (['deleted', 'deactivated'].includes(s)) {
+    colorStyles = 'bg-rose-100/80 text-rose-800 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-600/40';
   } else if (['paid', 'packed', 'confirmed', 'interview scheduled', 'interview', 'reviewed', 'pincode admin approved', 'kyc pending', 'pending kyc review'].includes(s)) {
     colorStyles = 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-500/30';
   } else if (['pending', 'processing', 'scheduled', 'busy', 'order placed', 'under review', 'application submitted', 'pending pincode admin approval', 'pending verification'].includes(s)) {
@@ -92,6 +96,10 @@ export function StatusBadge({ status, className = '' }) {
   let displayLabel = status;
   if (s === 'approved' || s === 'active') {
     displayLabel = 'Active';
+  } else if (s === 'suspended') {
+    displayLabel = 'Suspended';
+  } else if (s === 'deleted' || s === 'deactivated') {
+    displayLabel = 'Deleted';
   } else if (s === 'pending pincode admin approval') {
     displayLabel = 'Pending Pincode Approval';
   } else if (s === 'pincode admin approved') {

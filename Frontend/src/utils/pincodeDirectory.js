@@ -236,3 +236,42 @@ export function resolveVendorAddedBy(vendor) {
     addedAt: vendor.createdAt ? vendor.createdAt.split('T')[0] : '-'
   };
 }
+
+/**
+ * Checks if a vendor has successfully completed the official onboarding and required approval workflow.
+ * Excludes pending, rejected, awaiting Pincode approval, awaiting KYC approval, and incomplete records.
+ */
+export function isVendorOfficiallyOnboarded(v) {
+  if (!v) return false;
+  const status = String(v.status || '').toLowerCase().trim();
+  const kycStatus = String(v.kycStatus || '').toLowerCase().trim();
+  const approvalStatus = String(v.approvalStatus || '').toLowerCase().trim();
+
+  // 1. Exclude any rejected records
+  if (status.includes('reject') || kycStatus.includes('reject') || approvalStatus.includes('reject')) {
+    return false;
+  }
+
+  // 2. Exclude pending, under review, awaiting approval, or incomplete records
+  if (
+    status.includes('pending') ||
+    status.includes('under review') ||
+    status.includes('submitted') ||
+    kycStatus.includes('pending') ||
+    kycStatus.includes('review') ||
+    kycStatus.includes('verification') ||
+    approvalStatus.includes('pending') ||
+    v.pincodeAdminApproval?.status === 'Pending' ||
+    v.kycTeamApproval?.status === 'Pending'
+  ) {
+    return false;
+  }
+
+  // 3. Must be actively approved and KYC cleared
+  const isKycCleared = kycStatus === 'verified' || kycStatus === 'approved' || kycStatus === 'kyc approved';
+  const isActiveOrApproved = status === 'active' || status === 'approved' || status === 'verified';
+  const isApprovalConfirmed = !approvalStatus || approvalStatus === 'approved' || approvalStatus === 'kyc_approved' || approvalStatus === 'pincode_approved';
+
+  return isKycCleared && isActiveOrApproved && isApprovalConfirmed;
+}
+

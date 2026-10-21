@@ -967,27 +967,27 @@ function filterByLocation(items, user) {
     // ── 2. DIVISION ADMIN (Level 3) ─────────────────────────────────
     if (role.includes('division') || role.includes('divisional')) {
       // Must match assigned State
-      if (userState && userState !== 'all india' && geo.state && geo.state !== userState) return false;
+      if (userState && userState !== 'all india' && geo.state && geo.state !== userState && !geo.state.includes(userState) && !userState.includes(geo.state)) return false;
       // Must match assigned District
-      if (userDistrict && geo.district && geo.district !== userDistrict) return false;
+      if (userDistrict && geo.district && geo.district !== userDistrict && !geo.district.includes(userDistrict) && !userDistrict.includes(geo.district)) return false;
       // Must match assigned Division
       if (userDivision && geo.division) {
-        return geo.division === userDivision;
+        if (geo.division === userDivision || geo.division.includes(userDivision) || userDivision.includes(geo.division)) return true;
       }
       if (divisionId && item.divisionId && String(item.divisionId) === String(divisionId)) return true;
-      return Boolean(userDivision && geo.division && geo.division === userDivision);
+      return Boolean(userDivision && geo.division && (geo.division === userDivision || geo.division.includes(userDivision) || userDivision.includes(geo.division)));
     }
 
     // ── 3. DISTRICT ADMIN (Level 2) ─────────────────────────────────
     if (role.includes('district')) {
       // Must match assigned State
-      if (userState && userState !== 'all india' && geo.state && geo.state !== userState) return false;
+      if (userState && userState !== 'all india' && geo.state && geo.state !== userState && !geo.state.includes(userState) && !userState.includes(geo.state)) return false;
       // Must match assigned District
       if (userDistrict && geo.district) {
-        return geo.district === userDistrict;
+        if (geo.district === userDistrict || geo.district.includes(userDistrict) || userDistrict.includes(geo.district)) return true;
       }
       if (districtId && item.districtId && String(item.districtId) === String(districtId)) return true;
-      return Boolean(userDistrict && geo.district && geo.district === userDistrict);
+      return Boolean(userDistrict && geo.district && (geo.district === userDistrict || geo.district.includes(userDistrict) || userDistrict.includes(geo.district)));
     }
 
     // ── 4. STATE ADMIN (Level 1) ────────────────────────────────────
@@ -995,7 +995,7 @@ function filterByLocation(items, user) {
       if (!userState || userState === 'all india') return true;
       // Reject cross-state records
       if (geo.state) {
-        return geo.state === userState;
+        return geo.state === userState || geo.state.includes(userState) || userState.includes(geo.state);
       }
       if (stateId && item.stateId && String(item.stateId) === String(stateId)) return true;
       return false;

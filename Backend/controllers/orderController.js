@@ -303,10 +303,10 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap, productMap, custom
     vendorPhone,
     vendorEmail,
     vendorLocation,
-    vendorPincode: matchedVendor?.pincode || '',
-    vendorDistrict: matchedVendor?.district || '',
-    vendorDivision: matchedVendor?.division || '',
-    vendorState: matchedVendor?.state || '',
+    vendorPincode: matchedVendor?.pincode || order.vendorPincode || order.vendor_pincode || '',
+    vendorDistrict: matchedVendor?.district || order.vendorDistrict || order.vendor_district || '',
+    vendorDivision: matchedVendor?.division || order.vendorDivision || order.vendor_division || '',
+    vendorState: matchedVendor?.state || order.vendorState || order.vendor_state || '',
     deliveryPartnerName: order.deliveryPartnerName || order.deliveryPartner?.name || 'Not provided',
     deliveryPartnerId: order.deliveryPartnerId || order.deliveryPartner?.id || 'Not provided',
     deliveryPartnerPhone: order.deliveryPartnerPhone || order.deliveryPartner?.phone || 'Not provided',
@@ -314,6 +314,35 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap, productMap, custom
     deliveryAssignedAt: order.deliveryAssignedAt ? formatOrderDate(order.deliveryAssignedAt) : 'Not provided',
     timeline
   };
+}
+
+// Scope order by dual territory criteria:
+// 1. Delivery destination is in Sub Admin's authorized territory, OR
+// 2. Fulfilling vendor is in Sub Admin's authorized territory
+function isOrderInScope(order, user) {
+  if (!order || !user) return false;
+
+  const rawRole = user.role || '';
+  const role = rawRole.toLowerCase().replace(/[_-]/g, ' ');
+  const userAdminRole = (user.adminRole || '').toLowerCase();
+  const isSuper = (role.includes('super admin') || role === 'superadmin' || rawRole === 'super-admin' || role.includes('kyc') || (user.adminLevel && user.adminLevel.toLowerCase() === 'kyc') || (role === 'admin' && !userAdminRole.includes('state') && !userAdminRole.includes('district') && !userAdminRole.includes('division') && !userAdminRole.includes('pincode') && !user.adminLevel)) && (!user.state || user.state.toLowerCase() === 'all india');
+  if (isSuper) return true;
+
+  // 1. Check delivery destination
+  if (filterByLocation([order], user).length > 0) return true;
+
+  // 2. Check fulfilling vendor territory
+  if (order.vendorState || order.vendorDistrict || order.vendorDivision || order.vendorPincode) {
+    const vendorProxy = {
+      state: order.vendorState,
+      district: order.vendorDistrict,
+      division: order.vendorDivision,
+      pincode: order.vendorPincode
+    };
+    if (filterByLocation([vendorProxy], user).length > 0) return true;
+  }
+
+  return false;
 }
 
 async function getOrders(req, res) {
@@ -356,7 +385,8 @@ async function getOrders(req, res) {
     const normalizedAll = rawOrders.map(o => normalizeOrder(o, pinMap, vendorMap, historyMap, productMap, customerMap)).filter(Boolean);
 
     // Scope geographically according to user role on fully-resolved territory coordinates
-    let scoped = filterByLocation(normalizedAll, req.user);
+    // An order is in scope if EITHER delivery destination OR fulfilling vendor is within caller's jurisdiction
+    let scoped = normalizedAll.filter(o => isOrderInScope(o, req.user));
 
     // ORDER CATEGORY CLASSIFICATION:
     // Orders = product, daily_need, daily needs, food (commerce/physical goods)
@@ -403,8 +433,11 @@ async function getOrders(req, res) {
         (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
         (o.customerName && o.customerName.toLowerCase().includes(q)) ||
         (o.pincode && o.pincode.includes(q)) ||
+        (o.vendorPincode && o.vendorPincode.includes(q)) ||
         (o.district && o.district.toLowerCase().includes(q)) ||
+        (o.vendorDistrict && o.vendorDistrict.toLowerCase().includes(q)) ||
         (o.division && o.division.toLowerCase().includes(q)) ||
+        (o.vendorDivision && o.vendorDivision.toLowerCase().includes(q)) ||
         (o.items && o.items.some(i => i.name && i.name.toLowerCase().includes(q)))
       );
     }
@@ -414,15 +447,17 @@ async function getOrders(req, res) {
     }
 
     if (pincode && req.user.role !== 'Pincode Admin') {
-      filtered = filtered.filter(o => o.pincode === pincode);
+      filtered = filtered.filter(o => o.pincode === pincode || o.vendorPincode === pincode);
     }
 
     if (district && district !== 'all') {
-      filtered = filtered.filter(o => (o.district || '').toLowerCase() === district.toLowerCase());
+      const dNorm = district.toLowerCase();
+      filtered = filtered.filter(o => (o.district || '').toLowerCase() === dNorm || (o.vendorDistrict || '').toLowerCase() === dNorm);
     }
 
     if (division && division !== 'all') {
-      filtered = filtered.filter(o => (o.division || '').toLowerCase() === division.toLowerCase());
+      const divNorm = division.toLowerCase();
+      filtered = filtered.filter(o => (o.division || '').toLowerCase() === divNorm || (o.vendorDivision || '').toLowerCase() === divNorm);
     }
 
     // Stable newest-first sorting by date with secondary sort on orderNumber
@@ -486,8 +521,8 @@ async function updateOrderStatus(req, res) {
     });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    const scoped = filterByLocation([order], req.user);
-    if (scoped.length === 0) {
+    const allowed = isOrderInScope(order, req.user);
+    if (!allowed) {
       return res.status(403).json({ success: false, message: 'Order outside your jurisdiction' });
     }
 

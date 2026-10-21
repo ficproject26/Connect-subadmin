@@ -1,4 +1,5 @@
 const { db, filterByLocation } = require('../config/db');
+const { getMongoDb } = require('../config/mongo');
 
 // Executives & Support Team
 function getExecutives(req, res) {
@@ -477,17 +478,30 @@ async function getAgents(req, res) {
 
     // Step 7: Status filter
     if (status) {
-      if (String(status).toLowerCase() === 'all') {
-        // Explicit all-records view
+      const qStat = String(status).toLowerCase().trim();
+      if (qStat === 'all') {
+        // Explicit all-records view (excludes pending/rejected, includes active, suspended, deleted)
+        scoped = scoped.filter(a => {
+          const s = (a.status || '').toLowerCase().trim();
+          return s !== 'rejected' && !s.includes('pending');
+        });
+      } else if (qStat === 'active') {
+        scoped = scoped.filter(a => {
+          const s = (a.status || '').toLowerCase().trim();
+          return (s === 'active' || s === 'approved') && s !== 'suspended' && s !== 'deleted' && !a.isDeleted && a.isActive !== false;
+        });
+      } else if (qStat === 'suspended') {
+        scoped = scoped.filter(a => (a.status || '').toLowerCase().trim() === 'suspended');
+      } else if (qStat === 'deleted') {
+        scoped = scoped.filter(a => (a.status || '').toLowerCase().trim() === 'deleted' || a.isDeleted === true);
       } else {
-        scoped = scoped.filter(a => a.status && String(a.status).toLowerCase() === String(status).toLowerCase());
+        scoped = scoped.filter(a => a.status && String(a.status).toLowerCase() === qStat);
       }
     } else {
-      // By default in Agent Directories / Rosters, strictly show ONLY approved/active agents.
-      // Rejected and pending applicants belong exclusively in the Agent Requests workflow.
+      // By default in Agent Directories / Rosters, strictly show ONLY approved/active agents (not suspended or deleted).
       scoped = scoped.filter(a => {
         const s = (a.status || '').toLowerCase().trim();
-        return (s === 'active' || s === 'approved') && s !== 'rejected' && !s.includes('pending');
+        return (s === 'active' || s === 'approved') && s !== 'rejected' && s !== 'suspended' && s !== 'deleted' && !s.includes('pending') && !a.isDeleted && a.isActive !== false;
       });
     }
 
@@ -517,6 +531,15 @@ async function getAgents(req, res) {
         assignedArea = terr.district || '';
       }
 
+      const sLower = (a.status || '').toLowerCase().trim();
+      const resolvedStatus = (a.isDeleted || sLower === 'deleted')
+        ? 'Deleted'
+        : (a.isSuspended || sLower === 'suspended')
+        ? 'Suspended'
+        : (sLower === 'approved' || sLower === 'active')
+        ? 'Active'
+        : (a.status || 'Active');
+
       return {
         ...a,
         id: idStr,
@@ -532,7 +555,9 @@ async function getAgents(req, res) {
         vendorOnboardings: a.vendorOnboardings ?? 0,
         walletBalance: a.walletBalance ?? 0,
         totalEarned: a.totalEarned ?? 0,
-        status: (a.status && a.status.toLowerCase() === 'approved') ? 'Active' : (a.status || 'Active')
+        status: resolvedStatus,
+        isDeleted: Boolean(a.isDeleted || sLower === 'deleted'),
+        isSuspended: Boolean(a.isSuspended || sLower === 'suspended')
       };
     });
 
@@ -1370,6 +1395,8 @@ function canAdminViewAgent(admin, agent) {
   // Division Admin: can view division and pincode agents in their division
   if (adminRole.includes('division') || adminRole.includes('divisional')) {
     if (aLevel === 'state' || aLevel === 'district') return false;
+    // Direct division match
+    if (uDiv && tDiv && (tDiv === uDiv || divisionMatches(t.division, admin.division))) return true;
     const matchState = !uState || uState === 'all india' || (tState && tState === uState);
     const matchDist = matchState && (!uDist || uDist === 'all districts' || (tDist && tDist === uDist));
     return Boolean(matchDist && (!uDiv || uDiv === 'all divisions' || (tDiv && (tDiv === uDiv || divisionMatches(t.division, admin.division)))));
@@ -1378,6 +1405,8 @@ function canAdminViewAgent(admin, agent) {
   // Pincode Admin: can view pincode agents in their pincode
   if (adminRole.includes('pincode')) {
     if (aLevel !== 'pincode') return false;
+    // Direct PIN code match:
+    if (uPin && tPin && tPin === uPin) return true;
     const matchState = !uState || uState === 'all india' || (tState && tState === uState);
     const matchDist = matchState && (!uDist || uDist === 'all districts' || (tDist && tDist === uDist));
     const matchDiv = matchDist && (!uDiv || uDiv === 'all divisions' || (tDiv && (tDiv === uDiv || divisionMatches(t.division, admin.division))));
@@ -1504,7 +1533,7 @@ async function getAgentRequests(req, res) {
         const s = (a.status || '').toLowerCase().trim();
         const adminApproval = (a.adminApprovalStatus || '').toLowerCase().trim();
         if (qStatus === 'pending') {
-          return s === 'pending' || s === 'under_review' || s === 'pending_approval' || s === 'pending_admin_approval' || adminApproval === 'pending' || adminApproval === 'under_review';
+          return s.includes('pending') || s.includes('review') || !s || s === 'submitted' || adminApproval.includes('pending') || adminApproval.includes('review');
         }
         if (qStatus === 'approved' || qStatus === 'active') {
           return s === 'active' || s === 'approved' || adminApproval === 'approved';
@@ -2096,6 +2125,147 @@ async function keepPendingAgent(req, res) {
   }
 }
 
+// PATCH /operations/agents/:id/status - Suspend, activate, or soft-delete agent account
+async function updateAgentStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { action, status, reason } = req.body;
+
+    let agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    if (!agent && db.agents && typeof db.agents.reloadFromMongo === 'function') {
+      try {
+        await db.agents.reloadFromMongo(true);
+      } catch (_) {}
+      agent = Array.from(db.agents || []).find(a => String(a._id || a.id) === String(id));
+    }
+    if (!agent) {
+      agent = Array.from(db.users || []).find(u => String(u._id || u.id) === String(id) && String(u.role || '').toLowerCase().includes('agent'));
+    }
+
+    if (!agent) {
+      return res.status(404).json({ success: false, message: 'Agent record not found' });
+    }
+
+    // Territorial authorization check
+    if (!canAdminViewAgent(req.user, agent)) {
+      return res.status(403).json({
+        success: false,
+        code: 'UNAUTHORIZED_TERRITORY',
+        message: 'Forbidden: You do not have territory authorization to manage this agent account.'
+      });
+    }
+
+    let targetStatus = '';
+    const norm = String(action || status || '').toLowerCase().trim();
+    if (norm === 'suspend' || norm === 'suspended') {
+      targetStatus = 'Suspended';
+    } else if (norm === 'activate' || norm === 'active') {
+      targetStatus = 'Active';
+    } else if (norm === 'delete' || norm === 'deleted') {
+      targetStatus = 'Deleted';
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid action. Must be suspend, activate, or delete.' });
+    }
+
+    if (targetStatus === 'Active') {
+      const currentAdm = String(agent.adminApprovalStatus || '').toLowerCase();
+      if (currentAdm === 'rejected') {
+        return res.status(400).json({ success: false, message: 'Cannot activate an account that has been rejected.' });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const oldStatus = agent.status || 'Active';
+    const isDeleted = targetStatus === 'Deleted';
+    const isActive = targetStatus === 'Active';
+
+    const updates = {
+      status: targetStatus,
+      isActive,
+      updatedAt: now
+    };
+
+    if (isDeleted) {
+      updates.isDeleted = true;
+      updates.deletedAt = now;
+      updates.deletedBy = req.user.name || req.user.email;
+      updates.deletedById = req.user.id || req.user._id;
+      updates.deletedByRole = req.user.role;
+      if (reason) updates.deleteReason = reason;
+    } else if (targetStatus === 'Suspended') {
+      updates.isSuspended = true;
+      updates.suspendedAt = now;
+      updates.suspendedBy = req.user.name || req.user.email;
+      updates.suspendedById = req.user.id || req.user._id;
+      updates.suspendedByRole = req.user.role;
+      if (reason) updates.suspendReason = reason;
+    } else if (targetStatus === 'Active') {
+      updates.isSuspended = false;
+      updates.isDeleted = false;
+      updates.activatedAt = now;
+      updates.activatedBy = req.user.name || req.user.email;
+      updates.activatedById = req.user.id || req.user._id;
+      updates.activatedByRole = req.user.role;
+    }
+
+    // Update in db.agents
+    Object.assign(agent, updates);
+    if (db.agents && typeof db.agents.findByIdAndUpdate === 'function') {
+      await db.agents.findByIdAndUpdate(agent._id || agent.id, updates);
+    }
+
+    // Sync to db.users & MongoDB Atlas users
+    const agIdStr = String(agent._id || agent.id);
+    if (db.users) {
+      const u = Array.from(db.users).find(x => String(x._id || x.id) === agIdStr || (agent.email && x.email && x.email.toLowerCase() === agent.email.toLowerCase()));
+      if (u) Object.assign(u, updates);
+    }
+
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const { ObjectId } = require('mongodb');
+        const filter = {
+          $or: [
+            { id: agIdStr },
+            { email: (agent.email || '').toLowerCase() }
+          ]
+        };
+        if (ObjectId.isValid(agIdStr)) {
+          filter.$or.unshift({ _id: new ObjectId(agIdStr) });
+        }
+        await mongoDb.collection('users').updateMany(filter, { $set: updates });
+      }
+    } catch (mErr) {
+      console.warn('MongoDB Atlas sync in updateAgentStatus warning:', mErr.message);
+    }
+
+    // Audit log
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        id: `AUD-${Date.now()}`,
+        userId: req.user.id || req.user._id,
+        userName: req.user.name || req.user.email,
+        userRole: req.user.role,
+        action: `AGENT_${targetStatus.toUpperCase()}`,
+        module: 'Agents',
+        details: `${req.user.role} "${req.user.name || req.user.email}" transitioned agent "${agent.name}" status from "${oldStatus}" to "${targetStatus}". Reason: ${reason || 'N/A'}.`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      }).catch(() => {});
+    }
+
+    return res.json({
+      success: true,
+      message: `Agent account successfully updated to ${targetStatus}.`,
+      agent: { ...agent, ...updates }
+    });
+  } catch (error) {
+    console.error('Failed to update agent status:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update agent status', error: error.message });
+  }
+}
+
 module.exports = {
   getExecutives,
   getSupportTeam,
@@ -2111,6 +2281,7 @@ module.exports = {
   approveAgent,
   rejectAgent,
   keepPendingAgent,
+  updateAgentStatus,
   isRelatedAdminForAgent,
   canAdminViewAgent,
   getHierarchicalScopedAgents,

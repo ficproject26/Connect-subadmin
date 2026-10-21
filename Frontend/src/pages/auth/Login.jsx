@@ -92,7 +92,11 @@ export function Login() {
       const errMsg = (err?.message || '').toLowerCase();
       const status = err?.status;
 
-      if (
+      if (err?.code === 'ACCOUNT_SUSPENDED' || errMsg.includes('suspended')) {
+        setError('Your account has been suspended. Please contact your administrator for assistance.');
+      } else if (err?.code === 'ACCOUNT_DEACTIVATED' || errMsg.includes('deactivated') || errMsg.includes('deleted')) {
+        setError('Your account has been deactivated and access is no longer available. Please contact your administrator if you believe this is an error.');
+      } else if (
         (status && status >= 500) ||
         (!status && (errMsg.includes('connect') || errMsg.includes('network') || errMsg.includes('fetch') || errMsg.includes('timeout') || errMsg.includes('failed')))
       ) {
@@ -104,7 +108,7 @@ export function Login() {
         errMsg === 'invalid credentials'
       ) {
         setError('Invalid credentials');
-      } else if (status === 403 || errMsg.includes('pending') || errMsg.includes('inactive') || errMsg.includes('suspended')) {
+      } else if (status === 403 || errMsg.includes('pending') || errMsg.includes('inactive')) {
         setError(err.message || 'Account access is not permitted. Please contact administrator.');
       } else {
         // In accordance with security & RBAC guidelines, show generic "Invalid credentials" on credential mismatch

@@ -82,9 +82,23 @@ async function authMiddleware(req, res, next) {
 
     const effectiveUser = dbUser ? { ...userPayload, ...dbUser } : userPayload;
 
-    // 3. Strict Account Status Check (Suspended, Blocked, Revoked, Inactive, Rejected)
+    // 3. Strict Account Status Check (Suspended, Blocked, Revoked, Inactive, Rejected, Deleted)
     if (isAccountBlockedOrSuspended(effectiveUser)) {
       const currentStatus = String(effectiveUser.status || 'inactive').toLowerCase();
+      if (currentStatus === 'suspended') {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_SUSPENDED',
+          message: 'Your account has been suspended. Please contact your administrator for assistance.'
+        });
+      }
+      if (currentStatus === 'deleted' || currentStatus === 'deactivated' || effectiveUser.isDeleted === true) {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCOUNT_DEACTIVATED',
+          message: 'Your account has been deactivated and access is no longer available. Please contact your administrator if you believe this is an error.'
+        });
+      }
       return res.status(403).json({
         success: false,
         code: 'ACCOUNT_STATUS_REVOKED',

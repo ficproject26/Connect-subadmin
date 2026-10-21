@@ -7,7 +7,9 @@ import { StatusBadge } from '../../components/Badge';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { RegisterVendorModal } from '../../components/RegisterVendorModal';
 import { VendorDetailsModal } from '../../components/VendorDetailsModal';
+import { AccountActionModal } from '../../components/AccountActionModal';
 import { resolvePincodeHierarchy, resolveVendorAddedBy } from '../../utils/pincodeDirectory';
+import { isFullyOnboardedVendor, computeOnboardedVendorKpis } from '../../utils/vendorHelper';
 import {
   Store,
   MapPin,
@@ -23,6 +25,8 @@ import {
   ShieldCheck,
   UserCog,
   UserCheck,
+  UserX,
+  Trash2,
   Eye,
   Phone
 } from 'lucide-react';
@@ -43,13 +47,62 @@ export function StateVendors() {
   const [selectedPincode, setSelectedPincode] = useState('');
 
   // Table Filters
-  const [kycFilter, setKycFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [ratingFilter, setRatingFilter] = useState('');
 
   // Modals
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [selectedVendorForDetails, setSelectedVendorForDetails] = useState(null);
+
+  // Account Action State (Suspend / Activate / Delete)
+  const [accountActionState, setAccountActionState] = useState({
+    isOpen: false,
+    actionType: 'suspend', // 'suspend' | 'activate' | 'delete'
+    account: null,
+    loading: false,
+    error: ''
+  });
+
+  const handleTriggerAccountAction = (account, actionType) => {
+    setAccountActionState({
+      isOpen: true,
+      actionType,
+      account: {
+        id: account.id || account._id,
+        name: account.name || account.businessName || 'Vendor',
+        role: 'vendor',
+        status: account.status || 'Active',
+        identifier: account.phone || account.email || account.vendorId || account.id
+      },
+      loading: false,
+      error: ''
+    });
+  };
+
+  const handleConfirmAccountAction = async (payload) => {
+    if (!accountActionState.account) return;
+    setAccountActionState(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const id = accountActionState.account.id;
+      const res = await dataService.updateVendorAccountStatus(id, {
+        action: accountActionState.actionType,
+        reason: payload.reason || ''
+      });
+      if (res?.success) {
+        setAccountActionState(prev => ({ ...prev, isOpen: false, loading: false, account: null }));
+        await loadData();
+      } else {
+        setAccountActionState(prev => ({ ...prev, loading: false, error: res?.message || 'Failed to update vendor status' }));
+      }
+    } catch (err) {
+      setAccountActionState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.response?.data?.message || err.message || 'Error updating vendor status'
+      }));
+    }
+  };
 
   // Load Territory Tree
   useEffect(() => {
@@ -63,7 +116,7 @@ export function StateVendors() {
   const loadData = useCallback(async (overrides = {}) => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { onboardedOnly: true, status: 'all' };
       const d = overrides.district !== undefined ? overrides.district : selectedDistrict;
       const v = overrides.division !== undefined ? overrides.division : selectedDivision;
       const p = overrides.pincode !== undefined ? overrides.pincode : selectedPincode;
@@ -75,7 +128,8 @@ export function StateVendors() {
 
       const res = await dataService.getVendors(params);
       if (res && res.success) {
-        setVendors(res.vendors || []);
+        const raw = res.vendors || res.data || [];
+        setVendors(raw.filter(isFullyOnboardedVendor));
       } else {
         setVendors([]);
       }
@@ -91,24 +145,11 @@ export function StateVendors() {
     loadData();
   }, [loadData]);
 
-  // Helper to determine if a vendor is awaiting Pincode Admin approval (Stage 1)
-  const isAwaitingPincodeApproval = (v) => {
-    if (!v) return false;
-    if (v.pincodeAdminApproval?.status === 'Approved' || v.pincodeAdminApproval?.status === 'Rejected') return false;
-    const appStatus = (v.approvalStatus || '').toLowerCase();
-    if (appStatus.includes('pincode admin approved') || appStatus.includes('pincode admin rejected')) return false;
-    const kyc = (v.kycStatus || '').toLowerCase();
-    if (kyc.includes('kyc pending') || kyc.includes('approved') || kyc === 'verified' || kyc.includes('rejected')) return false;
-    if ((v.status || '').toLowerCase().includes('rejected')) return false;
-    if (v.pincodeAdminApproval?.status === 'Pending') return true;
-    if (appStatus.includes('pending')) return true;
-    if (kyc.includes('pending') || kyc.includes('verification') || (v.status || '').toLowerCase().includes('under review')) return true;
-    return false;
-  };
-
-  // Territory-scoped vendors based on selected hierarchy filters
+  // Territory-scoped vendors based on selected hierarchy filters (strictly fully onboarded)
   const territoryScopedVendors = useMemo(() => {
     return vendors.filter(v => {
+      if (!isFullyOnboardedVendor(v)) return false;
+
       if (selectedDistrict) {
         const dNorm = selectedDistrict.toLowerCase().trim();
         const vDist = (v.district || v.districtName || '').toLowerCase().trim();
@@ -128,40 +169,27 @@ export function StateVendors() {
     });
   }, [vendors, selectedDistrict, selectedDivision, selectedPincode]);
 
-  // Compute 4 KPI stats from territory-scoped dataset
+  // Compute KPI stats strictly from territory-scoped onboarded dataset
   const kpiStats = useMemo(() => {
-    const total = territoryScopedVendors.length;
-    const verified = territoryScopedVendors.filter(v => (v.kycStatus || '').toLowerCase().includes('approved') || (v.kycStatus || '').toLowerCase() === 'verified' || (v.status || '').toLowerCase() === 'active').length;
-    const pendingPincode = territoryScopedVendors.filter(isAwaitingPincodeApproval).length;
-    const pendingKyc = territoryScopedVendors.filter(v => (v.kycStatus || '').toLowerCase() === 'kyc pending' || (v.kycStatus || '').toLowerCase().includes('admin approved')).length;
-    const pendingPayout = territoryScopedVendors.reduce((sum, v) => sum + (Number(v.pendingPayout) || 0), 0);
-
-    return {
-      total,
-      verified,
-      pendingPincode,
-      pendingKyc,
-      pendingPayout
-    };
+    return computeOnboardedVendorKpis(territoryScopedVendors);
   }, [territoryScopedVendors]);
 
   // Filtered vendors list
   const filteredVendors = useMemo(() => {
     return territoryScopedVendors.filter(v => {
-      // 1. KYC Status Filter
-      if (kycFilter) {
-        const k = (v.kycStatus || '').toLowerCase();
-        const target = kycFilter.toLowerCase();
-        if (target === 'approved') {
-          if (!k.includes('approved') && k !== 'verified' && (v.status || '').toLowerCase() !== 'active') return false;
-        } else if (target === 'pending_pincode') {
-          if (!isAwaitingPincodeApproval(v)) return false;
-        } else if (target === 'kyc_pending') {
-          if (!k.includes('kyc pending') && !k.includes('pincode admin approved')) return false;
-        } else if (target === 'rejected') {
-          if (!k.includes('rejected') && (v.status || '').toLowerCase() !== 'rejected') return false;
-        } else if (!k.includes(target)) {
-          return false;
+      // 1. Status Filter (within onboarded vendors)
+      if (statusFilter) {
+        const s = (v.status || '').toLowerCase();
+        const target = statusFilter.toLowerCase();
+        if (target === 'active') {
+          if (s !== 'active' || v.isDeleted) return false;
+        } else if (target === 'suspended') {
+          if (s !== 'suspended' || v.isDeleted) return false;
+        } else if (target === 'deleted') {
+          if (s !== 'deleted' && !v.isDeleted) return false;
+        } else if (target === 'approved') {
+          const k = (v.kycStatus || '').toLowerCase();
+          if (!k.includes('approved') && k !== 'verified' && s !== 'approved') return false;
         }
       }
 
@@ -186,7 +214,7 @@ export function StateVendors() {
 
       return true;
     });
-  }, [vendors, kycFilter, categoryFilter, ratingFilter]);
+  }, [territoryScopedVendors, statusFilter, categoryFilter, ratingFilter]);
 
   const handleVendorCreated = (newVendor) => {
     setVendors(prev => [newVendor, ...prev]);
@@ -197,6 +225,16 @@ export function StateVendors() {
   };
 
   const columns = [
+    {
+      header: 'S.No.',
+      accessor: (_, idx) => idx + 1,
+      className: 'w-14 text-center whitespace-nowrap',
+      render: (_, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
     {
       header: 'Vendor Business',
       accessor: 'name',
@@ -283,15 +321,6 @@ export function StateVendors() {
       accessor: 'rating',
       className: 'w-[13%]',
       render: (row) => {
-        const isVerified = (row.kycStatus || '').toLowerCase().includes('approved') || (row.kycStatus || '').toLowerCase() === 'verified';
-        if (!isVerified) {
-          return (
-            <div className="min-w-0">
-              <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">—</span>
-              <div className="text-[10px] text-slate-400 dark:text-slate-500 italic truncate" title="Awaiting Full KYC Verification">Pending Clearance</div>
-            </div>
-          );
-        }
         return (
           <div className="min-w-0">
             <div className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold text-xs">
@@ -306,30 +335,93 @@ export function StateVendors() {
     {
       header: 'KYC & Approval',
       accessor: 'kycStatus',
-      className: 'w-[23%]',
+      className: 'w-[14%]',
       render: (row) => (
         <div className="py-0.5">
-          <StatusBadge status={row.kycStatus || 'Pending Pincode Admin Approval'} />
+          <StatusBadge status={row.kycStatus || 'KYC Approved'} />
         </div>
       )
     },
     {
+      header: 'Account Status',
+      accessor: 'status',
+      className: 'w-[12%]',
+      render: (row) => <StatusBadge status={row.status || 'Active'} />
+    },
+    {
       header: 'Actions',
       accessor: 'id',
-      className: 'w-[7%] text-center',
-      render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedVendorForDetails(row);
-          }}
-          title="View Vendor Hierarchy & KYC Dossier"
-          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:border-blue-700 transition cursor-pointer inline-flex items-center justify-center"
-        >
-          <Eye className="w-3.5 h-3.5" />
-        </button>
-      )
+      className: 'w-[18%]',
+      render: (row) => {
+        const rowStatus = (row.status || 'Active').toLowerCase();
+        const isDeleted = rowStatus === 'deleted' || row.isDeleted;
+        const isSuspended = rowStatus === 'suspended';
+
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedVendorForDetails(row);
+              }}
+              title="View Vendor Hierarchy & KYC Dossier"
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:border-blue-700 transition cursor-pointer inline-flex items-center justify-center"
+            >
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+
+            {isDeleted ? (
+              <span className="inline-flex items-center px-2 py-1 text-[11px] font-semibold rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">
+                Deactivated
+              </span>
+            ) : (
+              <>
+                {isSuspended ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerAccountAction(row, 'activate');
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                    title="Activate Vendor"
+                  >
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Activate</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerAccountAction(row, 'suspend');
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition cursor-pointer"
+                    title="Suspend Vendor"
+                  >
+                    <UserX className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>Suspend</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTriggerAccountAction(row, 'delete');
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800 transition cursor-pointer"
+                  title="Delete Vendor (Soft Delete)"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  <span>Delete</span>
+                </button>
+              </>
+            )}
+          </div>
+        );
+      }
     }
   ];
 
@@ -340,7 +432,7 @@ export function StateVendors() {
         <div>
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">State Vendors Network</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Certified merchant partners directory with automated pincode hierarchy mapping and two-stage KYC clearance.
+            Officially onboarded and verified merchant partners directory within your authorized state territory.
           </p>
         </div>
       </div>
@@ -374,11 +466,11 @@ export function StateVendors() {
         showPincode={true}
       />
 
-      {/* KPI Cards */}
+      {/* KPI Cards - Counting Only Officially Onboarded Vendors */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Vendors</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Onboarded Vendors</span>
             <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
               <Store className="w-4 h-4" />
             </div>
@@ -387,52 +479,52 @@ export function StateVendors() {
             {kpiStats.total}
           </div>
           <div className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">
-            State-wide merchant registry
+            Officially verified merchants
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Verified & Approved</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Active & Operational</span>
             <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
           <div className="text-xl font-bold text-slate-900 dark:text-white mt-1.5">
-            {kpiStats.verified}
+            {kpiStats.active}
           </div>
           <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-            KYC compliance cleared
+            Fulfilling active orders
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Awaiting Pincode Approval</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Top Rated (4★+)</span>
             <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
-              <Clock className="w-4 h-4" />
+              <Star className="w-4 h-4 fill-amber-400" />
             </div>
           </div>
           <div className="text-xl font-bold text-slate-900 dark:text-white mt-1.5">
-            {kpiStats.pendingPincode}
+            {kpiStats.topRated}
           </div>
           <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-            Stage 1 field verification
+            High customer satisfaction
           </div>
         </div>
 
         <div className="p-3.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Awaiting KYC Team</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Pending Payout</span>
             <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-              <ShieldCheck className="w-4 h-4" />
+              <IndianRupee className="w-4 h-4" />
             </div>
           </div>
           <div className="text-xl font-bold text-slate-900 dark:text-white mt-1.5">
-            {kpiStats.pendingKyc}
+            ₹{kpiStats.pendingPayout.toLocaleString('en-IN')}
           </div>
           <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium mt-0.5">
-            Stage 2 compliance review
+            Settlement pipeline
           </div>
         </div>
       </div>
@@ -461,31 +553,31 @@ export function StateVendors() {
                 className="w-36 sm:w-44 shrink flex-1 max-w-[220px]"
               />
 
-              {/* Filter 1: KYC Status */}
+              {/* Filter 1: Operational Status */}
               <div className={`h-9 inline-flex items-center gap-2 ${
                 isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
               } border rounded-xl px-2.5 text-xs transition-colors shrink-0`}>
                 <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <select
-                  value={kycFilter}
-                  onChange={(e) => setKycFilter(e.target.value)}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
                   className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 truncate`}
-                  title="Filter by KYC Status"
+                  title="Filter by Status"
                 >
                   <option value="" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
-                    KYC: All Stages
+                    Status: All ({territoryScopedVendors.length})
                   </option>
-                  <option value="pending_pincode" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
-                    Pending Pincode Approval
+                  <option value="active" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                    Active ({territoryScopedVendors.filter(v => (v.status || '').toLowerCase() === 'active' && !v.isDeleted).length})
                   </option>
-                  <option value="kyc_pending" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
-                    KYC Pending
+                  <option value="suspended" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                    Suspended ({territoryScopedVendors.filter(v => (v.status || '').toLowerCase() === 'suspended' && !v.isDeleted).length})
+                  </option>
+                  <option value="deleted" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                    Deleted ({territoryScopedVendors.filter(v => (v.status || '').toLowerCase() === 'deleted' || v.isDeleted).length})
                   </option>
                   <option value="approved" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
-                    KYC Approved
-                  </option>
-                  <option value="rejected" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
-                    Rejected
+                    KYC Verified
                   </option>
                 </select>
               </div>
@@ -604,6 +696,17 @@ export function StateVendors() {
         onClose={() => setSelectedVendorForDetails(null)}
         vendor={selectedVendorForDetails}
         onVendorUpdated={handleVendorUpdated}
+      />
+
+      {/* Account Action Modal (Suspend / Activate / Soft-Delete) */}
+      <AccountActionModal
+        isOpen={accountActionState.isOpen}
+        onClose={() => setAccountActionState(prev => ({ ...prev, isOpen: false, error: '' }))}
+        onConfirm={handleConfirmAccountAction}
+        actionType={accountActionState.actionType}
+        account={accountActionState.account}
+        loading={accountActionState.loading}
+        error={accountActionState.error}
       />
     </div>
   );

@@ -7,7 +7,9 @@ import { StatusBadge } from '../../components/Badge';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
 import { RegisterVendorModal } from '../../components/RegisterVendorModal';
 import { VendorDetailsModal } from '../../components/VendorDetailsModal';
+import { AccountActionModal } from '../../components/AccountActionModal';
 import { resolvePincodeHierarchy, resolveVendorAddedBy } from '../../utils/pincodeDirectory';
+import { isFullyOnboardedVendor, computeOnboardedVendorKpis } from '../../utils/vendorHelper';
 import {
   Store,
   MapPin,
@@ -22,7 +24,10 @@ import {
   CheckCircle2,
   Clock,
   IndianRupee,
-  Phone
+  Phone,
+  UserCheck,
+  UserX,
+  Trash2
 } from 'lucide-react';
 
 export function DivisionalVendors() {
@@ -41,13 +46,62 @@ export function DivisionalVendors() {
   const [selectedPincode, setSelectedPincode] = useState(pincodeParam || '');
 
   // Filters
-  const [kycFilter, setKycFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [ratingFilter, setRatingFilter] = useState('');
 
   // Modals
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [selectedVendorForDetails, setSelectedVendorForDetails] = useState(null);
+
+  // Account Action State (Suspend / Activate / Delete)
+  const [accountActionState, setAccountActionState] = useState({
+    isOpen: false,
+    actionType: 'suspend', // 'suspend' | 'activate' | 'delete'
+    account: null,
+    loading: false,
+    error: ''
+  });
+
+  const handleTriggerAccountAction = (account, actionType) => {
+    setAccountActionState({
+      isOpen: true,
+      actionType,
+      account: {
+        id: account.id || account._id,
+        name: account.name || account.businessName || 'Vendor',
+        role: 'vendor',
+        status: account.status || 'Active',
+        identifier: account.phone || account.email || account.vendorId || account.id
+      },
+      loading: false,
+      error: ''
+    });
+  };
+
+  const handleConfirmAccountAction = async (payload) => {
+    if (!accountActionState.account) return;
+    setAccountActionState(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const id = accountActionState.account.id;
+      const res = await dataService.updateVendorAccountStatus(id, {
+        action: accountActionState.actionType,
+        reason: payload.reason || ''
+      });
+      if (res?.success) {
+        setAccountActionState(prev => ({ ...prev, isOpen: false, loading: false, account: null }));
+        await loadData();
+      } else {
+        setAccountActionState(prev => ({ ...prev, loading: false, error: res?.message || 'Failed to update vendor status' }));
+      }
+    } catch (err) {
+      setAccountActionState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.response?.data?.message || err.message || 'Error updating vendor status'
+      }));
+    }
+  };
 
   // Load Territory Tree
   useEffect(() => {
@@ -61,7 +115,7 @@ export function DivisionalVendors() {
   const loadData = useCallback(async (overrides = {}) => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { onboardedOnly: true, status: 'all' };
       if (assignedState) params.state = assignedState;
       if (districtName) params.district = districtName;
       if (divisionName) params.division = divisionName;
@@ -70,13 +124,13 @@ export function DivisionalVendors() {
 
       const res = await dataService.getVendors(params);
       if (res && res.success) {
-        let list = res.vendors || [];
+        let list = res.vendors || res.data || [];
         // Strict boundary: Never display vendors outside assigned division
         if (divisionName) {
           const divNorm = divisionName.toLowerCase().trim().replace(/\s+division$/i, '');
           list = list.filter(v => (v.division || v.divisionName || '').toLowerCase().trim().replace(/\s+division$/i, '') === divNorm);
         }
-        setVendors(list);
+        setVendors(list.filter(isFullyOnboardedVendor));
       } else {
         setVendors([]);
       }
@@ -92,24 +146,10 @@ export function DivisionalVendors() {
     loadData();
   }, [loadData]);
 
-  // Helper to determine if a vendor is awaiting Pincode Admin approval (Stage 1)
-  const isAwaitingPincodeApproval = (v) => {
-    if (!v) return false;
-    if (v.pincodeAdminApproval?.status === 'Approved' || v.pincodeAdminApproval?.status === 'Rejected') return false;
-    const appStatus = (v.approvalStatus || '').toLowerCase();
-    if (appStatus.includes('pincode admin approved') || appStatus.includes('pincode admin rejected')) return false;
-    const kyc = (v.kycStatus || '').toLowerCase();
-    if (kyc.includes('kyc pending') || kyc.includes('approved') || kyc === 'verified' || kyc.includes('rejected')) return false;
-    if ((v.status || '').toLowerCase().includes('rejected')) return false;
-    if (v.pincodeAdminApproval?.status === 'Pending') return true;
-    if (appStatus.includes('pending')) return true;
-    if (kyc.includes('pending') || kyc.includes('verification') || (v.status || '').toLowerCase().includes('under review')) return true;
-    return false;
-  };
-
-  // Territory-scoped vendors based on assigned division and selected pincode filter
+  // Territory-scoped vendors based on assigned division and selected pincode filter (strictly fully onboarded)
   const territoryScopedVendors = useMemo(() => {
     return vendors.filter(v => {
+      if (!isFullyOnboardedVendor(v)) return false;
       // Must match assigned division
       if (divisionName) {
         const divNorm = divisionName.toLowerCase().trim().replace(/\s+division$/i, '');
@@ -125,40 +165,27 @@ export function DivisionalVendors() {
     });
   }, [vendors, divisionName, selectedPincode]);
 
-  // Compute 4 KPI stats from territory-scoped dataset
+  // Compute 4 KPI stats strictly from territory-scoped onboarded dataset
   const kpiStats = useMemo(() => {
-    const total = territoryScopedVendors.length;
-    const verified = territoryScopedVendors.filter(v => (v.kycStatus || '').toLowerCase().includes('approved') || (v.kycStatus || '').toLowerCase() === 'verified' || (v.status || '').toLowerCase() === 'active').length;
-    const pendingPincode = territoryScopedVendors.filter(isAwaitingPincodeApproval).length;
-    const pendingKyc = territoryScopedVendors.filter(v => (v.kycStatus || '').toLowerCase() === 'kyc pending' || (v.kycStatus || '').toLowerCase().includes('admin approved')).length;
-    const pendingPayout = territoryScopedVendors.reduce((sum, v) => sum + (Number(v.pendingPayout) || 0), 0);
-
-    return {
-      total,
-      verified,
-      pendingPincode,
-      pendingKyc,
-      pendingPayout
-    };
+    return computeOnboardedVendorKpis(territoryScopedVendors);
   }, [territoryScopedVendors]);
 
   // Filtered vendors list based on active filters
   const filteredVendors = useMemo(() => {
     return territoryScopedVendors.filter(v => {
-      // 1. KYC Status Filter
-      if (kycFilter) {
-        const k = (v.kycStatus || '').toLowerCase();
-        const target = kycFilter.toLowerCase();
-        if (target === 'approved') {
-          if (!k.includes('approved') && k !== 'verified' && (v.status || '').toLowerCase() !== 'active') return false;
-        } else if (target === 'pending_pincode') {
-          if (!isAwaitingPincodeApproval(v)) return false;
-        } else if (target === 'kyc_pending') {
-          if (!k.includes('kyc pending') && !k.includes('pincode admin approved')) return false;
-        } else if (target === 'rejected') {
-          if (!k.includes('rejected') && (v.status || '').toLowerCase() !== 'rejected') return false;
-        } else if (!k.includes(target)) {
-          return false;
+      // 1. Status Filter (within onboarded vendors)
+      if (statusFilter) {
+        const s = (v.status || '').toLowerCase();
+        const target = statusFilter.toLowerCase();
+        if (target === 'active') {
+          if (s !== 'active' || v.isDeleted) return false;
+        } else if (target === 'suspended') {
+          if (s !== 'suspended' || v.isDeleted) return false;
+        } else if (target === 'deleted') {
+          if (s !== 'deleted' && !v.isDeleted) return false;
+        } else if (target === 'approved') {
+          const k = (v.kycStatus || '').toLowerCase();
+          if (!k.includes('approved') && k !== 'verified' && s !== 'approved') return false;
         }
       }
 
@@ -183,7 +210,7 @@ export function DivisionalVendors() {
 
       return true;
     });
-  }, [vendors, kycFilter, categoryFilter, ratingFilter]);
+  }, [territoryScopedVendors, statusFilter, categoryFilter, ratingFilter]);
 
   const handleVendorCreated = (newVendor) => {
     setVendors(prev => [newVendor, ...prev]);
@@ -194,6 +221,16 @@ export function DivisionalVendors() {
   };
 
   const columns = [
+    {
+      header: 'S.No.',
+      accessor: (_, idx) => idx + 1,
+      className: 'w-14 text-center whitespace-nowrap',
+      render: (_, idx) => (
+        <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono text-xs">
+          {idx + 1}
+        </span>
+      )
+    },
     {
       header: 'Vendor Business',
       accessor: 'name',
@@ -298,31 +335,93 @@ export function DivisionalVendors() {
     {
       header: 'KYC & Approval',
       accessor: 'kycStatus',
-      className: 'w-[23%]',
+      className: 'w-[14%]',
       render: (row) => (
         <div className="py-0.5">
-          <StatusBadge status={row.kycStatus || 'Pending Pincode Admin Approval'} />
+          <StatusBadge status={row.kycStatus || 'KYC Approved'} />
         </div>
       )
     },
     {
+      header: 'Account Status',
+      accessor: 'status',
+      className: 'w-[12%]',
+      render: (row) => <StatusBadge status={row.status || 'Active'} />
+    },
+    {
       header: 'Actions',
       accessor: 'id',
-      className: 'w-[7%] text-center',
-      render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedVendorForDetails(row);
-          }}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer"
-          title="View Hierarchy & KYC Details"
-        >
-          <Eye className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-          <span>View</span>
-        </button>
-      )
+      className: 'w-[18%]',
+      render: (row) => {
+        const rowStatus = (row.status || 'Active').toLowerCase();
+        const isDeleted = rowStatus === 'deleted' || row.isDeleted;
+        const isSuspended = rowStatus === 'suspended';
+
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedVendorForDetails(row);
+              }}
+              title="View Vendor Hierarchy & KYC Dossier"
+              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:border-blue-700 transition cursor-pointer inline-flex items-center justify-center"
+            >
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+
+            {isDeleted ? (
+              <span className="inline-flex items-center px-2 py-1 text-[11px] font-semibold rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">
+                Deactivated
+              </span>
+            ) : (
+              <>
+                {isSuspended ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerAccountAction(row, 'activate');
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                    title="Activate Vendor"
+                  >
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Activate</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerAccountAction(row, 'suspend');
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition cursor-pointer"
+                    title="Suspend Vendor"
+                  >
+                    <UserX className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                    <span>Suspend</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTriggerAccountAction(row, 'delete');
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800 transition cursor-pointer"
+                  title="Delete Vendor (Soft Delete)"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                  <span>Delete</span>
+                </button>
+              </>
+            )}
+          </div>
+        );
+      }
     }
   ];
 
@@ -380,17 +479,31 @@ export function DivisionalVendors() {
           </div>
         </div>
 
-        {/* KPI 3: Pending Approvals */}
+        {/* KPI 2: Active & Operational */}
         <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Pending Approvals</span>
-            <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Active & Operational</span>
+            <div className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">{kpiStats.active}</div>
+          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+            Fully operational partners
+          </div>
+        </div>
+
+        {/* KPI 3: Top Rated */}
+        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Top Rated (4★+)</span>
+            <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
           </div>
           <div className="text-lg font-bold text-slate-900 dark:text-white mt-1.5">
-            {kpiStats.pendingPincode + kpiStats.pendingKyc}
+            {kpiStats.topRated}
           </div>
           <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-            {kpiStats.pendingPincode} PIN approval • {kpiStats.pendingKyc} KYC review
+            High customer trust
           </div>
         </div>
 
@@ -423,21 +536,31 @@ export function DivisionalVendors() {
         containerClassName="overflow-x-auto"
         customFilters={({ isDark }) => (
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            {/* KYC Status Filter */}
+            {/* Status Filter */}
             <div className={`h-9 flex-1 sm:flex-initial inline-flex items-center gap-1.5 ${
               isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
             } border rounded-xl px-2.5 text-xs transition-colors`}>
               <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <select
-                value={kycFilter}
-                onChange={(e) => setKycFilter(e.target.value)}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 className={`bg-transparent border-none ${isDark ? 'text-slate-200' : 'text-slate-800'} text-xs focus:outline-none cursor-pointer pr-1 w-full max-w-[180px] truncate`}
               >
-                <option value="" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>All Verification Status</option>
-                <option value="pending_pincode" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>Pending Pincode Approval</option>
-                <option value="kyc_pending" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>KYC Pending Review</option>
-                <option value="approved" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>Fully Approved / Verified</option>
-                <option value="rejected" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>Rejected</option>
+                <option value="" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                  Status: All ({territoryScopedVendors.length})
+                </option>
+                <option value="active" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                  Active ({territoryScopedVendors.filter(v => (v.status || '').toLowerCase() === 'active' && !v.isDeleted).length})
+                </option>
+                <option value="suspended" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                  Suspended ({territoryScopedVendors.filter(v => (v.status || '').toLowerCase() === 'suspended' && !v.isDeleted).length})
+                </option>
+                <option value="deleted" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                  Deleted ({territoryScopedVendors.filter(v => (v.status || '').toLowerCase() === 'deleted' || v.isDeleted).length})
+                </option>
+                <option value="approved" className={isDark ? "bg-slate-900 text-slate-200" : "bg-white text-slate-800"}>
+                  KYC Verified
+                </option>
               </select>
             </div>
 
@@ -477,11 +600,11 @@ export function DivisionalVendors() {
               </select>
             </div>
 
-            {(kycFilter || categoryFilter || ratingFilter) && (
+            {(statusFilter || categoryFilter || ratingFilter) && (
               <button
                 type="button"
                 onClick={() => {
-                  setKycFilter('');
+                  setStatusFilter('');
                   setCategoryFilter('');
                   setRatingFilter('');
                 }}
@@ -509,6 +632,17 @@ export function DivisionalVendors() {
         onClose={() => setSelectedVendorForDetails(null)}
         vendor={selectedVendorForDetails}
         onVendorUpdated={handleVendorUpdated}
+      />
+
+      {/* Account Action Modal (Suspend / Activate / Soft-Delete) */}
+      <AccountActionModal
+        isOpen={accountActionState.isOpen}
+        onClose={() => setAccountActionState(prev => ({ ...prev, isOpen: false, error: '' }))}
+        onConfirm={handleConfirmAccountAction}
+        actionType={accountActionState.actionType}
+        account={accountActionState.account}
+        loading={accountActionState.loading}
+        error={accountActionState.error}
       />
     </div>
   );

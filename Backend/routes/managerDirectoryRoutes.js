@@ -29,4 +29,7 @@ router.post('/:id/pending', managerDirectoryController.keepPendingManager);
 // PATCH /api/managers/:id/documents - Update/replace manager identity & official documents
 router.patch('/:id/documents', managerDirectoryController.updateManagerDocuments);
 
+// PATCH /api/managers/:id/status - Suspend, activate, or soft-delete manager account
+router.patch('/:id/status', managerDirectoryController.updateManagerStatus);
+
 module.exports = router;

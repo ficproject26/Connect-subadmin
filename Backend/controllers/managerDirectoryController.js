@@ -39,45 +39,57 @@ const matchesState = (admin, manager) => {
 // Check if an admin and a manager share the same district
 const matchesDistrict = (admin, manager) => {
   if (!admin || !manager) return false;
-  if (!matchesState(admin, manager)) return false;
 
   const adminDist = cleanTerritory(admin.district || admin.assignedDistrict);
-  if (!adminDist || adminDist === 'all districts') return true;
   const mgrDist = cleanTerritory(manager.district || manager.assignedDistrict);
-  if (adminDist && mgrDist && adminDist === mgrDist) return true;
   const adminDistId = String(admin.districtId || admin.assignedDistrictId || '').trim().toLowerCase();
   const mgrDistId = String(manager.districtId || manager.assignedDistrictId || '').trim().toLowerCase();
+
   if (adminDistId && mgrDistId && adminDistId === mgrDistId) return true;
+  if (adminDist && mgrDist && adminDist === mgrDist) return true;
+  if (!adminDist || adminDist === 'all districts') return matchesState(admin, manager);
+
+  if (matchesState(admin, manager)) {
+    if (!adminDist || adminDist === 'all districts') return true;
+    if (adminDist && mgrDist && (adminDist.includes(mgrDist) || mgrDist.includes(adminDist))) return true;
+  }
   return false;
 };
 
 // Check if an admin and a manager share the same division
 const matchesDivision = (admin, manager) => {
   if (!admin || !manager) return false;
-  if (!matchesDistrict(admin, manager)) return false;
 
   const adminDiv = cleanTerritory(admin.division || admin.assignedDivision);
-  if (!adminDiv || adminDiv === 'all divisions') return true;
   const mgrDiv = cleanTerritory(manager.division || manager.assignedDivision);
-  if (adminDiv && mgrDiv && adminDiv === mgrDiv) return true;
   const adminDivId = String(admin.divisionId || admin.assignedDivisionId || '').trim().toLowerCase();
   const mgrDivId = String(manager.divisionId || manager.assignedDivisionId || '').trim().toLowerCase();
+
   if (adminDivId && mgrDivId && adminDivId === mgrDivId) return true;
+  if (adminDiv && mgrDiv && adminDiv === mgrDiv) return true;
+  if (!adminDiv || adminDiv === 'all divisions') return matchesDistrict(admin, manager);
+
+  if (matchesDistrict(admin, manager)) {
+    if (!adminDiv || adminDiv === 'all divisions') return true;
+    if (adminDiv && mgrDiv && (adminDiv.includes(mgrDiv) || mgrDiv.includes(adminDiv))) return true;
+  }
   return false;
 };
 
 // Check if an admin and a manager share the same pincode
 const matchesPincode = (admin, manager) => {
   if (!admin || !manager) return false;
-  if (!matchesDivision(admin, manager)) return false;
 
   const adminPin = String(admin.pincode || admin.assignedPincode || '').trim();
-  if (!adminPin || adminPin === 'all') return true;
   const mgrPin = String(manager.pincode || manager.assignedPincode || '').trim();
-  if (adminPin && mgrPin && adminPin === mgrPin) return true;
   const adminPinId = String(admin.pincodeId || admin.assignedPincodeId || '').trim().toLowerCase();
   const mgrPinId = String(manager.pincodeId || manager.assignedPincodeId || '').trim().toLowerCase();
+
+  // Exact 6-digit PIN code match uniquely determines pincode jurisdiction
+  if (adminPin && mgrPin && adminPin === mgrPin) return true;
   if (adminPinId && mgrPinId && adminPinId === mgrPinId) return true;
+  if (!adminPin || adminPin === 'all') return matchesDivision(admin, manager);
+
   return false;
 };
 
@@ -517,7 +529,7 @@ const getLowerLevelManagers = async (req, res) => {
       const mongoDb = await getMongoDb();
       if (mongoDb) {
         const atlasRequests = await mongoDb.collection('managerrequests').find({
-          status: { $in: ['approved', 'Approved', 'active', 'Active'] }
+          status: { $in: ['approved', 'Approved', 'active', 'Active', 'suspended', 'Suspended', 'deleted', 'Deleted'] }
         }).toArray();
         for (const reqDoc of atlasRequests) {
           const levelMap = {
@@ -537,6 +549,10 @@ const getLowerLevelManagers = async (req, res) => {
           const existingId = (rawId && combinedManagersMap.has(rawId)) ? rawId : (email && emailToIdMap.get(email));
 
           const existing = existingId ? combinedManagersMap.get(existingId) : null;
+          const rawStatus = reqDoc.status || existing?.status || 'active';
+          const isSusp = String(rawStatus).toLowerCase() === 'suspended';
+          const isDel = String(rawStatus).toLowerCase() === 'deleted' || reqDoc.isDeleted === true || existing?.isDeleted === true;
+
           const mappedApproved = {
             ...(existing || {}),
             _id: reqDoc._id,
@@ -556,10 +572,12 @@ const getLowerLevelManagers = async (req, res) => {
             assignedDistrict: reqDoc.assignedDistrict || reqDoc.district || existing?.assignedDistrict || '',
             assignedDivision: reqDoc.assignedDivision || reqDoc.division || existing?.assignedDivision || '',
             assignedPincode: reqDoc.assignedPincode || reqDoc.pincode || existing?.assignedPincode || '',
-            status: 'active',
-            adminApprovalStatus: 'approved',
-            kycStatus: 'verified',
-            isActive: true
+            status: isDel ? 'Deleted' : isSusp ? 'Suspended' : 'Active',
+            adminApprovalStatus: reqDoc.adminApprovalStatus || existing?.adminApprovalStatus || 'approved',
+            kycStatus: reqDoc.kycStatus || existing?.kycStatus || 'verified',
+            isActive: !isDel && !isSusp,
+            isDeleted: isDel,
+            isSuspended: isSusp
           };
 
           if (existingId) {
@@ -746,14 +764,17 @@ const getLowerLevelManagers = async (req, res) => {
         s === 'rejected' ||
         admApp === 'rejected' ||
         (admApp && admApp !== 'approved') ||
-        kycStat === 'rejected' ||
-        m.isActive === false
+        kycStat === 'rejected'
       ) {
         return false;
       }
+      if (requestedStatus === 'all') {
+        return s === 'active' || s === 'approved' || s === 'suspended' || s === 'deleted' || m.isDeleted === true;
+      }
       if (requestedStatus === 'suspended') return s === 'suspended';
+      if (requestedStatus === 'deleted') return s === 'deleted' || m.isDeleted === true;
       if (requestedStatus === 'inactive') return s === 'inactive';
-      return s === 'active' || s === 'approved';
+      return (s === 'active' || s === 'approved') && s !== 'suspended' && s !== 'deleted' && !m.isDeleted && m.isActive !== false;
     };
 
     rawSubordinates = rawSubordinates.filter(isApprovedAndActive);
@@ -993,7 +1014,7 @@ const getManagerRequests = async (req, res) => {
         const subAdmApp = (m.subAdminApprovalStatus || '').toLowerCase();
         const mainAdmApp = (m.mainAdminApprovalStatus || '').toLowerCase();
         if (statusLower === 'pending' || statusLower === 'under_review') {
-          return s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval' || s === 'pending_main_admin_approval' || mainAdmApp === 'pending';
+          return s.includes('pending') || s.includes('review') || !s || s === 'submitted' || admApp.includes('pending') || subAdmApp.includes('pending') || mainAdmApp.includes('pending');
         }
         if (statusLower === 'approved') {
           return s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'approved' || s === 'active' || admApp === 'approved' || subAdmApp === 'approved' || s === 'pending_main_admin_approval';
@@ -2336,6 +2357,139 @@ const updateManagerDocuments = async (req, res) => {
   }
 };
 
+// PATCH /api/managers/:id/status - Suspend, activate, or soft-delete a manager account
+const updateManagerStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, status, reason } = req.body;
+
+    const manager = await findManagerRecord(id);
+    if (!manager) {
+      return res.status(404).json({ success: false, message: 'Manager record not found' });
+    }
+
+    // Territorial authorization check
+    if (!canAdminManage(req.user, manager)) {
+      return res.status(403).json({
+        success: false,
+        code: 'UNAUTHORIZED_TERRITORY',
+        message: 'Forbidden: You do not have territory authorization to manage this manager account.'
+      });
+    }
+
+    let targetStatus = '';
+    const norm = String(action || status || '').toLowerCase().trim();
+    if (norm === 'suspend' || norm === 'suspended') {
+      targetStatus = 'Suspended';
+    } else if (norm === 'activate' || norm === 'active') {
+      targetStatus = 'Active';
+    } else if (norm === 'delete' || norm === 'deleted') {
+      targetStatus = 'Deleted';
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid action. Must be suspend, activate, or delete.' });
+    }
+
+    // For activate: Ensure manager was approved/active previously and not bypassing unapproved KYC or registration
+    if (targetStatus === 'Active') {
+      const currentAdm = String(manager.adminApprovalStatus || '').toLowerCase();
+      if (currentAdm === 'rejected') {
+        return res.status(400).json({ success: false, message: 'Cannot activate an account that has been rejected during registration.' });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const oldStatus = manager.status || 'Active';
+    const isDeleted = targetStatus === 'Deleted';
+    const isActive = targetStatus === 'Active';
+
+    const updates = {
+      status: targetStatus,
+      isActive,
+      updatedAt: now
+    };
+
+    if (isDeleted) {
+      updates.isDeleted = true;
+      updates.deletedAt = now;
+      updates.deletedBy = req.user.name || req.user.email;
+      updates.deletedById = req.user.id || req.user._id;
+      updates.deletedByRole = req.user.role;
+      if (reason) updates.deleteReason = reason;
+    } else if (targetStatus === 'Suspended') {
+      updates.isSuspended = true;
+      updates.suspendedAt = now;
+      updates.suspendedBy = req.user.name || req.user.email;
+      updates.suspendedById = req.user.id || req.user._id;
+      updates.suspendedByRole = req.user.role;
+      if (reason) updates.suspendReason = reason;
+    } else if (targetStatus === 'Active') {
+      updates.isSuspended = false;
+      updates.isDeleted = false;
+      updates.activatedAt = now;
+      updates.activatedBy = req.user.name || req.user.email;
+      updates.activatedById = req.user.id || req.user._id;
+      updates.activatedByRole = req.user.role;
+    }
+
+    // Update in-memory db.users and db.managers
+    const mgrIdStr = String(manager._id || manager.id || manager.userId || '');
+    if (db.users) {
+      const u = Array.from(db.users).find(x => String(x._id || x.id) === mgrIdStr || (manager.email && x.email && x.email.toLowerCase() === manager.email.toLowerCase()));
+      if (u) Object.assign(u, updates);
+    }
+    if (db.managers) {
+      const m = Array.from(db.managers).find(x => String(x._id || x.id) === mgrIdStr || (manager.email && x.email && x.email.toLowerCase() === manager.email.toLowerCase()));
+      if (m) Object.assign(m, updates);
+    }
+
+    // Update MongoDB Atlas users & managerrequests collections
+    try {
+      const mongoDb = await getMongoDb();
+      if (mongoDb) {
+        const { ObjectId } = require('mongodb');
+        const filter = {
+          $or: [
+            { userId: mgrIdStr },
+            { id: mgrIdStr },
+            { email: (manager.email || '').toLowerCase() }
+          ]
+        };
+        if (ObjectId.isValid(mgrIdStr)) {
+          filter.$or.unshift({ _id: new ObjectId(mgrIdStr) });
+        }
+        await mongoDb.collection('users').updateMany(filter, { $set: updates });
+        await mongoDb.collection('managerrequests').updateMany(filter, { $set: updates });
+      }
+    } catch (mErr) {
+      console.warn('MongoDB Atlas update in updateManagerStatus warning:', mErr.message);
+    }
+
+    // Audit log
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        id: `AUD-${Date.now()}`,
+        userId: req.user.id || req.user._id,
+        userName: req.user.name || req.user.email,
+        userRole: req.user.role,
+        action: `MANAGER_${targetStatus.toUpperCase()}`,
+        module: 'Managers',
+        details: `${req.user.role} "${req.user.name || req.user.email}" transitioned manager "${manager.name}" status from "${oldStatus}" to "${targetStatus}". Reason: ${reason || 'N/A'}.`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      }).catch(() => {});
+    }
+
+    return res.json({
+      success: true,
+      message: `Manager account successfully updated to ${targetStatus}.`,
+      manager: { ...manager, ...updates }
+    });
+  } catch (error) {
+    console.error('Failed to update manager status:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update manager status', error: error.message });
+  }
+};
+
 module.exports = {
   getLowerLevelManagers,
   getManagerRequests,
@@ -2345,6 +2499,7 @@ module.exports = {
   keepPendingManager,
   addManager,
   updateManagerDocuments,
+  updateManagerStatus,
   isRelatedAdminForManager,
   canAdminManage
 };

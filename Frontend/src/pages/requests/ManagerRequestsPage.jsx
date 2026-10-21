@@ -269,12 +269,13 @@ export function ManagerRequestsPage() {
       // Status filter
       if (statusFilter !== 'All') {
         const s = (item.status || 'pending').toLowerCase();
+        const admApp = (item.adminApprovalStatus || '').toLowerCase();
         if (statusFilter === 'Pending') {
-          if (s !== 'pending' && s !== 'under_review' && s !== 'pending_admin_approval' && s !== 'pending_sub_admin_approval' && s !== 'pending_main_admin_approval') return false;
+          if (!s.includes('pending') && !s.includes('review') && s !== 'submitted' && !admApp.includes('pending') && !admApp.includes('review')) return false;
         } else if (statusFilter === 'Approved') {
-          if (s !== 'approved' && s !== 'active' && s !== 'pending_kyc' && s !== 'pending_kyc_approval' && s !== 'pending_main_admin_approval') return false;
+          if (s !== 'approved' && s !== 'active' && !s.includes('kyc') && s !== 'pending_main_admin_approval' && admApp !== 'approved') return false;
         } else if (statusFilter === 'Rejected') {
-          if (s !== 'rejected') return false;
+          if (!s.includes('rejected') && !admApp.includes('rejected')) return false;
         }
       }
 

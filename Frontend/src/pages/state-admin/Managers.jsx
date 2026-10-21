@@ -6,6 +6,7 @@ import { normalizeRole, canAdminApproveManagerRequest } from '../../utils/permis
 import { DataTable } from '../../components/DataTable';
 import { StatusBadge } from '../../components/Badge';
 import { ManagerApprovalModal } from '../../components/ManagerApprovalModal';
+import { AccountActionModal } from '../../components/AccountActionModal';
 import { Modal } from '../../components/Modal';
 import { useTheme } from '../../context/ThemeContext';
 import { TerritoryHierarchyFilter } from '../../components/TerritoryHierarchyFilter';
@@ -46,7 +47,10 @@ import {
   X,
   ArrowRight,
   Lock,
-  Loader2
+  Loader2,
+  UserX,
+  UserCheck,
+  Trash2
 } from 'lucide-react';
 import { ALL_INDIAN_STATES, getDistrictsForState, getDivisionsForDistrict, getPincodesForDivision } from '../../utils/indiaPostalData';
 import {
@@ -188,9 +192,60 @@ export function StateManagers({ level }) {
 
   const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'active'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'suspended' | 'deleted'
   const [selectedManager, setSelectedManager] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+
+  const [accountActionState, setAccountActionState] = useState({
+    isOpen: false,
+    actionType: 'suspend', // 'suspend' | 'activate' | 'delete'
+    account: null,
+    loading: false,
+    error: ''
+  });
+
+  const handleTriggerAccountAction = (account, actionType) => {
+    setAccountActionState({
+      isOpen: true,
+      actionType,
+      account: {
+        id: account.id || account._id,
+        name: account.name || account.fullName || 'Manager',
+        role: account.role || 'manager',
+        status: account.status || 'Active',
+        identifier: account.email || account.mobile || account.phone || account.managerId || account.id
+      },
+      loading: false,
+      error: ''
+    });
+  };
+
+  const handleConfirmAccountAction = async (payload) => {
+    if (!accountActionState.account) return;
+    setAccountActionState(prev => ({ ...prev, loading: true, error: '' }));
+    try {
+      const id = accountActionState.account.id || accountActionState.account._id;
+      const res = await dataService.updateManagerAccountStatus(id, {
+        action: accountActionState.actionType,
+        reason: payload.reason || ''
+      });
+      if (res?.success) {
+        setAccountActionState(prev => ({ ...prev, isOpen: false, loading: false, account: null }));
+        await loadData();
+        if (viewTab === 'hierarchy') {
+          await loadAllManagers();
+        }
+      } else {
+        setAccountActionState(prev => ({ ...prev, loading: false, error: res?.message || 'Failed to update account status' }));
+      }
+    } catch (err) {
+      setAccountActionState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.response?.data?.message || err.message || 'Error updating manager account status'
+      }));
+    }
+  };
 
   // Resilient user extraction (supports auth state + localStorage fallback during rehydration)
   const effectiveUser = useMemo(() => {
@@ -303,7 +358,7 @@ export function StateManagers({ level }) {
   const loadAllManagers = async (force = false) => {
     if (!force && allManagers && allManagers.length > 0) return;
     try {
-      const allRes = await dataService.getManagers({ status: 'active' });
+      const allRes = await dataService.getManagers({ status: 'all' });
       if (allRes?.success && Array.isArray(allRes.subordinates || allRes.data || allRes.managers)) {
         setAllManagers(allRes.subordinates || allRes.data || allRes.managers || []);
       }
@@ -320,7 +375,7 @@ export function StateManagers({ level }) {
       const reqDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || queryDivision);
       const reqPincode = locking.pincodeLocked ? locking.defaultPincode : (selectedFilterPincode || queryPincode);
 
-      const qParams = { level: activeLevel, status: 'active' };
+      const qParams = { level: activeLevel, status: 'all' };
       if (reqState) qParams.state = reqState;
       if (reqDistrict) qParams.district = reqDistrict;
       if (reqDivision) qParams.division = reqDivision;
@@ -358,9 +413,16 @@ export function StateManagers({ level }) {
   }, [viewTab]);
 
   // Filtered managers based on status tab and hierarchy query
-  // Manager Directory strictly shows ONLY approved and activated managers.
   const filteredManagers = useMemo(() => {
-    let list = (managers || []).filter(m => (m.status || '').toLowerCase() === 'active');
+    let list = managers || [];
+    if (statusFilter && statusFilter !== 'all') {
+      const sf = statusFilter.toLowerCase();
+      if (sf === 'deleted') {
+        list = list.filter(m => (m.status || '').toLowerCase() === 'deleted' || m.isDeleted);
+      } else {
+        list = list.filter(m => (m.status || '').toLowerCase() === sf && !m.isDeleted);
+      }
+    }
     const effectiveState = locking.stateLocked ? locking.defaultState : (selectedFilterState || queryState);
     const effectiveDistrict = locking.districtLocked ? locking.defaultDistrict : (selectedFilterDistrict || queryDistrict);
     const effectiveDivision = locking.divisionLocked ? locking.defaultDivision : (selectedFilterDivision || queryDivision);
@@ -379,10 +441,12 @@ export function StateManagers({ level }) {
       list = list.filter(m => safeString(m.pincode || m.assignedPincode || m.pincodeCode) === safeString(effectivePincode));
     }
     return list;
-  }, [managers, queryState, queryDistrict, queryDivision, queryPincode, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, locking]);
+  }, [managers, statusFilter, queryState, queryDistrict, queryDivision, queryPincode, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode, locking]);
 
-  const activeCount = managers.filter(m => (m.status || '').toLowerCase() === 'active').length;
-  const totalCount = activeCount;
+  const totalCount = managers.length;
+  const activeCount = managers.filter(m => (m.status || '').toLowerCase() === 'active' && !m.isDeleted).length;
+  const suspendedCount = managers.filter(m => (m.status || '').toLowerCase() === 'suspended' && !m.isDeleted).length;
+  const deletedCount = managers.filter(m => (m.status || '').toLowerCase() === 'deleted' || m.isDeleted).length;
   const pendingCount = 0;
 
   const handleOpenModal = (manager) => {
@@ -1891,8 +1955,12 @@ export function StateManagers({ level }) {
       render: (row) => {
         const isPendingAdmin = row.status === 'under_review' || row.status === 'pending' || row.status === 'pending_admin_approval';
         const canApprove = canAdminApproveManagerRequest(effectiveUser, row);
+        const rowStatus = (row.status || 'Active').toLowerCase();
+        const isDeleted = rowStatus === 'deleted' || row.isDeleted;
+        const isSuspended = rowStatus === 'suspended';
+
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isPendingAdmin ? (
               <button
                 type="button"
@@ -1915,6 +1983,57 @@ export function StateManagers({ level }) {
                 <Eye className="w-3.5 h-3.5 text-slate-500" />
                 View Details
               </button>
+            )}
+
+            {!isPendingAdmin && (
+              isDeleted ? (
+                <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">
+                  Deactivated
+                </span>
+              ) : (
+                <>
+                  {isSuspended ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTriggerAccountAction(row, 'activate');
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer"
+                      title="Activate Account"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Activate</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTriggerAccountAction(row, 'suspend');
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 transition cursor-pointer"
+                      title="Suspend Account"
+                    >
+                      <UserX className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <span>Suspend</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerAccountAction(row, 'delete');
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800 transition cursor-pointer"
+                    title="Delete Account (Soft Delete)"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                    <span>Delete</span>
+                  </button>
+                </>
+              )
             )}
 
             {activeLevel === 'state' && (
@@ -2801,8 +2920,10 @@ export function StateManagers({ level }) {
             loading={loading}
             onRefresh={loadData}
             filterOptions={[
-              { label: `All Managers (${activeCount})`, value: 'all' },
-              { label: `Active Managers (${activeCount})`, value: 'active' }
+              { label: `All (${totalCount})`, value: 'all' },
+              { label: `Active (${activeCount})`, value: 'active' },
+              { label: `Suspended (${suspendedCount})`, value: 'suspended' },
+              { label: `Deleted (${deletedCount})`, value: 'deleted' }
             ]}
             activeFilter={statusFilter}
             onFilterChange={setStatusFilter}
@@ -2853,6 +2974,17 @@ export function StateManagers({ level }) {
           }
         />
       )}
+
+      {/* Account Action Modal (Suspend / Activate / Soft-Delete) */}
+      <AccountActionModal
+        isOpen={accountActionState.isOpen}
+        onClose={() => setAccountActionState(prev => ({ ...prev, isOpen: false, error: '' }))}
+        onConfirm={handleConfirmAccountAction}
+        actionType={accountActionState.actionType}
+        account={accountActionState.account}
+        loading={accountActionState.loading}
+        error={accountActionState.error}
+      />
 
       {/* Manager Registration & KYC Review Modal */}
       <ManagerApprovalModal
