@@ -237,8 +237,13 @@ class Collection extends Array {
       if (found) return found;
     }
     if (this._mongoCol) {
+      const { ObjectId } = require('mongodb');
+      const orClauses = [{ _id: id }, { id: id }, { _id: strId }, { id: strId }];
+      if (typeof strId === 'string' && ObjectId.isValid(strId) && strId.length === 24) {
+        orClauses.unshift({ _id: new ObjectId(strId) });
+      }
       return await this._mongoCol.findOne({
-        $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }]
+        $or: orClauses
       });
     }
     return Array.from(this).find(item => String(item._id || item.id) === strId) || null;
@@ -375,7 +380,12 @@ class Collection extends Array {
 
     let updated = null;
     if (this._mongoCol) {
-      const filter = { $or: [{ _id: id }, { id: id }, { _id: strId }, { id: strId }] };
+      const { ObjectId } = require('mongodb');
+      const orClauses = [{ _id: id }, { id: id }, { _id: strId }, { id: strId }];
+      if (typeof strId === 'string' && ObjectId.isValid(strId) && strId.length === 24) {
+        orClauses.unshift({ _id: new ObjectId(strId) });
+      }
+      const filter = { $or: orClauses };
       await this._mongoCol.updateOne(filter, { $set: { ...patch, updatedAt } });
       updated = await this._mongoCol.findOne(filter);
     }
@@ -414,7 +424,21 @@ class Collection extends Array {
     const cleanQuery = sanitizeQuery(query);
     let deletedCount = 0;
     if (this._mongoCol) {
-      const res = await this._mongoCol.deleteOne(cleanQuery);
+      let mongoQuery = { ...cleanQuery };
+      if (cleanQuery._id && typeof cleanQuery._id === 'string') {
+        const { ObjectId } = require('mongodb');
+        const strId = cleanQuery._id;
+        if (ObjectId.isValid(strId) && strId.length === 24) {
+          mongoQuery = {
+            $or: [
+              { _id: new ObjectId(strId) },
+              { _id: strId },
+              { id: strId }
+            ]
+          };
+        }
+      }
+      const res = await this._mongoCol.deleteOne(mongoQuery);
       deletedCount = res.deletedCount || 0;
     }
 

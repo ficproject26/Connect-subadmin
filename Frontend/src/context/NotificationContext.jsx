@@ -34,10 +34,12 @@ export const NotificationProvider = ({ children }) => {
   // Mark single notification as read
   const markAsRead = async (id) => {
     try {
-      await apiRequest(`/notifications/${id}/read`, { method: 'PATCH' });
+      const strId = String(id || '').trim();
+      if (!strId) return;
+      await apiRequest(`/notifications/${strId}/read`, { method: 'PATCH' });
 
       setNotifications(prev =>
-        prev.map(n => (n._id === id || n.id === id ? { ...n, isRead: true } : n))
+        prev.map(n => (String(n._id || n.id) === strId ? { ...n, isRead: true } : n))
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (err) {
@@ -60,14 +62,16 @@ export const NotificationProvider = ({ children }) => {
   // Delete / dismiss notification
   const removeNotification = async (id) => {
     try {
-      await apiRequest(`/notifications/${id}`, { method: 'DELETE' });
+      const strId = String(id || '').trim();
+      if (!strId) return;
+      await apiRequest(`/notifications/${strId}`, { method: 'DELETE' });
 
       setNotifications(prev => {
-        const item = prev.find(n => n._id === id || n.id === id);
+        const item = prev.find(n => String(n._id || n.id) === strId);
         if (item && !item.isRead) {
           setUnreadCount(c => Math.max(0, c - 1));
         }
-        return prev.filter(n => n._id !== id && n.id !== id);
+        return prev.filter(n => String(n._id || n.id) !== strId);
       });
     } catch (err) {
       console.error('Failed to delete notification:', err);

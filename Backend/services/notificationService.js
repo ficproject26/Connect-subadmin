@@ -4,7 +4,7 @@ const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db
 const clients = new Map();
 
 // Periodic heartbeat to keep SSE connections open through firewalls & proxies
-setInterval(() => {
+const heartbeatInterval = setInterval(() => {
   for (const [clientId, client] of clients.entries()) {
     try {
       client.res.write(': keep-alive\n\n');
@@ -13,6 +13,7 @@ setInterval(() => {
     }
   }
 }, 25000);
+if (typeof heartbeatInterval.unref === 'function') heartbeatInterval.unref();
 
 /**
  * Register an SSE client connection
@@ -276,15 +277,59 @@ function getNotificationsForUser(user, options = {}) {
  * Mark a single notification as read
  */
 async function markNotificationAsRead(id, userId) {
-  const notif = (db.notifications || []).find(n => n._id === id || n.id === id);
+  if (!id) return null;
+  const strId = String(id).trim();
+
+  // 1. Try finding in in-memory mirror with string comparison (handles string & ObjectId)
+  let notif = (db.notifications || []).find(n => String(n._id || n.id) === strId);
+
+  // 2. Fallback to direct MongoDB query if not found in memory (stale cache / external insert)
+  if (!notif && db.notifications?._mongoCol) {
+    const { ObjectId } = require('mongodb');
+    const orList = [{ _id: strId }, { id: strId }];
+    if (ObjectId.isValid(strId) && strId.length === 24) {
+      orList.unshift({ _id: new ObjectId(strId) });
+    }
+    try {
+      notif = await db.notifications._mongoCol.findOne({ $or: orList });
+      if (notif && !db.notifications.some(n => String(n._id || n.id) === strId)) {
+        db.notifications.push(notif);
+      }
+    } catch (err) {
+      console.error('Error fetching notification from mongo:', err.message);
+    }
+  }
+
   if (!notif) return null;
 
-  notif.readBy = notif.readBy || [];
-  if (userId && !notif.readBy.includes(String(userId))) {
-    notif.readBy.push(String(userId));
+  notif.readBy = Array.isArray(notif.readBy) ? notif.readBy : [];
+  const uId = userId ? String(userId) : null;
+  if (uId && !notif.readBy.some(r => String(r) === uId)) {
+    notif.readBy.push(uId);
   }
   notif.isRead = true;
-  await db.notifications.findByIdAndUpdate(notif._id, { readBy: notif.readBy, isRead: true });
+
+  // Persist to in-memory Collection mirror
+  if (db.notifications?.findByIdAndUpdate) {
+    await db.notifications.findByIdAndUpdate(notif._id || notif.id || strId, {
+      readBy: notif.readBy,
+      isRead: true
+    });
+  }
+
+  // Also guarantee persistence directly in MongoDB Atlas
+  if (db.notifications?._mongoCol) {
+    const { ObjectId } = require('mongodb');
+    const orList = [{ _id: strId }, { id: strId }];
+    if (ObjectId.isValid(strId) && strId.length === 24) {
+      orList.unshift({ _id: new ObjectId(strId) });
+    }
+    await db.notifications._mongoCol.updateOne(
+      { $or: orList },
+      { $set: { readBy: notif.readBy, isRead: true, updatedAt: new Date().toISOString() } }
+    ).catch(err => console.error('Failed to update mongo notification read:', err.message));
+  }
+
   return notif;
 }
 
@@ -315,10 +360,29 @@ async function markAllNotificationsAsRead(user) {
  * Delete / dismiss a notification
  */
 async function deleteNotification(id) {
-  if (db.notifications) {
-    return await db.notifications.deleteOne({ _id: id });
+  if (!id) return { deletedCount: 0 };
+  const strId = String(id).trim();
+  let deletedCount = 0;
+
+  if (db.notifications?._mongoCol) {
+    const { ObjectId } = require('mongodb');
+    const orList = [{ _id: strId }, { id: strId }];
+    if (ObjectId.isValid(strId) && strId.length === 24) {
+      orList.unshift({ _id: new ObjectId(strId) });
+    }
+    const res = await db.notifications._mongoCol.deleteOne({ $or: orList }).catch(() => ({ deletedCount: 0 }));
+    deletedCount = res.deletedCount || 0;
   }
-  return { deletedCount: 0 };
+
+  if (db.notifications) {
+    const idx = (db.notifications || []).findIndex(n => String(n._id || n.id) === strId);
+    if (idx !== -1) {
+      db.notifications.splice(idx, 1);
+      deletedCount = 1;
+    }
+  }
+
+  return { deletedCount };
 }
 
 // ─── HIGH-LEVEL EVENT DISPATCHERS ─────────────────────────────────────────────
