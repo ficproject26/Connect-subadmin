@@ -515,16 +515,16 @@ const getVendors = async (req, res) => {
       }
 
       // 2. Category & Subcategory
-      if (category && category !== 'All') {
+      if (category && category.trim().toLowerCase() !== 'all') {
         const cat = (v.category || '').toLowerCase();
         const cats = Array.isArray(v.categories) ? v.categories.map(c => c.toLowerCase()) : [];
         if (cat !== category.toLowerCase() && !cats.includes(category.toLowerCase())) return false;
       }
-      if (subCategory && subCategory !== 'All' && (v.subCategory || '').toLowerCase() !== subCategory.toLowerCase()) return false;
+      if (subCategory && subCategory.trim().toLowerCase() !== 'all' && (v.subCategory || '').toLowerCase() !== subCategory.toLowerCase()) return false;
 
       // 3. Status filter
-      if (status && status !== 'All') {
-        const sTarget = status.toLowerCase();
+      if (status && status.trim().toLowerCase() !== 'all') {
+        const sTarget = status.trim().toLowerCase();
         const vStat = (v.status || '').toLowerCase();
         if (sTarget === 'active') {
           if (vStat !== 'active' && vStat !== 'approved') return false;
@@ -542,26 +542,26 @@ const getVendors = async (req, res) => {
           return false;
         }
       }
-      if (kycStatus && kycStatus !== 'All' && (v.kycStatus || '').toLowerCase() !== kycStatus.toLowerCase()) return false;
+      if (kycStatus && kycStatus.trim().toLowerCase() !== 'all' && (v.kycStatus || '').toLowerCase() !== kycStatus.toLowerCase()) return false;
 
       // 4. Sub-location territory filters (strictly within authorized caller scope)
       // Case-insensitive + whitespace-normalized matching on resolved geo fields
-      if (state && state !== 'All') {
+      if (state && state.trim().toLowerCase() !== 'all') {
         const sNorm = state.trim().toLowerCase();
         const vState = (v.state || v.stateName || '').trim().toLowerCase();
         if (vState && vState !== sNorm) return false;
       }
-      if (district && district !== 'All') {
+      if (district && district.trim().toLowerCase() !== 'all') {
         const dNorm = district.trim().toLowerCase();
         const vDist = (v.district || v.districtName || '').trim().toLowerCase();
         if (vDist && vDist !== dNorm) return false;
       }
-      if (division && division !== 'All') {
+      if (division && division.trim().toLowerCase() !== 'all') {
         const divNorm = division.trim().toLowerCase().replace(/\s+division$/i, '');
         const vDiv = (v.division || v.divisionName || '').trim().toLowerCase().replace(/\s+division$/i, '');
         if (vDiv && vDiv !== divNorm) return false;
       }
-      if (pincode && pincode !== 'All') {
+      if (pincode && String(pincode).trim().toLowerCase() !== 'all') {
         const pinNorm = String(pincode).trim();
         const vPin = String(v.pincode || v.pincodeCode || '').trim();
         if (vPin && vPin !== pinNorm) return false;
@@ -1676,8 +1676,8 @@ const getVendorRequests = async (req, res) => {
     const { status, source, state, district, division, pincode, search } = req.query;
     let filtered = scoped;
 
-    if (status && status !== 'All') {
-      const sLow = status.toLowerCase();
+    if (status && status.trim().toLowerCase() !== 'all') {
+      const sLow = status.trim().toLowerCase();
       filtered = filtered.filter(v => {
         const vSt = (v.approvalStatus || v.status || '').toLowerCase();
         if (sLow === 'pending') {
@@ -1693,17 +1693,17 @@ const getVendorRequests = async (req, res) => {
       });
     }
 
-    if (state && state !== 'All') {
-      filtered = filtered.filter(v => (v.state || '').toLowerCase() === state.toLowerCase());
+    if (state && state.trim().toLowerCase() !== 'all') {
+      filtered = filtered.filter(v => (v.state || '').toLowerCase() === state.trim().toLowerCase());
     }
-    if (district && district !== 'All') {
-      filtered = filtered.filter(v => (v.district || '').toLowerCase() === district.toLowerCase());
+    if (district && district.trim().toLowerCase() !== 'all') {
+      filtered = filtered.filter(v => (v.district || '').toLowerCase() === district.trim().toLowerCase());
     }
-    if (division && division !== 'All') {
+    if (division && division.trim().toLowerCase() !== 'all') {
       const targetDiv = String(division).toLowerCase().replace(/\s+division$/i, '').trim();
       filtered = filtered.filter(v => String(v.division || '').toLowerCase().replace(/\s+division$/i, '').trim() === targetDiv);
     }
-    if (pincode && pincode !== 'All') {
+    if (pincode && String(pincode).trim().toLowerCase() !== 'all') {
       filtered = filtered.filter(v => String(v.pincode || '').trim() === String(pincode).trim());
     }
 
