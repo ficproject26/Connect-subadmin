@@ -132,6 +132,26 @@ export default async function handler(req, res) {
             } catch (e) {}
           }
 
+          // If upstream returned 500+ with HTML (e.g. Nginx 502 Bad Gateway during restart), return JSON with CORS
+          if (proxyRes.statusCode >= 500) {
+            const bodyStr = body.toString('utf8');
+            if (bodyStr.includes('<html') || bodyStr.includes('502 Bad Gateway') || (proxyRes.headers['content-type'] || '').includes('text/html')) {
+              res.setHeader('Content-Type', 'application/json');
+              res.setHeader('Access-Control-Allow-Origin', origin);
+              res.setHeader('Access-Control-Allow-Credentials', 'true');
+              const jsonBody = Buffer.from(JSON.stringify({
+                success: false,
+                message: 'Unable to connect to the server. Please try again.'
+              }));
+              res.setHeader('content-length', Buffer.byteLength(jsonBody));
+              return res.end(jsonBody);
+            }
+          }
+
+          // Always ensure CORS headers are maintained
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+
           if (!res.headersSent) {
             res.setHeader('content-length', Buffer.byteLength(body));
           }

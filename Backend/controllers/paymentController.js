@@ -9,7 +9,6 @@ function normalizeAgentPayment(item) {
   const amount = Number(item.amount ?? item.netSalary ?? item.salary ?? 0);
   const status = item.status || item.paymentStatus || 'Pending';
   const transactionRef = item.transactionRef || item.transactionReference || item.employeeCode || '-';
-  const pincode = item.pincode ? String(item.pincode) : '';
   const date = item.paymentDate || item.date || item.createdAt || '-';
   let state = item.state || '';
   let district = item.district || '';
