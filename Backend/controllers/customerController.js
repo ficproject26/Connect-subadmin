@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict, DISTRICT_STATE_MAP } = require('../config/db');
 
 const PIN_MAP = {
   '641666': { state: 'Tamil Nadu', district: 'Tirupur', division: 'Palladam' },
@@ -29,10 +29,15 @@ function resolvePinGeo(rawPin) {
   if (pin && db.pincodes) {
     const found = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === pin);
     if (found) {
+      let state = found.state || found.stateName || '';
+      let district = found.district || found.districtName || '';
+      if (!state && district) {
+        state = resolveStateFromDistrict(district) || '';
+      }
       return {
-        state: found.state || found.stateName || 'Tamil Nadu',
-        district: found.district || found.districtName || '',
-        division: found.division || found.divisionName || '',
+        state: state ? state.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : (PIN_MAP[pin]?.state || ''),
+        district: district || PIN_MAP[pin]?.district || '',
+        division: found.division || found.divisionName || PIN_MAP[pin]?.division || '',
         pincode: pin
       };
     }
@@ -100,38 +105,23 @@ function findCustomerCard(customer, indicesOrArray) {
 function enrichCustomer(c, indicesOrArray) {
   const addr0 = (c.addresses && c.addresses[0]) || {};
   const rawPin = String(c.pincode || addr0.pincode || '').trim();
-  const geo = PIN_MAP[rawPin] || {};
+  const geo = resolvePinGeo(rawPin);
 
-  let state = c.state || geo.state || addr0.state || '';
   let district = c.district || geo.district || addr0.city || c.city || '';
   let division = c.division || geo.division || '';
   let street = addr0.address || c.address || '';
   let locality = addr0.locality || '';
   let city = addr0.city || c.city || district || '';
 
-  const DISTRICT_STATE_MAP = {
-    'krishnagiri': 'Tamil Nadu',
-    'dharmapuri': 'Tamil Nadu',
-    'salem': 'Tamil Nadu',
-    'erode': 'Tamil Nadu',
-    'tirupur': 'Tamil Nadu',
-    'tiruppur': 'Tamil Nadu',
-    'coimbatore': 'Tamil Nadu',
-    'dindigul': 'Tamil Nadu',
-    'chennai': 'Tamil Nadu',
-    'namakkal': 'Tamil Nadu',
-    'madurai': 'Tamil Nadu',
-    'thiruvarur': 'Tamil Nadu',
-    'bengaluru urban': 'Karnataka',
-    'bangalore': 'Karnataka',
-    'thrissur': 'Kerala',
-    'ntr district': 'Andhra Pradesh',
-    'vijayawada': 'Andhra Pradesh'
-  };
-
-  const dLow = (district || '').toLowerCase().trim();
-  if (dLow && DISTRICT_STATE_MAP[dLow]) {
-    state = DISTRICT_STATE_MAP[dLow];
+  let state = geo.state || '';
+  if (!state && district) {
+    const derived = resolveStateFromDistrict(district);
+    if (derived) {
+      state = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+  }
+  if (!state) {
+    state = c.state || addr0.state || '';
   }
 
   if (!state && street) {
@@ -425,14 +415,20 @@ async function getMembershipCards(req, res) {
         const rawPin = String(ch.pincode || (cust && cust.pincode) || '').trim();
         const geo = resolvePinGeo(rawPin);
 
-        let state = ch.state || (cust && cust.state) || geo.state || 'Tamil Nadu';
         let district = ch.district || (cust && (cust.district || cust.city)) || geo.district || '';
         let division = ch.division || (cust && cust.division) || geo.division || '';
         let pincode = rawPin || (cust && cust.pincode) || '';
+        let state = geo.state || '';
 
-        if (district && district.toLowerCase() === 'salem') state = 'Tamil Nadu';
-        if (district && district.toLowerCase() === 'krishnagiri') state = 'Tamil Nadu';
-        if (district && district.toLowerCase() === 'dharmapuri') state = 'Tamil Nadu';
+        if (!state && district) {
+          const derived = resolveStateFromDistrict(district);
+          if (derived) {
+            state = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          }
+        }
+        if (!state) {
+          state = ch.state || (cust && cust.state) || '';
+        }
 
         const rawTier = ch.cardType || ch.tier || 'Silver';
         const tier = rawTier === 'Platinum' ? 'Diamond' : rawTier;

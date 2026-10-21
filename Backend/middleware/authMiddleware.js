@@ -82,6 +82,28 @@ async function authMiddleware(req, res, next) {
 
     const effectiveUser = dbUser ? { ...userPayload, ...dbUser } : userPayload;
 
+    // Preserve specialized administrative roles from token/adminRole when dbUser.role is generic 'admin'
+    if (userPayload.role && userPayload.role !== 'admin' && effectiveUser.role === 'admin') {
+      effectiveUser.role = userPayload.role;
+    }
+    if (effectiveUser.adminRole && (!effectiveUser.role || effectiveUser.role === 'admin')) {
+      const ar = String(effectiveUser.adminRole).toLowerCase().replace(/[_-]/g, ' ').trim();
+      if (ar.includes('state') || ar === 'state admin' || ar === 'state-admin') effectiveUser.role = 'State Admin';
+      else if (ar.includes('dist') || ar === 'district admin' || ar === 'district-admin') effectiveUser.role = 'District Admin';
+      else if (ar.includes('divis') || ar === 'division admin' || ar === 'division-admin') effectiveUser.role = 'Divisional Admin';
+      else if (ar.includes('pin') || ar === 'pincode admin' || ar === 'pincode-admin') effectiveUser.role = 'Pincode Admin';
+    }
+
+    // Synchronize territory fields between assigned* and primary coordinates
+    if (!effectiveUser.state && effectiveUser.assignedState) effectiveUser.state = effectiveUser.assignedState;
+    if (!effectiveUser.assignedState && effectiveUser.state) effectiveUser.assignedState = effectiveUser.state;
+    if (!effectiveUser.district && effectiveUser.assignedDistrict) effectiveUser.district = effectiveUser.assignedDistrict;
+    if (!effectiveUser.assignedDistrict && effectiveUser.district) effectiveUser.assignedDistrict = effectiveUser.district;
+    if (!effectiveUser.division && effectiveUser.assignedDivision) effectiveUser.division = effectiveUser.assignedDivision;
+    if (!effectiveUser.assignedDivision && effectiveUser.division) effectiveUser.assignedDivision = effectiveUser.division;
+    if (!effectiveUser.pincode && effectiveUser.assignedPincode) effectiveUser.pincode = effectiveUser.assignedPincode;
+    if (!effectiveUser.assignedPincode && effectiveUser.pincode) effectiveUser.assignedPincode = effectiveUser.pincode;
+
     // 3. Strict Account Status Check (Suspended, Blocked, Revoked, Inactive, Rejected, Deleted)
     if (isAccountBlockedOrSuspended(effectiveUser)) {
       const currentStatus = String(effectiveUser.status || 'inactive').toLowerCase();
@@ -135,8 +157,8 @@ async function authMiddleware(req, res, next) {
       });
     }
 
-    // Normalize canonical role title on authenticated user
-    effectiveUser.role = normalizeRoleName(effectiveUser.role);
+    // Normalize canonical role title on authenticated user, preserving territory level
+    effectiveUser.role = normalizeRoleName(effectiveUser.role, effectiveUser);
     req.user = effectiveUser;
     req.userId = userId;
 
@@ -155,9 +177,12 @@ function optionalAuth(req, res, next) {
         const decoded = verifyToken(token);
         const userPayload = decoded.user ? { ...decoded.user, ...decoded } : decoded;
         if (!userPayload.role && userPayload.adminRole) userPayload.role = userPayload.adminRole;
-        if ((userPayload.role === 'admin' || userPayload.role === 'super-admin') && (userPayload.adminRole === 'super-admin' || !userPayload.adminRole)) {
-          userPayload.role = 'Super Admin';
-        }
+        if (!userPayload.state && userPayload.assignedState) userPayload.state = userPayload.assignedState;
+        if (!userPayload.assignedState && userPayload.state) userPayload.assignedState = userPayload.state;
+        if (!userPayload.district && userPayload.assignedDistrict) userPayload.district = userPayload.assignedDistrict;
+        if (!userPayload.division && userPayload.assignedDivision) userPayload.division = userPayload.assignedDivision;
+        if (!userPayload.pincode && userPayload.assignedPincode) userPayload.pincode = userPayload.assignedPincode;
+        userPayload.role = normalizeRoleName(userPayload.role, userPayload);
         req.user = userPayload;
         req.userId = userPayload.id || userPayload._id;
       } catch (err) {}

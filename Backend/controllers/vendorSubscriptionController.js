@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 const { resolvePincodeHierarchy } = require('../utils/pincodeMapping');
 
 /**
@@ -56,10 +56,17 @@ const getVendorSubscriptions = async (req, res) => {
       const rawPincode = s.pincode || vendor?.pincode || '';
       const resolvedGeo = rawPincode ? resolvePincodeHierarchy(rawPincode) : null;
 
-      const state = s.state || vendor?.state || resolvedGeo?.stateName || '';
-      const district = s.district || vendor?.district || resolvedGeo?.districtName || '';
-      const division = s.division || vendor?.division || resolvedGeo?.divisionName || '';
-      const pincode = rawPincode || resolvedGeo?.pincode || '';
+      let state = s.state || vendor?.state || resolvedGeo?.stateName || '';
+      let district = s.district || vendor?.district || resolvedGeo?.districtName || '';
+      let division = s.division || vendor?.division || resolvedGeo?.divisionName || '';
+      let pincode = rawPincode || resolvedGeo?.pincode || '';
+
+      if (!state && district) {
+        const derived = resolveStateFromDistrict(district);
+        if (derived) {
+          state = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
 
       const stateId = s.stateId || vendor?.stateId || resolvedGeo?.stateId || null;
       const districtId = s.districtId || vendor?.districtId || resolvedGeo?.districtId || null;

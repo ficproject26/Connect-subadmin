@@ -829,29 +829,163 @@ const KNOWN_PINCODES = {
 };
 
 const DISTRICT_STATE_MAP = {
-  'krishnagiri': 'tamil nadu',
-  'dharmapuri': 'tamil nadu',
-  'salem': 'tamil nadu',
-  'erode': 'tamil nadu',
-  'tirupur': 'tamil nadu',
-  'tiruppur': 'tamil nadu',
-  'dindigul': 'tamil nadu',
-  'coimbatore': 'tamil nadu',
+  // Tamil Nadu (all 38 districts + verified aliases)
+  'ariyalur': 'tamil nadu',
+  'chengalpattu': 'tamil nadu',
   'chennai': 'tamil nadu',
-  'namakkal': 'tamil nadu',
+  'coimbatore': 'tamil nadu',
+  'cuddalore': 'tamil nadu',
+  'dharmapuri': 'tamil nadu',
+  'dindigul': 'tamil nadu',
+  'erode': 'tamil nadu',
+  'kallakurichi': 'tamil nadu',
+  'kanchipuram': 'tamil nadu',
+  'kanniyakumari': 'tamil nadu',
+  'kanyakumari': 'tamil nadu',
+  'karur': 'tamil nadu',
+  'krishnagiri': 'tamil nadu',
   'madurai': 'tamil nadu',
+  'mayiladuthurai': 'tamil nadu',
+  'nagapattinam': 'tamil nadu',
+  'namakkal': 'tamil nadu',
+  'nilgiris': 'tamil nadu',
+  'perambalur': 'tamil nadu',
+  'pudukkottai': 'tamil nadu',
+  'ramanathapuram': 'tamil nadu',
+  'ranipet': 'tamil nadu',
+  'salem': 'tamil nadu',
+  'sivagangai': 'tamil nadu',
+  'sivaganga': 'tamil nadu',
+  'tenkasi': 'tamil nadu',
+  'thanjavur': 'tamil nadu',
+  'theni': 'tamil nadu',
   'thiruvarur': 'tamil nadu',
+  'tiruvarur': 'tamil nadu',
+  'thoothukudi': 'tamil nadu',
+  'tuticorin': 'tamil nadu',
+  'tiruchirappalli': 'tamil nadu',
+  'trichy': 'tamil nadu',
+  'tirunelveli': 'tamil nadu',
+  'tirupattur': 'tamil nadu',
+  'tiruppur': 'tamil nadu',
+  'tirupur': 'tamil nadu',
+  'tiruvallur': 'tamil nadu',
+  'thiruvallur': 'tamil nadu',
+  'tiruvannamalai': 'tamil nadu',
+  'vellore': 'tamil nadu',
+  'viluppuram': 'tamil nadu',
+  'villupuram': 'tamil nadu',
+  'virudhunagar': 'tamil nadu',
+
+  // Karnataka (all verified districts + verified aliases)
   'bengaluru urban': 'karnataka',
+  'bengaluru rural': 'karnataka',
   'bangalore': 'karnataka',
+  'bengaluru': 'karnataka',
+  'ballari': 'karnataka',
+  'bellary': 'karnataka',
+  'belagavi': 'karnataka',
+  'belgaum': 'karnataka',
+  'bidar': 'karnataka',
+  'chitradurga': 'karnataka',
+  'dakshina kannada': 'karnataka',
+  'davanagere': 'karnataka',
+  'dharwad': 'karnataka',
+  'hassan': 'karnataka',
+  'kalaburagi': 'karnataka',
+  'gulbarga': 'karnataka',
+  'kolar': 'karnataka',
+  'mandya': 'karnataka',
+  'mysuru': 'karnataka',
+  'mysore': 'karnataka',
+  'raichur': 'karnataka',
+  'shivamogga': 'karnataka',
+  'shimoga': 'karnataka',
+  'tumakuru': 'karnataka',
+  'tumkur': 'karnataka',
+  'udupi': 'karnataka',
+  'uttara kannada': 'karnataka',
+  'vijayapura': 'karnataka',
+  'bijapur': 'karnataka',
+
+  // Kerala
   'thrissur': 'kerala',
+  'ernakulam': 'kerala',
+  'kochi': 'kerala',
+  'thiruvananthapuram': 'kerala',
+  'trivandrum': 'kerala',
+  'kozhikode': 'kerala',
+  'kollam': 'kerala',
+  'kannur': 'kerala',
+  'palakkad': 'kerala',
+  'malappuram': 'kerala',
+  'alappuzha': 'kerala',
+  'kottayam': 'kerala',
+  'wayanad': 'kerala',
+  'idukki': 'kerala',
+  'kasaragod': 'kerala',
+  'pathanamthitta': 'kerala',
+
+  // Andhra Pradesh
   'ntr district': 'andhra pradesh',
-  'vijayawada': 'andhra pradesh'
+  'vijayawada': 'andhra pradesh',
+  'visakhapatnam': 'andhra pradesh',
+  'guntur': 'andhra pradesh',
+  'tirupati': 'andhra pradesh',
+  'chittoor': 'andhra pradesh',
+  'kurnool': 'andhra pradesh',
+  'anantapur': 'andhra pradesh',
+  'nellore': 'andhra pradesh',
+  'kadapa': 'andhra pradesh',
+
+  // Gujarat
+  'ahmedabad': 'gujarat',
+  'surat': 'gujarat',
+  'vadodara': 'gujarat',
+  'rajkot': 'gujarat',
+  'bhavnagar': 'gujarat',
+  'jamnagar': 'gujarat',
+  'gandhinagar': 'gujarat',
+
+  // Pondicherry / Puducherry
+  'pondicherry': 'pondicherry',
+  'puducherry': 'pondicherry',
+  'karaikal': 'pondicherry',
+  'mahe': 'pondicherry',
+  'yanam': 'pondicherry'
 };
+
+/**
+ * Resolve state name from a verified district via static map or dynamic db.districts/db.states
+ */
+function resolveStateFromDistrict(districtName) {
+  if (!districtName) return null;
+  const dNorm = String(districtName).trim().toLowerCase();
+  if (DISTRICT_STATE_MAP[dNorm]) return DISTRICT_STATE_MAP[dNorm];
+
+  // Dynamic check against db.districts collection if available
+  if (db && db.districts && Array.isArray(db.districts)) {
+    const dObj = db.districts.find(d => String(d.name || '').trim().toLowerCase() === dNorm);
+    if (dObj) {
+      if (dObj.state) return String(dObj.state).trim().toLowerCase();
+      if (dObj.stateName) return String(dObj.stateName).trim().toLowerCase();
+      if (dObj.stateId && db.states && Array.isArray(db.states)) {
+        const sObj = db.states.find(s => String(s._id || s.id) === String(dObj.stateId));
+        if (sObj && sObj.name) return String(sObj.name).trim().toLowerCase();
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Extract unified geographic coordinates from any entity
  */
 function extractEntityGeo(item, pinLookup) {
+  if (!item || typeof item !== 'object') {
+    return { state: '', district: '', division: '', pincode: '', stateId: null, districtId: null, divisionId: null, pincodeId: null };
+  }
+
   const t = item.territory || {};
   const addr0 = (item.addresses && item.addresses[0]) || {};
   const sc = item.scope || {};
@@ -863,46 +997,78 @@ function extractEntityGeo(item, pinLookup) {
   let division = item.division || item.assignedDivision || t.division || addr0.division || sc.division || meta.division || deliv.division || '';
   let pincode = String(item.pincode || item.assignedPincode || item.pincodeCode || t.pincode || addr0.pincode || item.postalCode || sc.pincode || meta.pincode || deliv.pincode || '').trim();
 
-  // If geo is missing and entityId is present, resolve from entity
-  if (!pincode && !district && item.entityId) {
-    if (item.entityType === 'vendor' && db.vendors) {
-      const v = (db.vendors || []).find(x => String(x._id || x.id || x.vendorId) === String(item.entityId));
-      if (v) {
-        state = state || v.state;
-        district = district || v.district || v.city;
-        division = division || v.division;
-        pincode = pincode || v.pincode;
-      }
-    } else if ((item.entityType === 'task' || item.entityType === 'qc_task') && db.qcTasks) {
-      const tk = (db.qcTasks || []).find(x => String(x._id || x.id || x.taskId) === String(item.entityId));
-      if (tk) {
-        state = state || tk.state;
-        district = district || tk.district;
-        division = division || tk.division;
-        pincode = pincode || tk.pincode;
-      }
-    } else if (item.entityType === 'order' && db.orders) {
-      const od = (db.orders || []).find(x => String(x._id || x.id || x.orderId) === String(item.entityId));
-      if (od) {
-        state = state || od.state;
-        district = district || od.district;
-        division = division || od.division;
-        pincode = pincode || od.pincode;
-      }
+  // 1. Resolve from linked Vendor relationship (orders, subscriptions, vendor payments, settlements)
+  const vKey = item.vendor_id || item.vendorId || item.vendor || (item.entityType === 'vendor' ? item.entityId : null);
+  if (vKey && db.vendors) {
+    const vStr = String(vKey).trim();
+    const v = (db.vendors || []).find(x => String(x._id || x.id || x.vendorId || x.registrationId) === vStr);
+    if (v) {
+      if (!district) district = v.district || v.city;
+      if (!division) division = v.division;
+      if (!pincode) pincode = v.pincode;
+      if (!state && (v.state || v.assignedState)) state = v.state || v.assignedState;
     }
   }
 
-  // If pincode missing, search address and message text
-  const rawAddr = String(item.delivery_address || item.deliveryAddress || item.customer_address || item.customerAddress || item.shipping_address || item.shippingAddress || item.address || item.fullAddress || addr0.address || item.message || item.desc || item.title || '');
-  if (!pincode && rawAddr) {
-    const m = rawAddr.match(/\b\d{6}\b/);
-    if (m) pincode = m[0];
+  // 2. Resolve from linked Customer relationship (orders, cardholders)
+  const cKey = item.customerId || item.customer_id || item.memberId || (item.entityType === 'customer' ? item.entityId : null);
+  if (cKey && db.customers) {
+    const cStr = String(cKey).trim();
+    const c = (db.customers || []).find(x => String(x._id || x.id || x.customerId || x.memberId) === cStr);
+    if (c) {
+      const cAddr = (c.addresses && c.addresses[0]) || {};
+      if (!district) district = c.district || c.city || cAddr.city || cAddr.district;
+      if (!division) division = c.division || cAddr.division;
+      if (!pincode) pincode = c.pincode || cAddr.pincode;
+      // Do not trust corrupted 'karnataka' on customer records without verified pin/district check
+    }
   }
 
-  // If geo is missing, resolve from userId if available
-  if (!state && item.userId) {
-    const usr = (db.users || []).find(u => String(u._id || u.id) === String(item.userId)) ||
-                (db.managers || []).find(m => String(m._id || m.id) === String(item.userId));
+  // 3. Resolve from linked Agent relationship (agent payments, agent activities, tasks)
+  const aKey = item.agentId || item.agent_id || item.employeeCode || (item.entityType === 'agent' ? item.entityId : null);
+  if (aKey && db.agents) {
+    const aStr = String(aKey).trim();
+    const a = (db.agents || []).find(x => String(x._id || x.id || x.agentId || x.registrationId || x.employeeCode) === aStr);
+    if (a) {
+      if (!district) district = a.district || a.assignedDistrict;
+      if (!division) division = a.division || a.assignedDivision;
+      if (!pincode) pincode = a.pincode || a.assignedPincode;
+      if (!state && (a.state || a.assignedState)) state = a.state || a.assignedState;
+    }
+  }
+
+  // 4. Resolve from linked Task relationship (QC issues, notifications)
+  const tkKey = item.taskId || item.qcTaskId || item.task_id || ((item.entityType === 'task' || item.entityType === 'qc_task') ? item.entityId : null);
+  if (tkKey && db.qcTasks) {
+    const tkStr = String(tkKey).trim();
+    const tk = (db.qcTasks || []).find(x => String(x._id || x.id || x.taskId) === tkStr);
+    if (tk) {
+      if (!district) district = tk.district;
+      if (!division) division = tk.division;
+      if (!pincode) pincode = tk.pincode;
+      if (!state && tk.state) state = tk.state;
+    }
+  }
+
+  // 5. Resolve from linked Order relationship (notifications, delivery tracking, payments)
+  const odKey = item.orderId || item.order_id || item.orderNumber || (item.entityType === 'order' ? item.entityId : null);
+  if (odKey && db.orders) {
+    const odStr = String(odKey).trim();
+    const od = (db.orders || []).find(x => String(x._id || x.id || x.orderId || x.order_number) === odStr);
+    if (od) {
+      if (!district) district = od.district;
+      if (!division) division = od.division;
+      if (!pincode) pincode = od.pincode;
+      if (!state && od.state) state = od.state;
+    }
+  }
+
+  // 6. If geo is missing, resolve from userId/managerId if available
+  const uKey = item.userId || item.managerId;
+  if (uKey && (!state || !district)) {
+    const uStr = String(uKey).trim();
+    const usr = (db.users || []).find(u => String(u._id || u.id) === uStr) ||
+                (db.managers || []).find(m => String(m._id || m.id) === uStr);
     if (usr) {
       if (!state) state = usr.state || usr.assignedState;
       if (!district) district = usr.district || usr.assignedDistrict;
@@ -911,37 +1077,58 @@ function extractEntityGeo(item, pinLookup) {
     }
   }
 
-  // Lookup in dynamic + static pin table
+  // 7. If pincode missing, search address and message text
+  const rawAddr = String(item.delivery_address || item.deliveryAddress || item.customer_address || item.customerAddress || item.shipping_address || item.shippingAddress || item.address || item.fullAddress || addr0.address || item.message || item.desc || item.title || '');
+  if (!pincode && rawAddr) {
+    const m = rawAddr.match(/\b\d{6}\b/);
+    if (m) pincode = m[0];
+  }
+
+  // 8. Lookup in dynamic + static pin table
   if (pincode) {
-    const geo = pinLookup.get(pincode) || KNOWN_PINCODES[pincode];
+    const geo = (pinLookup && pinLookup.get(pincode)) || KNOWN_PINCODES[pincode];
     if (geo) {
-      if (!state && geo.state) state = geo.state;
+      // Verified pincode coordinates take precedence
+      if (geo.state) state = geo.state;
       if (!district && geo.district) district = geo.district;
       if (!division && geo.division) division = geo.division;
     }
   }
 
-  // If stateId is provided but state name is missing
+  // 9. District to State resolution
+  const dNorm = String(district || '').trim().toLowerCase();
+  if (dNorm) {
+    const verifiedState = resolveStateFromDistrict(dNorm);
+    if (verifiedState) {
+      // Override missing state or misattributed state (e.g. legacy customer state 'karnataka' with Salem/Dharmapuri district)
+      if (!state || (verifiedState !== state.toLowerCase() && (state.toLowerCase() === 'karnataka' || state.toLowerCase() === 'tamil nadu'))) {
+        state = verifiedState;
+      }
+    }
+  }
+
+  // 10. If stateId is provided but state name is missing
   if (!state && item.stateId) {
     const sId = String(item.stateId).toLowerCase();
     if (sId.includes('tn') || sId.includes('tamil')) state = 'tamil nadu';
     else if (sId.includes('ka') || sId.includes('karn')) state = 'karnataka';
     else if (sId.includes('kl') || sId.includes('ker')) state = 'kerala';
     else if (sId.includes('ap') || sId.includes('andhra')) state = 'andhra pradesh';
+    else if (sId.includes('gj') || sId.includes('guj')) state = 'gujarat';
+    else if (db && db.states && Array.isArray(db.states)) {
+      const sObj = db.states.find(s => String(s._id || s.id) === String(item.stateId));
+      if (sObj && sObj.name) state = sObj.name;
+    }
   }
 
-  // If district is known but state missing
-  const dNorm = String(district || '').trim().toLowerCase();
-  if (dNorm && DISTRICT_STATE_MAP[dNorm] && (!state || state.toLowerCase() === 'karnataka' && dNorm === 'salem')) {
-    state = DISTRICT_STATE_MAP[dNorm];
-  }
-
-  // String address / message fallback
+  // 11. String address / message fallback (only if state is still missing)
   if (!state && rawAddr) {
-    if (/tamil\s*nadu/i.test(rawAddr)) state = 'Tamil Nadu';
-    else if (/karnataka/i.test(rawAddr)) state = 'Karnataka';
-    else if (/kerala/i.test(rawAddr)) state = 'Kerala';
-    else if (/andhra\s*pradesh/i.test(rawAddr)) state = 'Andhra Pradesh';
+    if (/tamil\s*nadu/i.test(rawAddr)) state = 'tamil nadu';
+    else if (/karnataka/i.test(rawAddr)) state = 'karnataka';
+    else if (/kerala/i.test(rawAddr)) state = 'kerala';
+    else if (/andhra\s*pradesh/i.test(rawAddr)) state = 'andhra pradesh';
+    else if (/gujarat/i.test(rawAddr)) state = 'gujarat';
+    else if (/pondicherry|puducherry/i.test(rawAddr)) state = 'pondicherry';
   }
 
   return {
@@ -971,20 +1158,25 @@ function filterByLocation(items, user) {
   const isSuper = (role.includes('super admin') || role === 'superadmin' || rawRole === 'super-admin' || role.includes('kyc') || (user.adminLevel && user.adminLevel.toLowerCase() === 'kyc') || (role === 'admin' && !userAdminRole.includes('state') && !userAdminRole.includes('district') && !userAdminRole.includes('division') && !userAdminRole.includes('pincode') && !user.adminLevel)) && (!user.state || user.state.toLowerCase() === 'all india');
   if (isSuper) return items;
 
-  const { state, district, division, pincode, stateId, districtId, divisionId, pincodeId } = user;
-  const userState = (state || '').trim().toLowerCase();
-  const userDistrict = (district || '').trim().toLowerCase();
-  const userDivision = normDiv(division);
-  const userPincode = (pincode || '').trim();
+  const userState = (user.state || user.assignedState || '').trim().toLowerCase();
+  const userDistrict = (user.district || user.assignedDistrict || '').trim().toLowerCase();
+  const userDivision = normDiv(user.division || user.assignedDivision);
+  const userPincode = String(user.pincode || user.assignedPincode || '').trim();
+  const { stateId, districtId, divisionId, pincodeId } = user;
 
   // Index pincodes for fast geographic resolution
   const pinLookup = new Map();
   Array.from(pincodesCollection).forEach(p => {
     const code = String(p.code || p.pincode || '').trim();
     if (code) {
+      let pState = (p.state || '').trim().toLowerCase();
+      const pDistrict = (p.district || '').trim().toLowerCase();
+      if (!pState && pDistrict) {
+        pState = resolveStateFromDistrict(pDistrict) || '';
+      }
       pinLookup.set(code, {
-        state: (p.state || '').trim().toLowerCase(),
-        district: (p.district || '').trim().toLowerCase(),
+        state: pState,
+        district: pDistrict,
         division: normDiv(p.division)
       });
     }
@@ -1027,13 +1219,22 @@ function filterByLocation(items, user) {
     }
 
     // ── 4. STATE ADMIN (Level 1) ────────────────────────────────────
-    if (role.includes('state') || (role === 'admin' && (userState || userAdminRole.includes('state')))) {
+    if (role.includes('state') || userAdminRole.includes('state') || (role === 'admin' && (userState || userAdminRole.includes('state')))) {
       if (!userState || userState === 'all india') return true;
-      // Reject cross-state records
+
+      // Check matched state name
       if (geo.state) {
         return geo.state === userState || geo.state.includes(userState) || userState.includes(geo.state);
       }
+      // Check matched stateId
       if (stateId && item.stateId && String(item.stateId) === String(stateId)) return true;
+      // Check verified district mapping when state field was empty
+      if (geo.district) {
+        const derivedState = resolveStateFromDistrict(geo.district);
+        if (derivedState && (derivedState === userState || derivedState.includes(userState) || userState.includes(derivedState))) {
+          return true;
+        }
+      }
       return false;
     }
 
@@ -1044,8 +1245,12 @@ function filterByLocation(items, user) {
 module.exports = {
   db,
   Collection,
+  DISTRICT_STATE_MAP,
+  resolveStateFromDistrict,
+  extractEntityGeo,
   filterByLocation,
   initDatabase,
   syncHierarchyFromDatabase,
   syncHierarchyFromUsers: syncHierarchyFromDatabase
 };
+

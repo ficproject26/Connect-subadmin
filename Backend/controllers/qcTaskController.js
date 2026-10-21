@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 const notificationService = require('../services/notificationService');
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -709,6 +709,13 @@ const getTasks = async (req, res) => {
           if (!district) district = mgr.district || mgr.assignedDistrict || '';
           if (!division) division = mgr.division || mgr.assignedDivision || '';
           if (!pincode) pincode = String(mgr.pincode || mgr.assignedPincode || '').trim();
+        }
+      }
+
+      if (!state && district) {
+        const derived = resolveStateFromDistrict(district);
+        if (derived) {
+          state = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
       }
 

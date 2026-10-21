@@ -29,6 +29,8 @@ const MODULE_PERMISSIONS = {
   'Agent Payments': ['State Admin', 'District Admin', 'Divisional Admin', 'Division Admin', 'Pincode Admin']
 };
 
+const { resolveStateFromDistrict, DISTRICT_STATE_MAP } = require('../config/db');
+
 function hasPermission(role, moduleName) {
   const allowedRoles = MODULE_PERMISSIONS[moduleName];
   if (!allowedRoles) return true;
@@ -36,10 +38,22 @@ function hasPermission(role, moduleName) {
   return allowedRoles.includes(role) || allowedRoles.includes(normalized);
 }
 
-function normalizeAdminRole(role) {
+function normalizeAdminRole(role, user = null) {
   if (!role) return '';
   const r = String(role).toLowerCase().replace(/[_-]/g, ' ').trim();
-  if (r === 'super admin' || r === 'main admin' || r === 'superadmin' || r === 'admin') return 'Super Admin';
+  const adminRole = String(user?.adminRole || '').toLowerCase().replace(/[_-]/g, ' ').trim();
+  const assignedState = String(user?.state || user?.assignedState || '').trim();
+
+  // If role is generic 'admin', preserve actual administrative level if assigned
+  if (r === 'admin') {
+    if (adminRole.includes('state') || (assignedState && assignedState.toLowerCase() !== 'all india')) return 'State Admin';
+    if (adminRole.includes('district') || user?.district || user?.assignedDistrict) return 'District Admin';
+    if (adminRole.includes('division') || user?.division || user?.assignedDivision) return 'Division Admin';
+    if (adminRole.includes('pincode') || user?.pincode || user?.assignedPincode) return 'Pincode Admin';
+    return 'Super Admin';
+  }
+
+  if (r === 'super admin' || r === 'main admin' || r === 'superadmin') return 'Super Admin';
   if (r === 'state admin' || r === 'stateadmin') return 'State Admin';
   if (r === 'district admin' || r === 'districtadmin') return 'District Admin';
   if (r === 'division admin' || r === 'divisional admin' || r === 'divisionadmin' || r === 'divisionaladmin') return 'Division Admin';
@@ -61,7 +75,7 @@ function resolveAdminTerritory(user) {
     };
   }
 
-  const role = normalizeAdminRole(user.role);
+  const role = normalizeAdminRole(user.role, user);
   const state = (user.state || user.assignedState || '').trim();
   const district = (user.district || user.assignedDistrict || '').trim();
   const division = (user.division || user.assignedDivision || '').trim();
@@ -172,8 +186,17 @@ function isEntityInAdminTerritory(entity, territory) {
   const adminState = territory.state ? territory.state.trim().toLowerCase() : '';
   const adminStateId = territory.stateId;
 
-  // State check: must match state name or stateId
-  const stateMatch = (adminState && entState === adminState) || (adminStateId && entStateId && entStateId === adminStateId);
+  // State check: must match state name or stateId or verified district mapping
+  let stateMatch = (adminState && entState === adminState) || (adminStateId && entStateId && entStateId === adminStateId);
+  if (!stateMatch && adminState) {
+    const rawDist = String(entity.vendorDistrict || entity.district || '').trim().toLowerCase();
+    if (rawDist) {
+      const derived = resolveStateFromDistrict(rawDist);
+      if (derived && derived === adminState) {
+        stateMatch = true;
+      }
+    }
+  }
   if (!stateMatch) return false;
 
   if (territory.level === 'state') return true;

@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 const { getMongoDb } = require('../config/mongo');
 
 // Executives & Support Team
@@ -163,6 +163,14 @@ function getAgentTerritory(agent) {
     if (divObj) {
       if (!district && divObj.districtName) district = String(divObj.districtName).trim();
       if (!state && divObj.stateName) state = String(divObj.stateName).trim();
+    }
+  }
+
+  // If state is still missing but district is known, derive from verified district map
+  if (!state && district) {
+    const derived = resolveStateFromDistrict(district);
+    if (derived) {
+      state = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     }
   }
 

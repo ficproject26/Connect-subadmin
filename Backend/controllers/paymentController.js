@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 
 // --- AGENT PAYMENTS ---
 
@@ -11,6 +11,36 @@ function normalizeAgentPayment(item) {
   const transactionRef = item.transactionRef || item.transactionReference || item.employeeCode || '-';
   const pincode = item.pincode ? String(item.pincode) : '';
   const date = item.paymentDate || item.date || item.createdAt || '-';
+  let state = item.state || '';
+  let district = item.district || '';
+  let division = item.division || '';
+  let pincode = item.pincode ? String(item.pincode) : '';
+
+  const empKey = String(item.agentId || item.employeeId || item.employeeCode || '').trim();
+  if (empKey && (!district || !state)) {
+    const a = (Array.from(db.agents || [])).find(x => String(x.registrationId || x.agentId || x.employeeCode || x._id || x.id) === empKey);
+    if (a) {
+      if (!district) district = a.district || a.assignedDistrict || '';
+      if (!division) division = a.division || a.assignedDivision || '';
+      if (!pincode) pincode = String(a.pincode || a.assignedPincode || '').trim();
+      if (!state) state = a.state || a.assignedState || '';
+    } else {
+      const u = (Array.from(db.users || [])).find(x => String(x.employeeCode || x.loginId || x._id || x.id) === empKey);
+      if (u) {
+        if (!district) district = u.district || u.assignedDistrict || '';
+        if (!division) division = u.division || u.assignedDivision || '';
+        if (!pincode) pincode = String(u.pincode || u.assignedPincode || '').trim();
+        if (!state) state = u.state || u.assignedState || '';
+      }
+    }
+  }
+
+  if (!state && district) {
+    const derived = resolveStateFromDistrict(district);
+    if (derived) {
+      state = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+  }
 
   return {
     ...item,
@@ -22,9 +52,9 @@ function normalizeAgentPayment(item) {
     transactionRef,
     pincode,
     date,
-    state: item.state || '',
-    district: item.district || '',
-    division: item.division || ''
+    state,
+    district,
+    division
   };
 }
 
@@ -258,7 +288,12 @@ function getVendorPayments(req, res) {
         }
       }
 
-      if (!state) state = 'Tamil Nadu';
+      if (!state && district) {
+        const derived = resolveStateFromDistrict(district);
+        if (derived) {
+          state = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
 
       const dateSource = item.createdAt || item.dueDate || item.settlementDate || item.paymentDate;
       const requestDate = formatPaymentDate(dateSource);

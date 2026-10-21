@@ -17,15 +17,52 @@ const AUTHORIZED_APP_ROLES = [
   'Pincode Admin'
 ];
 
-// Normalize role string into canonical representation
-const normalizeRoleName = (role) => {
-  if (!role) return '';
-  const r = String(role).toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
-  if (r === 'super admin' || r === 'main admin' || r === 'superadmin' || r === 'admin') return 'Super Admin';
-  if (r === 'state admin' || r === 'stateadmin') return 'State Admin';
-  if (r === 'district admin' || r === 'districtadmin') return 'District Admin';
-  if (r === 'divisional admin' || r === 'division admin' || r === 'divisionaladmin' || r === 'divisionadmin') return 'Divisional Admin';
-  if (r === 'pincode admin' || r === 'pincodeadmin') return 'Pincode Admin';
+// Normalize role string into canonical representation, preserving administrative level
+const normalizeRoleName = (role, user = null) => {
+  if (!role && !user) return '';
+
+  const userObj = (typeof role === 'object' && role !== null) ? role : (user || {});
+  const rawRoleStr = typeof role === 'string' ? role : (userObj.role || userObj.adminRole || '');
+  const r = String(rawRoleStr).toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+  const ar = String(userObj.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
+
+  // 1. Explicit adminRole or sub-admin role strings
+  if (r === 'state admin' || r === 'stateadmin' || ar === 'state admin' || ar === 'state-admin' || ar === 'stateadmin') return 'State Admin';
+  if (r === 'district admin' || r === 'districtadmin' || ar === 'district admin' || ar === 'district-admin' || ar === 'districtadmin') return 'District Admin';
+  if (r === 'divisional admin' || r === 'division admin' || r === 'divisionaladmin' || r === 'divisionadmin' || ar.includes('divis')) return 'Divisional Admin';
+  if (r === 'pincode admin' || r === 'pincodeadmin' || ar.includes('pincode') || ar === 'pin-admin') return 'Pincode Admin';
+
+  // 2. Generic 'admin' role disambiguation based on user assigned territories
+  if (r === 'admin') {
+    if (ar.includes('state')) return 'State Admin';
+    if (ar.includes('dist')) return 'District Admin';
+    if (ar.includes('divis')) return 'Divisional Admin';
+    if (ar.includes('pin')) return 'Pincode Admin';
+
+    // If assigned to a state without lower level assignments (district/division/pincode), it is State Admin
+    const hasState = Boolean(userObj.state || userObj.assignedState);
+    const hasDist = Boolean(userObj.district || userObj.assignedDistrict);
+    const hasDiv = Boolean(userObj.division || userObj.assignedDivision);
+    const hasPin = Boolean(userObj.pincode || userObj.assignedPincode);
+
+    if (hasState && !hasDist && !hasDiv && !hasPin) {
+      const stateVal = String(userObj.state || userObj.assignedState || '').trim().toLowerCase();
+      if (stateVal && stateVal !== 'all india') {
+        return 'State Admin';
+      }
+    } else if (hasDist && !hasDiv && !hasPin) {
+      return 'District Admin';
+    } else if (hasDiv && !hasPin) {
+      return 'Divisional Admin';
+    } else if (hasPin) {
+      return 'Pincode Admin';
+    }
+
+    return 'Super Admin';
+  }
+
+  if (r === 'super admin' || r === 'main admin' || r === 'superadmin') return 'Super Admin';
+
   return role;
 };
 
@@ -49,7 +86,7 @@ const isRoleAuthorizedForApp = (roleOrUser) => {
     return false;
   }
 
-  const normalized = normalizeRoleName(roleStr);
+  const normalized = normalizeRoleName(roleStr, typeof roleOrUser === 'object' ? roleOrUser : null);
   return AUTHORIZED_APP_ROLES.includes(normalized) || AUTHORIZED_APP_ROLES.includes(roleStr);
 };
 

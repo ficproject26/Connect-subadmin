@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 const { getComprehensiveVendorDirectory } = require('../utils/vendorDirectory');
 
 // Helper to format ISO date string into readable order date
@@ -113,21 +113,42 @@ function normalizeOrder(order, pinMap, vendorMap, historyMap, productMap, custom
     else if (addrUpper.includes('NAGARBHAVI') || addrUpper.includes('BOMMANAHALLI') || addrUpper.includes('PAPAREDDYPALYA')) division = 'Bengaluru South';
   }
 
-  if (!state && (district || customerAddress || pincode)) {
-    const addrLower = (customerAddress || '').toLowerCase();
-    const distLower = (district || '').toLowerCase();
-    if (addrLower.includes('karnataka') || distLower.includes('bengaluru') || distLower.includes('bangalore') || String(pincode).startsWith('560')) {
-      state = 'Karnataka';
-    } else if (addrLower.includes('kerala') || distLower.includes('thrissur') || String(pincode).startsWith('680')) {
-      state = 'Kerala';
-    } else {
-      state = 'Tamil Nadu';
-    }
-  }
-
   // Vendor Enrichment from comprehensive vendor directory (vendors, users, businesses, settlements)
   const vendorKey = String(order.vendor_id || order.vendorId || '').trim();
   const matchedVendor = (vendorKey && vendorMap) ? (vendorMap.get(vendorKey) || vendorMap.get(vendorKey.toLowerCase())) : null;
+
+  // Inherit missing customer delivery geo from fulfilling vendor if order geo was completely unprovided
+  if (!district && matchedVendor && (matchedVendor.district || matchedVendor.city)) district = matchedVendor.district || matchedVendor.city;
+  if (!division && matchedVendor && matchedVendor.division) division = matchedVendor.division;
+  if (!pincode && matchedVendor && matchedVendor.pincode) pincode = String(matchedVendor.pincode).trim();
+  if (!state && matchedVendor && matchedVendor.state) state = matchedVendor.state;
+
+  // Derive state from verified district
+  if (!state && district) {
+    const vState = resolveStateFromDistrict(district);
+    if (vState) {
+      state = vState === 'tamil nadu' ? 'Tamil Nadu' : vState === 'karnataka' ? 'Karnataka' : vState === 'kerala' ? 'Kerala' : vState === 'andhra pradesh' ? 'Andhra Pradesh' : vState === 'gujarat' ? 'Gujarat' : vState === 'pondicherry' ? 'Pondicherry' : vState;
+    }
+  }
+
+  // Address and pincode prefix resolution
+  if (!state && (district || customerAddress || pincode)) {
+    const addrLower = (customerAddress || '').toLowerCase();
+    const pStr = String(pincode || '').trim();
+    if (addrLower.includes('karnataka') || pStr.startsWith('56') || pStr.startsWith('57') || pStr.startsWith('58') || pStr.startsWith('59')) {
+      state = 'Karnataka';
+    } else if (addrLower.includes('kerala') || pStr.startsWith('67') || pStr.startsWith('68') || pStr.startsWith('69')) {
+      state = 'Kerala';
+    } else if (addrLower.includes('andhra') || pStr.startsWith('51') || pStr.startsWith('52') || pStr.startsWith('53')) {
+      state = 'Andhra Pradesh';
+    } else if (addrLower.includes('gujarat') || pStr.startsWith('36') || pStr.startsWith('37') || pStr.startsWith('38') || pStr.startsWith('39')) {
+      state = 'Gujarat';
+    } else if (pStr.startsWith('605') || addrLower.includes('pondicherry') || addrLower.includes('puducherry')) {
+      state = 'Pondicherry';
+    } else if (addrLower.includes('tamil nadu') || pStr.startsWith('60') || pStr.startsWith('61') || pStr.startsWith('62') || pStr.startsWith('63') || pStr.startsWith('64')) {
+      state = 'Tamil Nadu';
+    }
+  }
 
   const vendorName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorName || matchedVendor.name || 'Vendor Merchant') : (order.vendorBusinessName || order.vendorName || (vendorKey ? 'Vendor information unavailable' : 'Unassigned'));
   const vendorBusinessName = matchedVendor ? (matchedVendor.businessName || matchedVendor.vendorName || vendorName) : (order.vendorBusinessName || vendorName);

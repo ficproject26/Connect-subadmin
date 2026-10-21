@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 const { resolvePincodeHierarchy } = require('../utils/pincodeMapping');
 const { resolveResponsibleAdmin, isUserAuthorizedForVendor } = require('../utils/adminResolver');
 const { getScopeFilter, isVendorInScope } = require('../middleware/scopeMiddleware');
@@ -360,10 +360,18 @@ const populateVendorLocations = (vendor, ctx = null) => {
   const division = vendor.divisionId ? context.divisionIdMap.get(String(vendor.divisionId)) : (vendor.division ? context.divisionNameMap.get(String(vendor.division).trim().toLowerCase()) : null);
   const pincode = vendor.pincodeId ? context.pincodeIdMap.get(String(vendor.pincodeId)) : (vendor.pincode ? context.pincodeCodeMap.get(String(vendor.pincode).trim()) : null);
 
-  const stateName = vendor.state || state?.name || '';
-  const districtName = vendor.district || district?.name || '';
-  const divisionName = vendor.division || division?.name || '';
-  const pincodeCode = vendor.pincode || pincode?.code || '';
+  let districtName = vendor.district || district?.name || pincode?.district || '';
+  let divisionName = vendor.division || division?.name || pincode?.division || '';
+  let pincodeCode = vendor.pincode || pincode?.code || '';
+  let stateName = vendor.state || state?.name || pincode?.state || '';
+
+  if (!stateName && districtName) {
+    const derived = resolveStateFromDistrict(districtName);
+    if (derived) {
+      stateName = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+  }
+
   const pincodeArea = pincode?.areaName || vendor.address || '';
 
   const addedBy = resolveOnboardedBy(vendor, context);

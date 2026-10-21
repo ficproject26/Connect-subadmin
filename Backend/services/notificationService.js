@@ -1,4 +1,4 @@
-const { db, filterByLocation } = require('../config/db');
+const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 
 // In-memory active SSE clients: Map<clientId, { res, user, connectedAt }>
 const clients = new Map();
@@ -85,6 +85,37 @@ function isNotificationInScope(notification, user) {
   let resolvedDivision = nScope.division || meta.division || notification.division;
   let resolvedPincode = nScope.pincode || meta.pincode || notification.pincode;
 
+  // Resolve from linked entity if present
+  if (notification.entityId) {
+    const eId = String(notification.entityId).trim();
+    const eType = String(notification.entityType || '').toLowerCase();
+    if (eType === 'vendor' && db.vendors) {
+      const v = (db.vendors || []).find(x => String(x._id || x.id || x.vendorId) === eId);
+      if (v) {
+        if (!resolvedState) resolvedState = v.state;
+        if (!resolvedDistrict) resolvedDistrict = v.district || v.city;
+        if (!resolvedDivision) resolvedDivision = v.division;
+        if (!resolvedPincode) resolvedPincode = v.pincode;
+      }
+    } else if ((eType === 'task' || eType === 'qc_task') && db.qcTasks) {
+      const tk = (db.qcTasks || []).find(x => String(x._id || x.id || x.taskId) === eId);
+      if (tk) {
+        if (!resolvedState) resolvedState = tk.state;
+        if (!resolvedDistrict) resolvedDistrict = tk.district;
+        if (!resolvedDivision) resolvedDivision = tk.division;
+        if (!resolvedPincode) resolvedPincode = tk.pincode;
+      }
+    } else if (eType === 'order' && db.orders) {
+      const od = (db.orders || []).find(x => String(x._id || x.id || x.orderId || x.order_number) === eId);
+      if (od) {
+        if (!resolvedState) resolvedState = od.state;
+        if (!resolvedDistrict) resolvedDistrict = od.district;
+        if (!resolvedDivision) resolvedDivision = od.division;
+        if (!resolvedPincode) resolvedPincode = od.pincode;
+      }
+    }
+  }
+
   if (!resolvedState && notification.userId) {
     const creator = (db.users || []).find(u => String(u._id || u.id) === String(notification.userId)) ||
                     (db.managers || []).find(m => String(m._id || m.id) === String(notification.userId));
@@ -93,6 +124,13 @@ function isNotificationInScope(notification, user) {
       resolvedDistrict = resolvedDistrict || creator.district || creator.assignedDistrict;
       resolvedDivision = resolvedDivision || creator.division || creator.assignedDivision;
       resolvedPincode = resolvedPincode || creator.pincode || creator.assignedPincode;
+    }
+  }
+
+  if (!resolvedState && resolvedDistrict) {
+    const derived = resolveStateFromDistrict(resolvedDistrict);
+    if (derived) {
+      resolvedState = derived.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     }
   }
 
