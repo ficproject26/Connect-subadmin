@@ -26,10 +26,19 @@ export function MembershipCardsView({ title = 'Membership Cards Directory', subt
   const [selectedPincode, setSelectedPincode] = useState(locking.defaultPincode || '');
   const [territoryTree, setTerritoryTree] = useState([]);
 
+  // Sync locked territory when user profile loads
+  useEffect(() => {
+    if (locking.stateLocked && locking.defaultState) setSelectedState(locking.defaultState);
+    if (locking.districtLocked && locking.defaultDistrict) setSelectedDistrict(locking.defaultDistrict);
+    if (locking.divisionLocked && locking.defaultDivision) setSelectedDivision(locking.defaultDivision);
+    if (locking.pincodeLocked && locking.defaultPincode) setSelectedPincode(locking.defaultPincode);
+  }, [locking]);
+
   useEffect(() => {
     let isMounted = true;
     dataService.getTerritoryHierarchy().then(res => {
-      if (isMounted && res?.data) setTerritoryTree(res.data);
+      if (isMounted && res?.success && Array.isArray(res.hierarchy)) setTerritoryTree(res.hierarchy);
+      else if (isMounted && res?.data) setTerritoryTree(res.data);
     }).catch(() => {});
     return () => { isMounted = false; };
   }, []);
@@ -37,12 +46,17 @@ export function MembershipCardsView({ title = 'Membership Cards Directory', subt
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const reqState = locking.stateLocked ? locking.defaultState : selectedState;
+      const reqDistrict = locking.districtLocked ? locking.defaultDistrict : selectedDistrict;
+      const reqDivision = locking.divisionLocked ? locking.defaultDivision : selectedDivision;
+      const reqPincode = locking.pincodeLocked ? locking.defaultPincode : selectedPincode;
+
       const params = {
         tier: tierFilter || undefined,
-        state: selectedState || undefined,
-        district: selectedDistrict || undefined,
-        division: selectedDivision || undefined,
-        pincode: selectedPincode || undefined
+        state: reqState || undefined,
+        district: reqDistrict || undefined,
+        division: reqDivision || undefined,
+        pincode: reqPincode || undefined
       };
       const res = await dataService.getMembershipCards(params);
       if (res && res.success) {
@@ -56,7 +70,7 @@ export function MembershipCardsView({ title = 'Membership Cards Directory', subt
     } finally {
       setLoading(false);
     }
-  }, [tierFilter, selectedState, selectedDistrict, selectedDivision, selectedPincode]);
+  }, [tierFilter, locking, selectedState, selectedDistrict, selectedDivision, selectedPincode]);
 
   useEffect(() => {
     loadData();

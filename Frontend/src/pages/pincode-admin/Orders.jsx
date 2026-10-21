@@ -25,7 +25,11 @@ export function PincodeOrders() {
       if (res.success) {
         let list = res.orders || [];
         if (pincode) {
-          const filtered = list.filter(o => String(o.pincode) === String(pincode));
+          const pinStr = String(pincode).trim();
+          const filtered = list.filter(o =>
+            String(o.pincode || o.deliveryPincode || '').trim() === pinStr ||
+            String(o.vendorPincode || '').trim() === pinStr
+          );
           if (filtered.length > 0) list = filtered;
         }
         setOrders(list);

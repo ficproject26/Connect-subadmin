@@ -28,7 +28,7 @@ function isFullyOnboardedVendor(v, options = {}) {
     kycStatus.includes('reject') ||
     pinStatus === 'rejected' ||
     kycTeamStatus === 'rejected' ||
-    v.isApproved === false
+    (v.isApproved === false && status !== 'active' && status !== 'approved')
   ) {
     return false;
   }
@@ -37,7 +37,7 @@ function isFullyOnboardedVendor(v, options = {}) {
     if (!allowSuspended) return false;
   } else if (isDeletedAccount) {
     if (!allowDeleted) return false;
-  } else if (v.isActive === false) {
+  } else if (v.isActive === false && status !== 'active' && status !== 'approved') {
     return false;
   }
 
@@ -46,6 +46,8 @@ function isFullyOnboardedVendor(v, options = {}) {
     status.includes('pending') ||
     status === 'under review' ||
     status === 'submitted' ||
+    status === 'draft' ||
+    status === 'incomplete' ||
     appStatus.includes('pending') ||
     appStatus === 'under review' ||
     appStatus === 'submitted' ||
@@ -54,7 +56,7 @@ function isFullyOnboardedVendor(v, options = {}) {
     return false;
   }
 
-  // 3. Pending Stage 2 (KYC Team review) or incomplete intermediate stage
+  // 3. Intermediate pending approval states
   if (
     appStatus === 'pincode_approved' ||
     appStatus === 'pincode admin approved' ||
@@ -63,30 +65,18 @@ function isFullyOnboardedVendor(v, options = {}) {
     status === 'additional info required' ||
     appStatus === 'additional_information_required' ||
     kycTeamStatus === 'pending' ||
-    kycTeamStatus.includes('additional') ||
-    kycStatus.includes('pending') ||
-    kycStatus.includes('review') ||
-    kycStatus.includes('verification') ||
-    kycStatus.includes('additional')
+    kycTeamStatus.includes('additional')
   ) {
     return false;
   }
 
-  // 4. Must have cleared KYC or approved KYC
-  const isKycCleared = kycStatus === 'verified' || kycStatus === 'kyc approved' || kycStatus === 'approved';
-  const isAppCleared = appStatus === 'kyc_approved' || appStatus === 'approved' || !appStatus;
-
-  if (!isKycCleared && kycStatus) {
+  // 4. Must be in active or approved operational state
+  const isOperational = status === 'active' || status === 'approved';
+  if (!isOperational) {
     return false;
   }
 
-  if (isSuspendedAccount || isDeletedAccount) {
-    return isKycCleared || isAppCleared;
-  }
-
-  // 5. Must be in active or approved operational state
-  const isOperational = status === 'active' || status === 'approved';
-  return isOperational && (isKycCleared || isAppCleared);
+  return true;
 }
 
 module.exports = {

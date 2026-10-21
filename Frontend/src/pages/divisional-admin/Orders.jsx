@@ -25,9 +25,12 @@ export function DivisionalOrders() {
       if (res.success) {
         let list = res.orders || [];
         if (divisionName) {
-          const filtered = list.filter(
-            o => (o.division || '')?.toLowerCase() === divisionName.toLowerCase()
-          );
+          const cleanDiv = divisionName.toLowerCase().replace(/\s+division$/i, '').trim();
+          const filtered = list.filter(o => {
+            const destDiv = String(o.division || o.deliveryDivision || '').toLowerCase().replace(/\s+division$/i, '').trim();
+            const vendDiv = String(o.vendorDivision || '').toLowerCase().replace(/\s+division$/i, '').trim();
+            return destDiv === cleanDiv || vendDiv === cleanDiv;
+          });
           if (filtered.length > 0) {
             list = filtered;
           }

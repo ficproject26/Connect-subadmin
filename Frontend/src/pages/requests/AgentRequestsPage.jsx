@@ -49,19 +49,21 @@ export function AgentRequestsPage() {
   
   // Role-specific level options based on locking.tier:
   // - State Admin / Super: All Levels, State, District, Division, Pincode
-  // - District Admin: District, Division, Pincode (remove All Levels and State)
-  // - Divisional Admin: Division, Pincode (remove All Levels, State, and District)
+  // - District Admin: All Levels, District, Division, Pincode
+  // - Divisional Admin: All Levels, Division, Pincode
   // - Pincode Admin: None (entire level control removed)
   const availableLevels = useMemo(() => {
     if (locking.tier === 'pincode') return [];
     if (locking.tier === 'division') {
       return [
+        { id: 'All', label: 'All Levels' },
         { id: 'divisional', label: 'Division' },
         { id: 'pincode', label: 'Pincode' }
       ];
     }
     if (locking.tier === 'district') {
       return [
+        { id: 'All', label: 'All Levels' },
         { id: 'district', label: 'District' },
         { id: 'divisional', label: 'Division' },
         { id: 'pincode', label: 'Pincode' }
@@ -76,20 +78,11 @@ export function AgentRequestsPage() {
     ];
   }, [locking.tier]);
 
-  const [selectedRoleLevel, setSelectedRoleLevel] = useState(() => {
-    if (locking.tier === 'pincode') return 'pincode';
-    if (locking.tier === 'division') return 'divisional';
-    if (locking.tier === 'district') return 'district';
-    return 'All';
-  });
+  const [selectedRoleLevel, setSelectedRoleLevel] = useState('All');
 
   useEffect(() => {
     if (locking.tier === 'pincode') {
       setSelectedRoleLevel('pincode');
-    } else if (locking.tier === 'division' && selectedRoleLevel !== 'divisional' && selectedRoleLevel !== 'pincode') {
-      setSelectedRoleLevel('divisional');
-    } else if (locking.tier === 'district' && !['district', 'divisional', 'pincode'].includes(selectedRoleLevel)) {
-      setSelectedRoleLevel('district');
     }
   }, [locking.tier]);
 

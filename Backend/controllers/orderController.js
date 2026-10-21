@@ -456,8 +456,12 @@ async function getOrders(req, res) {
     }
 
     if (division && division !== 'all') {
-      const divNorm = division.toLowerCase();
-      filtered = filtered.filter(o => (o.division || '').toLowerCase() === divNorm || (o.vendorDivision || '').toLowerCase() === divNorm);
+      const divNorm = division.toLowerCase().replace(/\s+division$/i, '').trim();
+      filtered = filtered.filter(o => {
+        const d1 = (o.division || '').toLowerCase().replace(/\s+division$/i, '').trim();
+        const d2 = (o.vendorDivision || '').toLowerCase().replace(/\s+division$/i, '').trim();
+        return d1 === divNorm || d2 === divNorm;
+      });
     }
 
     // Stable newest-first sorting by date with secondary sort on orderNumber

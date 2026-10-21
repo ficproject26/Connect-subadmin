@@ -1,14 +1,14 @@
 const { db, filterByLocation } = require('../config/db');
 
-// Pincode to location dictionary for enriching customer data
 const PIN_MAP = {
   '641666': { state: 'Tamil Nadu', district: 'Tirupur', division: 'Palladam' },
   '635305': { state: 'Tamil Nadu', district: 'Dharmapuri', division: 'Harur Division' },
+  '636901': { state: 'Tamil Nadu', district: 'Dharmapuri', division: 'Harur Division' },
   '635002': { state: 'Tamil Nadu', district: 'Krishnagiri', division: 'Krishnagiri Division' },
   '635001': { state: 'Tamil Nadu', district: 'Krishnagiri', division: 'Krishnagiri Division' },
   '635109': { state: 'Tamil Nadu', district: 'Krishnagiri', division: 'Hosur Division' },
   '635110': { state: 'Tamil Nadu', district: 'Krishnagiri', division: 'Hosur Division' },
-  '636112': { state: 'Tamil Nadu', district: 'Salem', division: 'Attur Division' },
+  '636112': { state: 'Tamil Nadu', district: 'Salem', division: 'Thalaivasal' },
   '636114': { state: 'Tamil Nadu', district: 'Salem', division: 'Attur Division' },
   '636001': { state: 'Tamil Nadu', district: 'Salem', division: 'Salem North' },
   '636002': { state: 'Tamil Nadu', district: 'Salem', division: 'Salem North' },
@@ -23,6 +23,22 @@ const PIN_MAP = {
   '680618': { state: 'Kerala', district: 'Thrissur', division: 'Thrissur South' },
   '520001': { state: 'Andhra Pradesh', district: 'NTR District', division: 'Vijayawada Central' }
 };
+
+function resolvePinGeo(rawPin) {
+  const pin = String(rawPin || '').trim();
+  if (pin && db.pincodes) {
+    const found = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === pin);
+    if (found) {
+      return {
+        state: found.state || found.stateName || 'Tamil Nadu',
+        district: found.district || found.districtName || '',
+        division: found.division || found.divisionName || '',
+        pincode: pin
+      };
+    }
+  }
+  return PIN_MAP[pin] || {};
+}
 
 /**
  * Build fast O(1) hash maps for cardholders to avoid O(N*M) linear scans
@@ -407,12 +423,12 @@ async function getMembershipCards(req, res) {
                      (chName && custNameMap.get(chName)) || null;
 
         const rawPin = String(ch.pincode || (cust && cust.pincode) || '').trim();
-        const geo = PIN_MAP[rawPin] || {};
+        const geo = resolvePinGeo(rawPin);
 
         let state = ch.state || (cust && cust.state) || geo.state || 'Tamil Nadu';
-        let district = ch.district || (cust && (cust.district || cust.city)) || geo.district || 'Salem';
-        let division = ch.division || (cust && cust.division) || geo.division || 'Attur Division';
-        let pincode = rawPin || (cust && cust.pincode) || '636112';
+        let district = ch.district || (cust && (cust.district || cust.city)) || geo.district || '';
+        let division = ch.division || (cust && cust.division) || geo.division || '';
+        let pincode = rawPin || (cust && cust.pincode) || '';
 
         if (district && district.toLowerCase() === 'salem') state = 'Tamil Nadu';
         if (district && district.toLowerCase() === 'krishnagiri') state = 'Tamil Nadu';
@@ -471,11 +487,11 @@ async function getMembershipCards(req, res) {
       })
       .map(cust => {
         const rawPin = String(cust.pincode || cust.assignedPincode || '').trim();
-        const geo = PIN_MAP[rawPin] || {};
+        const geo = resolvePinGeo(rawPin);
         let state = cust.state || geo.state || 'Tamil Nadu';
-        let district = cust.district || cust.city || geo.district || 'Salem';
-        let division = cust.division || geo.division || 'Attur Division';
-        let pincode = rawPin || '636112';
+        let district = cust.district || cust.city || geo.district || '';
+        let division = cust.division || geo.division || '';
+        let pincode = rawPin || '';
 
         return {
           id: cust._id || cust.id,

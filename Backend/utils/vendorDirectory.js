@@ -136,21 +136,26 @@ function getComprehensiveVendorDirectory() {
   Array.from(db.settlements || []).forEach(s => {
     const sId = String(s.vendorId || s._id || s.id || '').trim();
     if (sId && !vendorMap.has(sId)) {
+      const vRec = Array.from(db.vendors || []).find(v => String(v._id || v.id || v.vendorId) === sId);
+      const uRec = !vRec && Array.from(db.users || []).find(u => String(u._id || u.id || u.vendorId) === sId);
+      const sPin = String(s.pincode || (vRec && vRec.pincode) || (uRec && uRec.pincode) || '').trim();
+      const pinInfo = pinLookup.get(sPin) || {};
+
       const entry = {
         vendorId: sId,
         registrationId: sId,
-        vendorName: s.vendorBusinessName || 'Vendor Merchant',
-        businessName: s.vendorBusinessName || 'Merchant Enterprise',
-        businessType: 'Merchant',
-        phone: '',
-        email: '',
-        address: '',
-        fullAddress: '',
-        state: 'Tamil Nadu',
-        district: '',
-        division: '',
-        pincode: '',
-        area: ''
+        vendorName: s.vendorBusinessName || (vRec && (vRec.businessName || vRec.name)) || (uRec && uRec.name) || 'Vendor Merchant',
+        businessName: s.vendorBusinessName || (vRec && (vRec.businessName || vRec.name)) || (uRec && uRec.name) || 'Merchant Enterprise',
+        businessType: (vRec && vRec.category) || 'Merchant',
+        phone: (vRec && vRec.phone) || (uRec && uRec.phone) || '',
+        email: (vRec && vRec.email) || (uRec && uRec.email) || '',
+        address: (vRec && vRec.address) || '',
+        fullAddress: (vRec && vRec.address) || '',
+        state: s.state || (vRec && vRec.state) || (uRec && uRec.state) || pinInfo.state || 'Tamil Nadu',
+        district: s.district || (vRec && vRec.district) || (uRec && uRec.district) || pinInfo.district || '',
+        division: s.division || (vRec && vRec.division) || (uRec && uRec.division) || pinInfo.division || '',
+        pincode: sPin,
+        area: pinInfo.area || ''
       };
       register(sId, entry);
       if (s.vendorBusinessName) register(s.vendorBusinessName.toLowerCase(), entry);

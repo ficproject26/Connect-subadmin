@@ -68,6 +68,14 @@ export function VendorRequestsPage() {
     }, 4500);
   };
 
+  // Sync locked territory when user profile loads
+  useEffect(() => {
+    if (locking.stateLocked && locking.defaultState) setSelectedFilterState(locking.defaultState);
+    if (locking.districtLocked && locking.defaultDistrict) setSelectedFilterDistrict(locking.defaultDistrict);
+    if (locking.divisionLocked && locking.defaultDivision) setSelectedFilterDivision(locking.defaultDivision);
+    if (locking.pincodeLocked && locking.defaultPincode) setSelectedFilterPincode(locking.defaultPincode);
+  }, [locking]);
+
   // Load Territory Hierarchy
   useEffect(() => {
     let isMounted = true;
@@ -93,10 +101,16 @@ export function VendorRequestsPage() {
       const params = {};
       if (statusFilter !== 'All') params.status = statusFilter;
       if (sourceFilter !== 'All') params.source = sourceFilter;
-      if (selectedFilterState && selectedFilterState !== 'All') params.state = selectedFilterState;
-      if (selectedFilterDistrict && selectedFilterDistrict !== 'All') params.district = selectedFilterDistrict;
-      if (selectedFilterDivision && selectedFilterDivision !== 'All') params.division = selectedFilterDivision;
-      if (selectedFilterPincode && selectedFilterPincode !== 'All') params.pincode = selectedFilterPincode;
+
+      const reqState = locking.stateLocked ? locking.defaultState : selectedFilterState;
+      const reqDistrict = locking.districtLocked ? locking.defaultDistrict : selectedFilterDistrict;
+      const reqDivision = locking.divisionLocked ? locking.defaultDivision : selectedFilterDivision;
+      const reqPincode = locking.pincodeLocked ? locking.defaultPincode : selectedFilterPincode;
+
+      if (reqState && reqState !== 'All') params.state = reqState;
+      if (reqDistrict && reqDistrict !== 'All') params.district = reqDistrict;
+      if (reqDivision && reqDivision !== 'All') params.division = reqDivision;
+      if (reqPincode && reqPincode !== 'All') params.pincode = reqPincode;
 
       const res = await dataService.getVendorRequests(params);
       if (res && res.success) {
@@ -110,7 +124,7 @@ export function VendorRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode]);
+  }, [statusFilter, sourceFilter, locking, selectedFilterState, selectedFilterDistrict, selectedFilterDivision, selectedFilterPincode]);
 
   useEffect(() => {
     loadRequests();
