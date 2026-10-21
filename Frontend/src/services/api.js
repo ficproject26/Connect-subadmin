@@ -109,7 +109,9 @@ export function clearApiCache(prefix = '') {
 // Invalidate relevant cache namespaces when a mutating request occurs
 function invalidateRelatedCaches(endpoint) {
   const ep = endpoint.toLowerCase();
-  if (ep.includes('/order')) {
+  if (ep.includes('/ticket')) {
+    clearApiCache('/tickets');
+  } else if (ep.includes('/order')) {
     clearApiCache('/orders');
     clearApiCache('/reports');
   } else if (ep.includes('/booking')) {

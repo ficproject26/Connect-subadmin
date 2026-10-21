@@ -26,6 +26,7 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const shopVisitRoutes = require('./routes/shopVisitRoutes');
 const qcTaskRoutes = require('./routes/qcTaskRoutes'); // QC & Task Routes
 const notificationRoutes = require('./routes/notificationRoutes'); // Real-time Notifications
+const ticketRoutes = require('./routes/ticketRoutes'); // Agent Support Tickets / Queries
 
 // Real-Time Event, Redis & WebSocket Architecture
 const { initRedis } = require('./redis/redisClient');
@@ -138,6 +139,7 @@ app.use('/api/shop-visits', shopVisitRoutes);
 app.use('/api/qc-tasks', qcTaskRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/territory', locationRoutes);
+app.use('/api/tickets', ticketRoutes); // Agent support tickets / Admin Queries
 app.use('/api', locationRoutes); // /api/states, /api/districts, /api/divisions, /api/pincodes, /api/hierarchy
 
 // Real-Time System Telemetry & Reconnection Sync
