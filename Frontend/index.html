@@ -2,17 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Forge India Connect | Admin Management System</title>
-    <meta name="description" content="Hierarchical Admin Management System with Role-Based and Location-Based Access Control for State, District, Divisional, and Pincode Admins." />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; connect-src * 'unsafe-inline'; img-src * data: blob: https: http:; style-src * 'unsafe-inline' https: fonts.googleapis.com; font-src * data: https: fonts.gstatic.com;" />
     <script>
       (function () {
-        function extractString(val) {
-          if (val === null || val === undefined) return '';
+        function extractNoiseText(val, depth) {
+          if (val === null || val === undefined || (depth || 0) > 3) return '';
           if (typeof val === 'string') return val;
           if (typeof val === 'number' || typeof val === 'boolean') return String(val);
           let res = '';
@@ -20,25 +14,24 @@
             if (val.name) res += ' ' + val.name;
             if (val.message) res += ' ' + val.message;
             if (val.stack) res += ' ' + val.stack;
+            if (val.filename) res += ' ' + val.filename;
             if (val.sourceFile) res += ' ' + val.sourceFile;
             if (val.blockedURI) res += ' ' + val.blockedURI;
             if (val.violatedDirective) res += ' ' + val.violatedDirective;
+            if (val.originalPolicy) res += ' ' + val.originalPolicy;
             if (val.sample) res += ' ' + val.sample;
-            if (val.reason) res += ' ' + extractString(val.reason);
-            if (val.error) res += ' ' + extractString(val.error);
-            res += ' ' + String(val);
-            try {
-              res += ' ' + JSON.stringify(val);
-            } catch (_) {}
-          } catch (_) {
-            res += ' ' + String(val);
-          }
+            if (val.reason) res += ' ' + extractNoiseText(val.reason, (depth || 0) + 1);
+            if (val.error) res += ' ' + extractNoiseText(val.error, (depth || 0) + 1);
+            if (typeof val.toString === 'function' && val.toString !== Object.prototype.toString) {
+              res += ' ' + val.toString();
+            }
+          } catch (_) {}
           return res;
         }
 
         const isIgnorableNoise = (msg) => {
           if (!msg) return false;
-          const str = extractString(msg).toLowerCase();
+          const str = extractNoiseText(msg).toLowerCase();
           return (
             str.includes('a listener indicated an asynchronous response') ||
             str.includes('message channel closed') ||
@@ -47,7 +40,8 @@
             str.includes('content security policy') ||
             str.includes('unsafe-eval') ||
             str.includes('content.js') ||
-            str.includes('chrome-extension')
+            str.includes('chrome-extension') ||
+            str.includes('f872d920-f021-4d52-ac98-78da36ceb659')
           );
         };
 
@@ -56,56 +50,145 @@
             for (let i = 0; i < args.length; i++) {
               if (isIgnorableNoise(args[i])) return;
             }
-            const combined = args.map(extractString).join(' ');
+            const combined = args.map(function (a) { return extractNoiseText(a); }).join(' ');
             if (isIgnorableNoise(combined)) return;
-            origFn.apply(console, args);
+            return origFn.apply(console, args);
           };
         };
 
         console.error = filterMethod(console.error);
         console.warn = filterMethod(console.warn);
         console.info = filterMethod(console.info);
+        console.log = filterMethod(console.log);
         console.debug = filterMethod(console.debug);
 
-        window.addEventListener('unhandledrejection', function (e) {
+        // Suppress unhandled rejections from chrome extensions / closed message channels
+        const handleUnhandledRejection = function (e) {
           if (isIgnorableNoise(e) || isIgnorableNoise(e?.reason)) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (typeof e?.preventDefault === 'function') e.preventDefault();
+            if (typeof e?.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e?.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            return true;
           }
-        }, true);
+        };
+        window.addEventListener('unhandledrejection', handleUnhandledRejection, true);
+        window.addEventListener('unhandledrejection', handleUnhandledRejection, false);
+        window.onunhandledrejection = handleUnhandledRejection;
 
-        window.addEventListener('error', function (e) {
-          if (isIgnorableNoise(e) || isIgnorableNoise(e?.error) || isIgnorableNoise(e?.message)) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        // Suppress uncaught script errors from external content scripts and extensions
+        const handleError = function (e) {
+          if (
+            isIgnorableNoise(e) ||
+            isIgnorableNoise(e?.error) ||
+            isIgnorableNoise(e?.message) ||
+            isIgnorableNoise(e?.filename) ||
+            (e?.filename && (e.filename.includes('content.js') || e.filename.includes('chrome-extension')))
+          ) {
+            if (typeof e?.preventDefault === 'function') e.preventDefault();
+            if (typeof e?.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e?.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            return true;
           }
-        }, true);
+        };
+        window.addEventListener('error', handleError, true);
+        window.addEventListener('error', handleError, false);
+        window.onerror = function (message, source, lineno, colno, error) {
+          if (
+            isIgnorableNoise(message) ||
+            isIgnorableNoise(source) ||
+            isIgnorableNoise(error) ||
+            (source && (source.includes('content.js') || source.includes('chrome-extension')))
+          ) {
+            return true;
+          }
+        };
 
+        // Suppress security policy violation events emitted by browser extensions
         const handleCSP = function (e) {
-          if (isIgnorableNoise(e) || isIgnorableNoise(e?.blockedURI) || isIgnorableNoise(e?.sourceFile) || isIgnorableNoise(e?.violatedDirective)) {
-            if (typeof e.preventDefault === 'function') e.preventDefault();
-            if (typeof e.stopPropagation === 'function') e.stopPropagation();
-            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          if (
+            isIgnorableNoise(e) ||
+            isIgnorableNoise(e?.blockedURI) ||
+            isIgnorableNoise(e?.sourceFile) ||
+            isIgnorableNoise(e?.violatedDirective) ||
+            (e?.sourceFile && (e.sourceFile.includes('content.js') || e.sourceFile.includes('chrome-extension')))
+          ) {
+            if (typeof e?.preventDefault === 'function') e.preventDefault();
+            if (typeof e?.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e?.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
           }
         };
         window.addEventListener('securitypolicyviolation', handleCSP, true);
+        window.addEventListener('securitypolicyviolation', handleCSP, false);
         document.addEventListener('securitypolicyviolation', handleCSP, true);
+        document.addEventListener('securitypolicyviolation', handleCSP, false);
 
+        // Intercept Chrome runtime message channels if present to prevent unhandled channel closing
         try {
           if (typeof window !== 'undefined' && window.chrome && window.chrome.runtime) {
-            const drainLastError = () => {
-              try {
-                if (window.chrome.runtime.lastError) {}
-              } catch (_) {}
-            };
-            drainLastError();
-            setInterval(drainLastError, 250);
+            if (typeof window.chrome.runtime.sendMessage === 'function') {
+              const origSendMessage = window.chrome.runtime.sendMessage.bind(window.chrome.runtime);
+              window.chrome.runtime.sendMessage = function (...args) {
+                try {
+                  const ret = origSendMessage(...args);
+                  if (ret && typeof ret.catch === 'function') {
+                    return ret.catch((err) => {
+                      if (isIgnorableNoise(err)) {
+                        return undefined;
+                      }
+                      return Promise.reject(err);
+                    });
+                  }
+                  return ret;
+                } catch (err) {
+                  if (isIgnorableNoise(err)) {
+                    return Promise.resolve(undefined);
+                  }
+                  throw err;
+                }
+              };
+            }
+
+            if (window.chrome.runtime.onMessage && typeof window.chrome.runtime.onMessage.addListener === 'function') {
+              const origAddListener = window.chrome.runtime.onMessage.addListener.bind(window.chrome.runtime.onMessage);
+              window.chrome.runtime.onMessage.addListener = function (listener) {
+                return origAddListener(function (message, sender, sendResponse) {
+                  let isAsync = false;
+                  try {
+                    isAsync = listener.apply(this, arguments);
+                  } catch (err) {
+                    if (!isIgnorableNoise(err)) throw err;
+                  }
+                  if (isAsync === true && typeof sendResponse === 'function') {
+                    let responded = false;
+                    const safeSendResponse = function (...rArgs) {
+                      if (!responded) {
+                        responded = true;
+                        try { sendResponse(...rArgs); } catch (_) {}
+                      }
+                    };
+                    setTimeout(() => {
+                      if (!responded) {
+                        responded = true;
+                        try { sendResponse({ status: 'ok', handled: true }); } catch (_) {}
+                      }
+                    }, 1000);
+                    return true;
+                  }
+                  return isAsync;
+                });
+              };
+            }
           }
         } catch (_) {}
       })();
     </script>
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Forge India Connect | Admin Management System</title>
+    <meta name="description" content="Hierarchical Admin Management System with Role-Based and Location-Based Access Control for State, District, Divisional, and Pincode Admins." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
       (function() {
         try {
