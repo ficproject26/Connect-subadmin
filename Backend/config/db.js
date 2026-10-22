@@ -14,6 +14,65 @@ function sanitizeQuery(query) {
   return sanitized;
 }
 
+function getCollectionProjection(colName, mongoName) {
+  if (colName === 'users' || colName === 'agents') {
+    return {
+      kyc: 0,
+      kycDocs: 0,
+      documents: 0,
+      aadhaarImage: 0,
+      panImage: 0,
+      selfie: 0,
+      educationalCertificates: 0,
+      bankProof: 0
+    };
+  }
+  if (colName === 'vendors') {
+    return {
+      documents: 0,
+      logo: 0,
+      businessLicense: 0,
+      storefrontPhoto: 0,
+      shopPhoto: 0,
+      bankProof: 0
+    };
+  }
+  if (colName === 'customers') {
+    return {
+      avatar: 0,
+      photo: 0
+    };
+  }
+  if (colName === 'shop_visits' || mongoName === 'fieldvisits') {
+    return {
+      shopPhoto: 0,
+      storefrontPhoto: 0,
+      voiceNote: 0
+    };
+  }
+  if (colName === 'submitted_reports' || mongoName === 'reports') {
+    return {
+      'shopVisits.shopPhoto': 0,
+      'shopVisits.storefrontPhoto': 0,
+      'shopVisits.voiceNote': 0
+    };
+  }
+  if (colName === 'qc_tasks' || mongoName === 'tasks') {
+    return {
+      'completionDetails.completionPhoto': 0,
+      'completionDetails.completionPhotos': 0,
+      'completionDetails.completionAudio': 0,
+      'completionDetails.voiceNote': 0,
+      'completionDetails.photos': 0,
+      history: 0,
+      photos: 0,
+      voiceNote: 0,
+      shopPhoto: 0
+    };
+  }
+  return {};
+}
+
 /**
  * Collection represents a MongoDB Atlas-driven data store.
  * MongoDB Atlas is the absolute single source of truth.
@@ -35,34 +94,7 @@ class Collection extends Array {
       throw new Error(`MongoDB client instance is required to initialize collection '${this.name}'`);
     }
     this._mongoCol = mongoDb.collection(this.mongoName);
-    const projection = (this.name === 'users' || this.name === 'agents') ? {
-      kyc: 0,
-      kycDocs: 0,
-      documents: 0,
-      aadhaarImage: 0,
-      panImage: 0,
-      selfie: 0,
-      educationalCertificates: 0,
-      bankProof: 0
-    } : (this.name === 'shop_visits' || this.mongoName === 'fieldvisits') ? {
-      shopPhoto: 0,
-      storefrontPhoto: 0,
-      voiceNote: 0
-    } : (this.name === 'submitted_reports' || this.mongoName === 'reports') ? {
-      'shopVisits.shopPhoto': 0,
-      'shopVisits.storefrontPhoto': 0,
-      'shopVisits.voiceNote': 0
-    } : (this.name === 'qc_tasks' || this.mongoName === 'tasks') ? {
-      'completionDetails.completionPhoto': 0,
-      'completionDetails.completionPhotos': 0,
-      'completionDetails.completionAudio': 0,
-      'completionDetails.voiceNote': 0,
-      'completionDetails.photos': 0,
-      history: 0,
-      photos: 0,
-      voiceNote: 0,
-      shopPhoto: 0
-    } : {};
+    const projection = getCollectionProjection(this.name, this.mongoName);
     const docs = await this._mongoCol.find({}, { projection }).toArray();
     this.length = 0;
     if (docs && docs.length > 0) {
@@ -73,6 +105,7 @@ class Collection extends Array {
     }
     this._isReady = true;
     this._lastReload = Date.now();
+    if (typeof invalidateLookupCaches === 'function') invalidateLookupCaches(this.name);
   }
 
   async reloadFromMongo(force = false) {
@@ -83,39 +116,13 @@ class Collection extends Array {
         return Array.from(this);
       }
       this._lastReload = now;
-      const projection = (this.name === 'users' || this.name === 'agents') ? {
-        kyc: 0,
-        kycDocs: 0,
-        documents: 0,
-        aadhaarImage: 0,
-        panImage: 0,
-        selfie: 0,
-        educationalCertificates: 0,
-        bankProof: 0
-      } : (this.name === 'shop_visits' || this.mongoName === 'fieldvisits') ? {
-        shopPhoto: 0,
-        storefrontPhoto: 0,
-        voiceNote: 0
-      } : (this.name === 'submitted_reports' || this.mongoName === 'reports') ? {
-        'shopVisits.shopPhoto': 0,
-        'shopVisits.storefrontPhoto': 0,
-        'shopVisits.voiceNote': 0
-      } : (this.name === 'qc_tasks' || this.mongoName === 'tasks') ? {
-        'completionDetails.completionPhoto': 0,
-        'completionDetails.completionPhotos': 0,
-        'completionDetails.completionAudio': 0,
-        'completionDetails.voiceNote': 0,
-        'completionDetails.photos': 0,
-        history: 0,
-        photos: 0,
-        voiceNote: 0,
-        shopPhoto: 0
-      } : {};
+      const projection = getCollectionProjection(this.name, this.mongoName);
       const docs = await this._mongoCol.find({}, { projection }).toArray();
       this.length = 0;
       if (docs && docs.length > 0) {
         super.push(...docs);
       }
+      if (typeof invalidateLookupCaches === 'function') invalidateLookupCaches(this.name);
       return docs;
     }
     return Array.from(this);
@@ -175,14 +182,7 @@ class Collection extends Array {
     }
 
     if (this._mongoCol) {
-      const projection = (this.name === 'users' || this.name === 'agents') ? {
-        kyc: 0,
-        kycDocs: 0,
-        documents: 0,
-        aadhaarImage: 0,
-        panImage: 0,
-        selfie: 0
-      } : {};
+      const projection = getCollectionProjection(this.name, this.mongoName);
       return await this._mongoCol.find(cleanQuery, { projection }).toArray();
     }
 
@@ -209,16 +209,7 @@ class Collection extends Array {
       }) || null;
     }
     if (this._mongoCol) {
-      const projection = (this.name === 'users' || this.name === 'agents') ? {
-        kyc: 0,
-        kycDocs: 0,
-        documents: 0,
-        aadhaarImage: 0,
-        panImage: 0,
-        selfie: 0,
-        educationalCertificates: 0,
-        bankProof: 0
-      } : {};
+      const projection = getCollectionProjection(this.name, this.mongoName);
       return await this._mongoCol.findOne(cleanQuery, { projection });
     }
     return Array.from(this).find(item => {
@@ -1002,6 +993,141 @@ function resolveStateFromDistrict(districtName) {
   return null;
 }
 
+// High-performance entity lookup caches for O(1) geographic coordinate extraction
+let cachedVendorLookupMap = null;
+let cachedCustomerLookupMap = null;
+let cachedAgentLookupMap = null;
+let cachedQcTaskLookupMap = null;
+let cachedOrderLookupMap = null;
+let cachedUserLookupMap = null;
+let cachedPinLookupMap = null;
+const pincodeMap = new Map();
+
+function syncPincodeMap() {
+  pincodeMap.clear();
+  for (const p of pincodesCollection) {
+    const code = String(p.code || p.pincode || '').trim();
+    if (code) pincodeMap.set(code, p);
+    if (p._id) pincodeMap.set(String(p._id), p);
+    if (p.id) pincodeMap.set(String(p.id), p);
+  }
+}
+
+function invalidateLookupCaches(colName) {
+  if (!colName || colName === 'pincodes') {
+    cachedPinLookupMap = null;
+    syncPincodeMap();
+  }
+  if (!colName || colName === 'vendors') cachedVendorLookupMap = null;
+  if (!colName || colName === 'customers') cachedCustomerLookupMap = null;
+  if (!colName || colName === 'agents') cachedAgentLookupMap = null;
+  if (!colName || colName === 'qc_tasks' || colName === 'tasks') cachedQcTaskLookupMap = null;
+  if (!colName || colName === 'orders') cachedOrderLookupMap = null;
+  if (!colName || colName === 'users' || colName === 'managers') cachedUserLookupMap = null;
+}
+
+function getVendorFromLookup(vStr) {
+  if (!cachedVendorLookupMap) {
+    cachedVendorLookupMap = new Map();
+    for (const x of (db.vendors || [])) {
+      if (x._id) cachedVendorLookupMap.set(String(x._id), x);
+      if (x.id) cachedVendorLookupMap.set(String(x.id), x);
+      if (x.vendorId) cachedVendorLookupMap.set(String(x.vendorId), x);
+      if (x.registrationId) cachedVendorLookupMap.set(String(x.registrationId), x);
+    }
+  }
+  return cachedVendorLookupMap.get(vStr);
+}
+
+function getCustomerFromLookup(cStr) {
+  if (!cachedCustomerLookupMap) {
+    cachedCustomerLookupMap = new Map();
+    for (const x of (db.customers || [])) {
+      if (x._id) cachedCustomerLookupMap.set(String(x._id), x);
+      if (x.id) cachedCustomerLookupMap.set(String(x.id), x);
+      if (x.customerId) cachedCustomerLookupMap.set(String(x.customerId), x);
+      if (x.memberId) cachedCustomerLookupMap.set(String(x.memberId), x);
+    }
+  }
+  return cachedCustomerLookupMap.get(cStr);
+}
+
+function getAgentFromLookup(aStr) {
+  if (!cachedAgentLookupMap) {
+    cachedAgentLookupMap = new Map();
+    for (const x of (db.agents || [])) {
+      if (x._id) cachedAgentLookupMap.set(String(x._id), x);
+      if (x.id) cachedAgentLookupMap.set(String(x.id), x);
+      if (x.agentId) cachedAgentLookupMap.set(String(x.agentId), x);
+      if (x.registrationId) cachedAgentLookupMap.set(String(x.registrationId), x);
+      if (x.employeeCode) cachedAgentLookupMap.set(String(x.employeeCode), x);
+    }
+  }
+  return cachedAgentLookupMap.get(aStr);
+}
+
+function getQcTaskFromLookup(tkStr) {
+  if (!cachedQcTaskLookupMap) {
+    cachedQcTaskLookupMap = new Map();
+    for (const x of (db.qcTasks || [])) {
+      if (x._id) cachedQcTaskLookupMap.set(String(x._id), x);
+      if (x.id) cachedQcTaskLookupMap.set(String(x.id), x);
+      if (x.taskId) cachedQcTaskLookupMap.set(String(x.taskId), x);
+    }
+  }
+  return cachedQcTaskLookupMap.get(tkStr);
+}
+
+function getOrderFromLookup(odStr) {
+  if (!cachedOrderLookupMap) {
+    cachedOrderLookupMap = new Map();
+    for (const x of (db.orders || [])) {
+      if (x._id) cachedOrderLookupMap.set(String(x._id), x);
+      if (x.id) cachedOrderLookupMap.set(String(x.id), x);
+      if (x.orderId) cachedOrderLookupMap.set(String(x.orderId), x);
+      if (x.order_number) cachedOrderLookupMap.set(String(x.order_number), x);
+    }
+  }
+  return cachedOrderLookupMap.get(odStr);
+}
+
+function getUserFromLookup(uStr) {
+  if (!cachedUserLookupMap) {
+    cachedUserLookupMap = new Map();
+    for (const u of (db.users || [])) {
+      if (u._id) cachedUserLookupMap.set(String(u._id), u);
+      if (u.id) cachedUserLookupMap.set(String(u.id), u);
+    }
+    for (const m of (db.managers || [])) {
+      if (m._id) cachedUserLookupMap.set(String(m._id), m);
+      if (m.id) cachedUserLookupMap.set(String(m.id), m);
+    }
+  }
+  return cachedUserLookupMap.get(uStr);
+}
+
+function getPinLookup() {
+  if (cachedPinLookupMap) return cachedPinLookupMap;
+  const pinLookup = new Map();
+  for (const p of pincodesCollection) {
+    const code = String(p.code || p.pincode || '').trim();
+    if (code) {
+      let pState = (p.state || '').trim().toLowerCase();
+      const pDistrict = (p.district || '').trim().toLowerCase();
+      if (!pState && pDistrict) {
+        pState = resolveStateFromDistrict(pDistrict) || '';
+      }
+      pinLookup.set(code, {
+        state: pState,
+        district: pDistrict,
+        division: normDiv(p.division)
+      });
+    }
+  }
+  cachedPinLookupMap = pinLookup;
+  return cachedPinLookupMap;
+}
+
 /**
  * Extract unified geographic coordinates from any entity
  */
@@ -1009,6 +1135,8 @@ function extractEntityGeo(item, pinLookup) {
   if (!item || typeof item !== 'object') {
     return { state: '', district: '', division: '', pincode: '', stateId: null, districtId: null, divisionId: null, pincodeId: null };
   }
+
+  const activePinLookup = pinLookup || getPinLookup();
 
   const t = item.territory || {};
   const addr0 = (item.addresses && item.addresses[0]) || {};
@@ -1025,7 +1153,7 @@ function extractEntityGeo(item, pinLookup) {
   const vKey = item.vendor_id || item.vendorId || item.vendor || (item.entityType === 'vendor' ? item.entityId : null);
   if (vKey && db.vendors) {
     const vStr = String(vKey).trim();
-    const v = (db.vendors || []).find(x => String(x._id || x.id || x.vendorId || x.registrationId) === vStr);
+    const v = getVendorFromLookup(vStr);
     if (v) {
       if (!district) district = v.district || v.city;
       if (!division) division = v.division;
@@ -1038,13 +1166,12 @@ function extractEntityGeo(item, pinLookup) {
   const cKey = item.customerId || item.customer_id || item.memberId || (item.entityType === 'customer' ? item.entityId : null);
   if (cKey && db.customers) {
     const cStr = String(cKey).trim();
-    const c = (db.customers || []).find(x => String(x._id || x.id || x.customerId || x.memberId) === cStr);
+    const c = getCustomerFromLookup(cStr);
     if (c) {
       const cAddr = (c.addresses && c.addresses[0]) || {};
       if (!district) district = c.district || c.city || cAddr.city || cAddr.district;
       if (!division) division = c.division || cAddr.division;
       if (!pincode) pincode = c.pincode || cAddr.pincode;
-      // Do not trust corrupted 'karnataka' on customer records without verified pin/district check
     }
   }
 
@@ -1052,7 +1179,7 @@ function extractEntityGeo(item, pinLookup) {
   const aKey = item.agentId || item.agent_id || item.employeeCode || (item.entityType === 'agent' ? item.entityId : null);
   if (aKey && db.agents) {
     const aStr = String(aKey).trim();
-    const a = (db.agents || []).find(x => String(x._id || x.id || x.agentId || x.registrationId || x.employeeCode) === aStr);
+    const a = getAgentFromLookup(aStr);
     if (a) {
       if (!district) district = a.district || a.assignedDistrict;
       if (!division) division = a.division || a.assignedDivision;
@@ -1065,7 +1192,7 @@ function extractEntityGeo(item, pinLookup) {
   const tkKey = item.taskId || item.qcTaskId || item.task_id || ((item.entityType === 'task' || item.entityType === 'qc_task') ? item.entityId : null);
   if (tkKey && db.qcTasks) {
     const tkStr = String(tkKey).trim();
-    const tk = (db.qcTasks || []).find(x => String(x._id || x.id || x.taskId) === tkStr);
+    const tk = getQcTaskFromLookup(tkStr);
     if (tk) {
       if (!district) district = tk.district;
       if (!division) division = tk.division;
@@ -1078,7 +1205,7 @@ function extractEntityGeo(item, pinLookup) {
   const odKey = item.orderId || item.order_id || item.orderNumber || (item.entityType === 'order' ? item.entityId : null);
   if (odKey && db.orders) {
     const odStr = String(odKey).trim();
-    const od = (db.orders || []).find(x => String(x._id || x.id || x.orderId || x.order_number) === odStr);
+    const od = getOrderFromLookup(odStr);
     if (od) {
       if (!district) district = od.district;
       if (!division) division = od.division;
@@ -1091,8 +1218,7 @@ function extractEntityGeo(item, pinLookup) {
   const uKey = item.userId || item.managerId;
   if (uKey && (!state || !district)) {
     const uStr = String(uKey).trim();
-    const usr = (db.users || []).find(u => String(u._id || u.id) === uStr) ||
-                (db.managers || []).find(m => String(m._id || m.id) === uStr);
+    const usr = getUserFromLookup(uStr);
     if (usr) {
       if (!state) state = usr.state || usr.assignedState;
       if (!district) district = usr.district || usr.assignedDistrict;
@@ -1110,11 +1236,15 @@ function extractEntityGeo(item, pinLookup) {
 
   // 8. Lookup in dynamic + static pin table
   if (pincode) {
-    const geo = (pinLookup && pinLookup.get(pincode)) || KNOWN_PINCODES[pincode];
+    const geo = activePinLookup.get(pincode) || KNOWN_PINCODES[pincode];
     if (geo) {
       // Verified pincode coordinates take precedence
       if (geo.state) state = geo.state;
-      if (!district && geo.district) district = geo.district;
+      if (geo.district) {
+        if (!district || district.toLowerCase() === 'thalaivasal' || district.toLowerCase() === 'attur') {
+          district = geo.district;
+        }
+      }
       if (!division && geo.division) division = geo.division;
     }
   }
@@ -1188,29 +1318,16 @@ function filterByLocation(items, user) {
   const userPincode = String(user.pincode || user.assignedPincode || '').trim();
   const { stateId, districtId, divisionId, pincodeId } = user;
 
-  // Index pincodes for fast geographic resolution
-  const pinLookup = new Map();
-  Array.from(pincodesCollection).forEach(p => {
-    const code = String(p.code || p.pincode || '').trim();
-    if (code) {
-      let pState = (p.state || '').trim().toLowerCase();
-      const pDistrict = (p.district || '').trim().toLowerCase();
-      if (!pState && pDistrict) {
-        pState = resolveStateFromDistrict(pDistrict) || '';
-      }
-      pinLookup.set(code, {
-        state: pState,
-        district: pDistrict,
-        division: normDiv(p.division)
-      });
-    }
-  });
+  // Cached pincode geographic resolution Map (O(1))
+  const pinLookup = getPinLookup();
 
   return items.filter(item => {
     const geo = extractEntityGeo(item, pinLookup);
 
     // ── 1. PINCODE ADMIN (Level 4) ──────────────────────────────────
     if (role.includes('pincode')) {
+      if (userState && userState !== 'all india' && geo.state && geo.state !== userState && !geo.state.includes(userState) && !userState.includes(geo.state)) return false;
+      if (userDistrict && geo.district && geo.district !== userDistrict && !geo.district.includes(userDistrict) && !userDistrict.includes(geo.district)) return false;
       if (userPincode && geo.pincode && geo.pincode === userPincode) return true;
       if (pincodeId && item.pincodeId && String(item.pincodeId) === String(pincodeId)) return true;
       return false;
@@ -1266,6 +1383,8 @@ function filterByLocation(items, user) {
   });
 }
 
+db.pincodeMap = pincodeMap;
+
 module.exports = {
   db,
   Collection,
@@ -1275,6 +1394,8 @@ module.exports = {
   filterByLocation,
   initDatabase,
   syncHierarchyFromDatabase,
-  syncHierarchyFromUsers: syncHierarchyFromDatabase
+  syncHierarchyFromUsers: syncHierarchyFromDatabase,
+  invalidateLookupCaches,
+  pincodeMap
 };
 

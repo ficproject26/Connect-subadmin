@@ -6,130 +6,145 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { RoleBasedRoute } from './RoleBasedRoute';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 
-// Auth Pages
+// Auth Pages (eagerly loaded for instant auth rendering)
 import { Login } from '../pages/auth/Login';
 import { RegistrationStatus } from '../pages/auth/RegistrationStatus';
 import { AccessDenied } from '../pages/common/AccessDenied';
 
-// State Admin Pages
-import { StateAdminDashboard } from '../pages/state-admin/Dashboard';
-import { StatesOverview } from '../pages/state-admin/StatesOverview';
-import { StateDistricts } from '../pages/state-admin/Districts';
-import { StateDivisions } from '../pages/state-admin/Divisions';
-import { StatePincodes } from '../pages/state-admin/Pincodes';
-import { StateCustomers } from '../pages/state-admin/Customers';
-import { StateMembershipCards } from '../pages/state-admin/MembershipCards';
-import { StateVendors } from '../pages/state-admin/Vendors';
-import { StateVendorSubscriptions } from '../pages/state-admin/VendorSubscriptions';
-import { StateVendorPayments } from '../pages/state-admin/VendorPayments';
-import { StateOrders } from '../pages/state-admin/Orders';
-import { StateBookings } from '../pages/state-admin/Bookings';
-import { StateJobs } from '../pages/state-admin/Jobs';
-import { StateDeliveryPartners } from '../pages/state-admin/DeliveryPartners';
-import { StateTechnicians } from '../pages/state-admin/Technicians';
-import { StateExecutives } from '../pages/state-admin/Executives';
-import { StateAgents } from '../pages/state-admin/Agents';
-import { StateManagers } from '../pages/state-admin/Managers';
-import { StateAgentPayments } from '../pages/state-admin/AgentPayments';
-import { StatePayments } from '../pages/state-admin/Payments';
-import { StateReports } from '../pages/state-admin/Reports';
-import { StateKYC } from '../pages/state-admin/KYC';
-import { StateQualityCheck } from '../pages/state-admin/QualityCheck';
-import { StateSupportTeam } from '../pages/state-admin/SupportTeam';
-import { StateProfile } from '../pages/state-admin/Profile';
-import { StateSettings } from '../pages/state-admin/Settings';
-import { StateTasks } from '../pages/state-admin/Tasks';
-import { StateQueries } from '../pages/state-admin/Queries';
+// Helper for dynamic code splitting of named component exports
+const lazyNamed = (importFn, name) => React.lazy(() => importFn().then(mod => ({ default: mod[name] })));
 
-// District Admin Pages
-import { DistrictAdminDashboard } from '../pages/district-admin/Dashboard';
-import { DistrictOverview } from '../pages/district-admin/Overview';
-import { DistrictDivisions } from '../pages/district-admin/Divisions';
-import { DistrictPincodes } from '../pages/district-admin/Pincodes';
-import { DistrictCustomers } from '../pages/district-admin/Customers';
-import { DistrictMembershipCards } from '../pages/district-admin/MembershipCards';
-import { DistrictVendors } from '../pages/district-admin/Vendors';
-import { DistrictVendorSubscriptions } from '../pages/district-admin/VendorSubscriptions';
-import { DistrictVendorPayments } from '../pages/district-admin/VendorPayments';
-import { DistrictOrders } from '../pages/district-admin/Orders';
-import { DistrictBookings } from '../pages/district-admin/Bookings';
-import { DistrictJobs } from '../pages/district-admin/Jobs';
-import { DistrictDeliveryPartners } from '../pages/district-admin/DeliveryPartners';
-import { DistrictTechnicians } from '../pages/district-admin/Technicians';
-import { DistrictExecutives } from '../pages/district-admin/Executives';
-import { DistrictSupportTeam } from '../pages/district-admin/SupportTeam';
-import { DistrictAgents } from '../pages/district-admin/Agents';
-import { DistrictAgentPayments } from '../pages/district-admin/AgentPayments';
-import { DistrictKYC } from '../pages/district-admin/KYC';
-import { DistrictQualityCheck } from '../pages/district-admin/QualityCheck';
-import { DistrictReports } from '../pages/district-admin/Reports';
-import { DistrictPayments } from '../pages/district-admin/Payments';
-import { DistrictTasks } from '../pages/district-admin/Tasks';
-import { DistrictQueries } from '../pages/district-admin/Queries';
-import { DistrictProfile } from '../pages/district-admin/Profile';
-import { DistrictSettings } from '../pages/district-admin/Settings';
+// Route Loading Spinner fallback
+function RouteLoadingSpinner() {
+  return (
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-indigo-400 font-mono text-sm">
+      <div className="flex items-center gap-2">
+        <div className="w-5 h-5 rounded-full border-2 border-indigo-400 border-t-transparent animate-spin"></div>
+        <span>Loading...</span>
+      </div>
+    </div>
+  );
+}
 
-// Divisional Admin Pages
-import { DivisionalAdminDashboard } from '../pages/divisional-admin/Dashboard';
-import { DivisionalOverview } from '../pages/divisional-admin/Overview';
-import { DivisionalPincodes } from '../pages/divisional-admin/Pincodes';
-import { DivisionalCustomers } from '../pages/divisional-admin/Customers';
-import { DivisionalMembershipCards } from '../pages/divisional-admin/MembershipCards';
-import { DivisionalVendors } from '../pages/divisional-admin/Vendors';
-import { DivisionalVendorSubscriptions } from '../pages/divisional-admin/VendorSubscriptions';
-import { DivisionalVendorPayments } from '../pages/divisional-admin/VendorPayments';
-import { DivisionalOrders } from '../pages/divisional-admin/Orders';
-import { DivisionalBookings } from '../pages/divisional-admin/Bookings';
-import { DivisionalJobs } from '../pages/divisional-admin/Jobs';
-import { DivisionalDeliveryPartners } from '../pages/divisional-admin/DeliveryPartners';
-import { DivisionalTechnicians } from '../pages/divisional-admin/Technicians';
-import { DivisionalExecutives } from '../pages/divisional-admin/Executives';
-import { DivisionalSupportTeam } from '../pages/divisional-admin/SupportTeam';
-import { DivisionalAgents } from '../pages/divisional-admin/Agents';
-import { DivisionalAgentPayments } from '../pages/divisional-admin/AgentPayments';
-import { DivisionalKYC } from '../pages/divisional-admin/KYC';
-import { DivisionalQualityCheck } from '../pages/divisional-admin/QualityCheck';
-import { DivisionalReports } from '../pages/divisional-admin/Reports';
-import { DivisionalPayments } from '../pages/divisional-admin/Payments';
-import { DivisionalTasks } from '../pages/divisional-admin/Tasks';
-import { DivisionalQueries } from '../pages/divisional-admin/Queries';
-import { DivisionalProfile } from '../pages/divisional-admin/Profile';
-import { DivisionalSettings } from '../pages/divisional-admin/Settings';
+// State Admin Pages (lazy loaded on demand)
+const StateAdminDashboard = lazyNamed(() => import('../pages/state-admin/Dashboard'), 'StateAdminDashboard');
+const StatesOverview = lazyNamed(() => import('../pages/state-admin/StatesOverview'), 'StatesOverview');
+const StateDistricts = lazyNamed(() => import('../pages/state-admin/Districts'), 'StateDistricts');
+const StateDivisions = lazyNamed(() => import('../pages/state-admin/Divisions'), 'StateDivisions');
+const StatePincodes = lazyNamed(() => import('../pages/state-admin/Pincodes'), 'StatePincodes');
+const StateCustomers = lazyNamed(() => import('../pages/state-admin/Customers'), 'StateCustomers');
+const StateMembershipCards = lazyNamed(() => import('../pages/state-admin/MembershipCards'), 'StateMembershipCards');
+const StateVendors = lazyNamed(() => import('../pages/state-admin/Vendors'), 'StateVendors');
+const StateVendorSubscriptions = lazyNamed(() => import('../pages/state-admin/VendorSubscriptions'), 'StateVendorSubscriptions');
+const StateVendorPayments = lazyNamed(() => import('../pages/state-admin/VendorPayments'), 'StateVendorPayments');
+const StateOrders = lazyNamed(() => import('../pages/state-admin/Orders'), 'StateOrders');
+const StateBookings = lazyNamed(() => import('../pages/state-admin/Bookings'), 'StateBookings');
+const StateJobs = lazyNamed(() => import('../pages/state-admin/Jobs'), 'StateJobs');
+const StateDeliveryPartners = lazyNamed(() => import('../pages/state-admin/DeliveryPartners'), 'StateDeliveryPartners');
+const StateTechnicians = lazyNamed(() => import('../pages/state-admin/Technicians'), 'StateTechnicians');
+const StateExecutives = lazyNamed(() => import('../pages/state-admin/Executives'), 'StateExecutives');
+const StateAgents = lazyNamed(() => import('../pages/state-admin/Agents'), 'StateAgents');
+const StateManagers = lazyNamed(() => import('../pages/state-admin/Managers'), 'StateManagers');
+const StateAgentPayments = lazyNamed(() => import('../pages/state-admin/AgentPayments'), 'StateAgentPayments');
+const StatePayments = lazyNamed(() => import('../pages/state-admin/Payments'), 'StatePayments');
+const StateReports = lazyNamed(() => import('../pages/state-admin/Reports'), 'StateReports');
+const StateKYC = lazyNamed(() => import('../pages/state-admin/KYC'), 'StateKYC');
+const StateQualityCheck = lazyNamed(() => import('../pages/state-admin/QualityCheck'), 'StateQualityCheck');
+const StateSupportTeam = lazyNamed(() => import('../pages/state-admin/SupportTeam'), 'StateSupportTeam');
+const StateProfile = lazyNamed(() => import('../pages/state-admin/Profile'), 'StateProfile');
+const StateSettings = lazyNamed(() => import('../pages/state-admin/Settings'), 'StateSettings');
+const StateTasks = lazyNamed(() => import('../pages/state-admin/Tasks'), 'StateTasks');
+const StateQueries = lazyNamed(() => import('../pages/state-admin/Queries'), 'StateQueries');
 
-// Pincode Admin Pages
-import { PincodeAdminDashboard } from '../pages/pincode-admin/Dashboard';
-import { PincodeOverview } from '../pages/pincode-admin/Overview';
-import { PincodeCustomers } from '../pages/pincode-admin/Customers';
-import { PincodeMembershipCards } from '../pages/pincode-admin/MembershipCards';
-import { PincodeVendors } from '../pages/pincode-admin/Vendors';
-import { PincodeVendorSubscriptions } from '../pages/pincode-admin/VendorSubscriptions';
-import { PincodeVendorDetails } from '../pages/pincode-admin/VendorDetails';
-import { PincodeVendorPayments } from '../pages/pincode-admin/VendorPayments';
-import { PincodeOrders } from '../pages/pincode-admin/Orders';
-import { PincodeBookings } from '../pages/pincode-admin/Bookings';
-import { PincodeJobs } from '../pages/pincode-admin/Jobs';
-import { PincodeDeliveryPartners } from '../pages/pincode-admin/DeliveryPartners';
-import { PincodeTechnicians } from '../pages/pincode-admin/Technicians';
-import { PincodeExecutives } from '../pages/pincode-admin/Executives';
-import { PincodeSupportTeam } from '../pages/pincode-admin/SupportTeam';
-import { PincodeAgents } from '../pages/pincode-admin/Agents';
-import { PincodeAgentPayments } from '../pages/pincode-admin/AgentPayments';
-import { PincodeKYC } from '../pages/pincode-admin/KYC';
-import { PincodeQualityCheck } from '../pages/pincode-admin/QualityCheck';
-import { PincodeBusinessReports } from '../pages/pincode-admin/BusinessReports';
-import { PincodePayments } from '../pages/pincode-admin/Payments';
-import { PincodeTasks } from '../pages/pincode-admin/Tasks';
-import { PincodeQueries } from '../pages/pincode-admin/Queries';
-import { PincodeProfile } from '../pages/pincode-admin/Profile';
-import { PincodeSettings } from '../pages/pincode-admin/Settings';
+// District Admin Pages (lazy loaded on demand)
+const DistrictAdminDashboard = lazyNamed(() => import('../pages/district-admin/Dashboard'), 'DistrictAdminDashboard');
+const DistrictOverview = lazyNamed(() => import('../pages/district-admin/Overview'), 'DistrictOverview');
+const DistrictDivisions = lazyNamed(() => import('../pages/district-admin/Divisions'), 'DistrictDivisions');
+const DistrictPincodes = lazyNamed(() => import('../pages/district-admin/Pincodes'), 'DistrictPincodes');
+const DistrictCustomers = lazyNamed(() => import('../pages/district-admin/Customers'), 'DistrictCustomers');
+const DistrictMembershipCards = lazyNamed(() => import('../pages/district-admin/MembershipCards'), 'DistrictMembershipCards');
+const DistrictVendors = lazyNamed(() => import('../pages/district-admin/Vendors'), 'DistrictVendors');
+const DistrictVendorSubscriptions = lazyNamed(() => import('../pages/district-admin/VendorSubscriptions'), 'DistrictVendorSubscriptions');
+const DistrictVendorPayments = lazyNamed(() => import('../pages/district-admin/VendorPayments'), 'DistrictVendorPayments');
+const DistrictOrders = lazyNamed(() => import('../pages/district-admin/Orders'), 'DistrictOrders');
+const DistrictBookings = lazyNamed(() => import('../pages/district-admin/Bookings'), 'DistrictBookings');
+const DistrictJobs = lazyNamed(() => import('../pages/district-admin/Jobs'), 'DistrictJobs');
+const DistrictDeliveryPartners = lazyNamed(() => import('../pages/district-admin/DeliveryPartners'), 'DistrictDeliveryPartners');
+const DistrictTechnicians = lazyNamed(() => import('../pages/district-admin/Technicians'), 'DistrictTechnicians');
+const DistrictExecutives = lazyNamed(() => import('../pages/district-admin/Executives'), 'DistrictExecutives');
+const DistrictSupportTeam = lazyNamed(() => import('../pages/district-admin/SupportTeam'), 'DistrictSupportTeam');
+const DistrictAgents = lazyNamed(() => import('../pages/district-admin/Agents'), 'DistrictAgents');
+const DistrictAgentPayments = lazyNamed(() => import('../pages/district-admin/AgentPayments'), 'DistrictAgentPayments');
+const DistrictKYC = lazyNamed(() => import('../pages/district-admin/KYC'), 'DistrictKYC');
+const DistrictQualityCheck = lazyNamed(() => import('../pages/district-admin/QualityCheck'), 'DistrictQualityCheck');
+const DistrictReports = lazyNamed(() => import('../pages/district-admin/Reports'), 'DistrictReports');
+const DistrictPayments = lazyNamed(() => import('../pages/district-admin/Payments'), 'DistrictPayments');
+const DistrictTasks = lazyNamed(() => import('../pages/district-admin/Tasks'), 'DistrictTasks');
+const DistrictQueries = lazyNamed(() => import('../pages/district-admin/Queries'), 'DistrictQueries');
+const DistrictProfile = lazyNamed(() => import('../pages/district-admin/Profile'), 'DistrictProfile');
+const DistrictSettings = lazyNamed(() => import('../pages/district-admin/Settings'), 'DistrictSettings');
 
-// Onboarding Request Pages
-import { ManagerRequestsPage } from '../pages/requests/ManagerRequestsPage';
-import { AgentRequestsPage } from '../pages/requests/AgentRequestsPage';
-import { VendorRequestsPage } from '../pages/requests/VendorRequestsPage';
+// Divisional Admin Pages (lazy loaded on demand)
+const DivisionalAdminDashboard = lazyNamed(() => import('../pages/divisional-admin/Dashboard'), 'DivisionalAdminDashboard');
+const DivisionalOverview = lazyNamed(() => import('../pages/divisional-admin/Overview'), 'DivisionalOverview');
+const DivisionalPincodes = lazyNamed(() => import('../pages/divisional-admin/Pincodes'), 'DivisionalPincodes');
+const DivisionalCustomers = lazyNamed(() => import('../pages/divisional-admin/Customers'), 'DivisionalCustomers');
+const DivisionalMembershipCards = lazyNamed(() => import('../pages/divisional-admin/MembershipCards'), 'DivisionalMembershipCards');
+const DivisionalVendors = lazyNamed(() => import('../pages/divisional-admin/Vendors'), 'DivisionalVendors');
+const DivisionalVendorSubscriptions = lazyNamed(() => import('../pages/divisional-admin/VendorSubscriptions'), 'DivisionalVendorSubscriptions');
+const DivisionalVendorPayments = lazyNamed(() => import('../pages/divisional-admin/VendorPayments'), 'DivisionalVendorPayments');
+const DivisionalOrders = lazyNamed(() => import('../pages/divisional-admin/Orders'), 'DivisionalOrders');
+const DivisionalBookings = lazyNamed(() => import('../pages/divisional-admin/Bookings'), 'DivisionalBookings');
+const DivisionalJobs = lazyNamed(() => import('../pages/divisional-admin/Jobs'), 'DivisionalJobs');
+const DivisionalDeliveryPartners = lazyNamed(() => import('../pages/divisional-admin/DeliveryPartners'), 'DivisionalDeliveryPartners');
+const DivisionalTechnicians = lazyNamed(() => import('../pages/divisional-admin/Technicians'), 'DivisionalTechnicians');
+const DivisionalExecutives = lazyNamed(() => import('../pages/divisional-admin/Executives'), 'DivisionalExecutives');
+const DivisionalSupportTeam = lazyNamed(() => import('../pages/divisional-admin/SupportTeam'), 'DivisionalSupportTeam');
+const DivisionalAgents = lazyNamed(() => import('../pages/divisional-admin/Agents'), 'DivisionalAgents');
+const DivisionalAgentPayments = lazyNamed(() => import('../pages/divisional-admin/AgentPayments'), 'DivisionalAgentPayments');
+const DivisionalKYC = lazyNamed(() => import('../pages/divisional-admin/KYC'), 'DivisionalKYC');
+const DivisionalQualityCheck = lazyNamed(() => import('../pages/divisional-admin/QualityCheck'), 'DivisionalQualityCheck');
+const DivisionalReports = lazyNamed(() => import('../pages/divisional-admin/Reports'), 'DivisionalReports');
+const DivisionalPayments = lazyNamed(() => import('../pages/divisional-admin/Payments'), 'DivisionalPayments');
+const DivisionalTasks = lazyNamed(() => import('../pages/divisional-admin/Tasks'), 'DivisionalTasks');
+const DivisionalQueries = lazyNamed(() => import('../pages/divisional-admin/Queries'), 'DivisionalQueries');
+const DivisionalProfile = lazyNamed(() => import('../pages/divisional-admin/Profile'), 'DivisionalProfile');
+const DivisionalSettings = lazyNamed(() => import('../pages/divisional-admin/Settings'), 'DivisionalSettings');
 
-// Common Notifications Page
-import NotificationsPage from '../pages/common/Notifications';
+// Pincode Admin Pages (lazy loaded on demand)
+const PincodeAdminDashboard = lazyNamed(() => import('../pages/pincode-admin/Dashboard'), 'PincodeAdminDashboard');
+const PincodeOverview = lazyNamed(() => import('../pages/pincode-admin/Overview'), 'PincodeOverview');
+const PincodeCustomers = lazyNamed(() => import('../pages/pincode-admin/Customers'), 'PincodeCustomers');
+const PincodeMembershipCards = lazyNamed(() => import('../pages/pincode-admin/MembershipCards'), 'PincodeMembershipCards');
+const PincodeVendors = lazyNamed(() => import('../pages/pincode-admin/Vendors'), 'PincodeVendors');
+const PincodeVendorSubscriptions = lazyNamed(() => import('../pages/pincode-admin/VendorSubscriptions'), 'PincodeVendorSubscriptions');
+const PincodeVendorDetails = lazyNamed(() => import('../pages/pincode-admin/VendorDetails'), 'PincodeVendorDetails');
+const PincodeVendorPayments = lazyNamed(() => import('../pages/pincode-admin/VendorPayments'), 'PincodeVendorPayments');
+const PincodeOrders = lazyNamed(() => import('../pages/pincode-admin/Orders'), 'PincodeOrders');
+const PincodeBookings = lazyNamed(() => import('../pages/pincode-admin/Bookings'), 'PincodeBookings');
+const PincodeJobs = lazyNamed(() => import('../pages/pincode-admin/Jobs'), 'PincodeJobs');
+const PincodeDeliveryPartners = lazyNamed(() => import('../pages/pincode-admin/DeliveryPartners'), 'PincodeDeliveryPartners');
+const PincodeTechnicians = lazyNamed(() => import('../pages/pincode-admin/Technicians'), 'PincodeTechnicians');
+const PincodeExecutives = lazyNamed(() => import('../pages/pincode-admin/Executives'), 'PincodeExecutives');
+const PincodeSupportTeam = lazyNamed(() => import('../pages/pincode-admin/SupportTeam'), 'PincodeSupportTeam');
+const PincodeAgents = lazyNamed(() => import('../pages/pincode-admin/Agents'), 'PincodeAgents');
+const PincodeAgentPayments = lazyNamed(() => import('../pages/pincode-admin/AgentPayments'), 'PincodeAgentPayments');
+const PincodeKYC = lazyNamed(() => import('../pages/pincode-admin/KYC'), 'PincodeKYC');
+const PincodeQualityCheck = lazyNamed(() => import('../pages/pincode-admin/QualityCheck'), 'PincodeQualityCheck');
+const PincodeBusinessReports = lazyNamed(() => import('../pages/pincode-admin/BusinessReports'), 'PincodeBusinessReports');
+const PincodePayments = lazyNamed(() => import('../pages/pincode-admin/Payments'), 'PincodePayments');
+const PincodeTasks = lazyNamed(() => import('../pages/pincode-admin/Tasks'), 'PincodeTasks');
+const PincodeQueries = lazyNamed(() => import('../pages/pincode-admin/Queries'), 'PincodeQueries');
+const PincodeProfile = lazyNamed(() => import('../pages/pincode-admin/Profile'), 'PincodeProfile');
+const PincodeSettings = lazyNamed(() => import('../pages/pincode-admin/Settings'), 'PincodeSettings');
+
+// Onboarding Request Pages (lazy loaded on demand)
+const ManagerRequestsPage = lazyNamed(() => import('../pages/requests/ManagerRequestsPage'), 'ManagerRequestsPage');
+const AgentRequestsPage = lazyNamed(() => import('../pages/requests/AgentRequestsPage'), 'AgentRequestsPage');
+const VendorRequestsPage = lazyNamed(() => import('../pages/requests/VendorRequestsPage'), 'VendorRequestsPage');
+
+// Common Notifications Page (lazy loaded on demand)
+const NotificationsPage = React.lazy(() => import('../pages/common/Notifications'));
 
 function RootRedirect() {
   const { user, isAuthenticated, loading } = useAuth();
@@ -164,7 +179,8 @@ function RootRedirect() {
 
 export function AppRoutes() {
   return (
-    <Routes>
+    <React.Suspense fallback={<RouteLoadingSpinner />}>
+      <Routes>
       <Route path="/" element={<RootRedirect />} />
       {/* /login: already-authenticated users are redirected to their dashboard inside Login.jsx */}
       <Route path="/login" element={<Login />} />
@@ -375,5 +391,6 @@ export function AppRoutes() {
       {/* Fallback */}
       <Route path="*" element={<RootRedirect />} />
     </Routes>
+    </React.Suspense>
   );
 }

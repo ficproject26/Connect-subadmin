@@ -4,7 +4,7 @@ import { Pagination } from './Pagination';
 import { useTheme } from '../context/ThemeContext';
 import { Download, Filter, RefreshCw, LayoutGrid, Table as TableIcon, AlertCircle } from 'lucide-react';
 
-export function DataTable({
+export const DataTable = React.memo(function DataTable({
   columns,
   data = [],
   loading = false,
@@ -30,6 +30,7 @@ export function DataTable({
 }) {
   const { isDark } = useTheme();
   const [search, setSearch] = useState('');
+  const deferredSearch = React.useDeferredValue(search);
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768 && renderCard) {
@@ -48,10 +49,10 @@ export function DataTable({
     return () => window.removeEventListener('resize', handleResize);
   }, [renderCard]);
 
-  // Client-side search filtering
+  // Client-side search filtering using React 18 useDeferredValue to keep input typing responsive (0 input lag)
   const filteredData = useMemo(() => {
-    if (!search || !search.trim()) return data;
-    const q = search.trim().toLowerCase();
+    if (!deferredSearch || !deferredSearch.trim()) return data;
+    const q = deferredSearch.trim().toLowerCase();
     const ph = (searchPlaceholder || '').trim().toLowerCase();
     if (q === ph || q === 'search records...' || (ph && ph.startsWith(q) && q.startsWith('search'))) {
       return data;
@@ -69,7 +70,7 @@ export function DataTable({
         return false;
       });
     });
-  }, [data, search, searchPlaceholder]);
+  }, [data, deferredSearch, searchPlaceholder]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
   const paginatedData = useMemo(() => {
@@ -424,4 +425,4 @@ export function DataTable({
       )}
     </div>
   );
-}
+});

@@ -27,7 +27,7 @@ const PIN_MAP = {
 function resolvePinGeo(rawPin) {
   const pin = String(rawPin || '').trim();
   if (pin && db.pincodes) {
-    const found = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === pin);
+    const found = (db.pincodeMap && db.pincodeMap.get(pin)) || Array.from(db.pincodes).find(p => String(p.code || p.pincode) === pin);
     if (found) {
       let state = found.state || found.stateName || '';
       let district = found.district || found.districtName || '';

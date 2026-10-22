@@ -90,8 +90,12 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static uploads with browser caching (7 days) and ETag validation
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '7d',
+  etag: true,
+  lastModified: true
+}));
 
 // Core Sub-Admin Routes
 app.use('/api/auth', authRoutes);

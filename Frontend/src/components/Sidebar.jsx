@@ -40,7 +40,7 @@ import {
   X
 } from 'lucide-react';
 
-export function Sidebar({ isOpen, setIsOpen }) {
+export const Sidebar = React.memo(function Sidebar({ isOpen, setIsOpen }) {
   const { user, logout } = useAuth();
   const { isDark } = useTheme();
   const { unreadCount } = useNotifications();
@@ -512,4 +512,4 @@ export function Sidebar({ isOpen, setIsOpen }) {
       </aside>
     </>
   );
-}
+});

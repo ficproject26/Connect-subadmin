@@ -664,6 +664,50 @@ function getDistricts(req, res) {
 
     const assignedDistrictsMap = new Map();
 
+    // Pre-index district-level counts for fast O(1) resolution
+    const vendorsByDist = new Map();
+    for (const v of allVendors) {
+      const d = (v.district || '').trim().toLowerCase();
+      if (d) vendorsByDist.set(d, (vendorsByDist.get(d) || 0) + 1);
+    }
+    const ordersByDist = new Map();
+    for (const o of allOrders) {
+      const d = (o.district || '').trim().toLowerCase();
+      if (d) ordersByDist.set(d, (ordersByDist.get(d) || 0) + 1);
+    }
+    const bookingsByDist = new Map();
+    for (const b of allBookings) {
+      const d = (b.district || '').trim().toLowerCase();
+      if (d) bookingsByDist.set(d, (bookingsByDist.get(d) || 0) + 1);
+    }
+    const jobsByDist = new Map();
+    for (const j of allJobs) {
+      const d = (j.district || '').trim().toLowerCase();
+      if (d) jobsByDist.set(d, (jobsByDist.get(d) || 0) + 1);
+    }
+    const techsByDist = new Map();
+    for (const t of allTechnicians) {
+      const d = (t.district || '').trim().toLowerCase();
+      if (d) techsByDist.set(d, (techsByDist.get(d) || 0) + 1);
+    }
+    const execsByDist = new Map();
+    for (const e of allExecutives) {
+      const d = (e.district || '').trim().toLowerCase();
+      if (d) execsByDist.set(d, (execsByDist.get(d) || 0) + 1);
+    }
+    const kycByDist = new Map();
+    for (const k of allKYC) {
+      if (k.status === 'Pending') {
+        const d = (k.district || '').trim().toLowerCase();
+        if (d) kycByDist.set(d, (kycByDist.get(d) || 0) + 1);
+      }
+    }
+    const custsByDist = new Map();
+    for (const c of allCustomers) {
+      const d = (c.district || '').trim().toLowerCase();
+      if (d) custsByDist.set(d, (custsByDist.get(d) || 0) + 1);
+    }
+
     candidateDistKeys.forEach(distKey => {
       const distInfo = districtMetaMap.get(distKey) || {};
       const distName = distInfo.name || distKey;
@@ -777,14 +821,7 @@ function getDistricts(req, res) {
       });
       combinedAgents.forEach(a => { if (a.pincode) activePincodeCodes.add(String(a.pincode).trim()); });
 
-      const distVendors = allVendors.filter(v => (v.district || '').trim().toLowerCase() === distKey);
-      const distOrders = allOrders.filter(o => (o.district || '').trim().toLowerCase() === distKey);
-      const distBookings = allBookings.filter(b => (b.district || '').trim().toLowerCase() === distKey);
-      const distJobs = allJobs.filter(j => (j.district || '').trim().toLowerCase() === distKey);
-      const distTechnicians = allTechnicians.filter(t => (t.district || '').trim().toLowerCase() === distKey);
-      const distExecutives = allExecutives.filter(e => (e.district || '').trim().toLowerCase() === distKey);
-      const distKYC = allKYC.filter(k => (k.district || '').trim().toLowerCase() === distKey && k.status === 'Pending');
-      const distCustomers = allCustomers.filter(c => (c.district || '').trim().toLowerCase() === distKey);
+      const totalCust = custsByDist.get(distKey) || 0;
 
       const primaryAdmin = distAdmins[0];
       const parent = getHierarchyParent(primaryAdmin, allUsers);
@@ -806,15 +843,15 @@ function getDistricts(req, res) {
         totalManagers: combinedManagers.length,
         managers: managerList,
         totalAgents: combinedAgents.length,
-        totalVendors: distVendors.length,
-        totalOrders: distOrders.length,
-        totalBookings: distBookings.length,
-        totalJobApplied: distJobs.length,
-        technician: distTechnicians.length,
-        executive: distExecutives.length,
-        pendingKYC: distKYC.length,
-        totalCustomers: distCustomers.length,
-        totalMembershipCards: distCustomers.length,
+        totalVendors: vendorsByDist.get(distKey) || 0,
+        totalOrders: ordersByDist.get(distKey) || 0,
+        totalBookings: bookingsByDist.get(distKey) || 0,
+        totalJobApplied: jobsByDist.get(distKey) || 0,
+        technician: techsByDist.get(distKey) || 0,
+        executive: execsByDist.get(distKey) || 0,
+        pendingKYC: kycByDist.get(distKey) || 0,
+        totalCustomers: totalCust,
+        totalMembershipCards: totalCust,
         adminId: primaryAdmin._id || primaryAdmin.id,
         adminName: (primaryAdmin.name || '').replace(/\s*\(.*?\)\s*/g, '').trim(),
         adminEmail: primaryAdmin.email || null,
@@ -1241,6 +1278,123 @@ function getDivisions(req, res) {
       return true;
     });
 
+    // Pre-index pincodes by divisionId and division name for fast O(1) matching
+    const pincodesByDivId = new Map();
+    const pincodesByDivName = new Map();
+    for (const p of allPincodes) {
+      if (p.divisionId) {
+        const dId = String(p.divisionId).toLowerCase();
+        if (!pincodesByDivId.has(dId)) pincodesByDivId.set(dId, []);
+        pincodesByDivId.get(dId).push(p);
+      }
+      const pDiv = (p.division || p.divisionName || '').trim().toLowerCase();
+      if (pDiv) {
+        if (!pincodesByDivName.has(pDiv)) pincodesByDivName.set(pDiv, []);
+        pincodesByDivName.get(pDiv).push(p);
+      }
+    }
+
+    // Pre-index Division Admins and Pincode Admins
+    const divAdminById = new Map();
+    const divAdminsList = [];
+    const pinAdminsByDivDist = new Map();
+    for (const u of allUsers) {
+      const r = (u.role || '').toLowerCase();
+      const isDivAdmin = r === 'division admin' || r === 'divisional admin' || r.includes('division admin') || r.includes('divisional admin');
+      if (isDivAdmin && isRealAdminRecord(u)) {
+        if (u.divisionId) divAdminById.set(String(u.divisionId).toLowerCase(), u);
+        divAdminsList.push(u);
+      }
+      const isPinAdmin = r === 'pincode admin' || r.includes('pincode admin');
+      if (isPinAdmin && isRealAdminRecord(u)) {
+        const uDiv = (u.division || '').trim().toLowerCase();
+        const uDist = (u.district || '').trim().toLowerCase();
+        if (uDiv && uDist) {
+          const k = `${uDiv}::${uDist}`;
+          pinAdminsByDivDist.set(k, (pinAdminsByDivDist.get(k) || 0) + 1);
+        }
+      }
+    }
+
+    // Pre-index managers and agents by division & district
+    const managersByDivKey = new Map();
+    const managersByDistKey = new Map();
+    for (const m of allManagers) {
+      const d = (m.divisionName || m.division || '').trim().toLowerCase();
+      if (d) {
+        if (!managersByDivKey.has(d)) managersByDivKey.set(d, new Set());
+        managersByDivKey.get(d).add(m.id || m._id || m);
+      }
+      const dist = (m.district || m.districtName || '').trim().toLowerCase();
+      if (dist) {
+        if (!managersByDistKey.has(dist)) managersByDistKey.set(dist, new Set());
+        managersByDistKey.get(dist).add(m.id || m._id || m);
+      }
+    }
+
+    const agentsByDivKey = new Map();
+    const agentsByDistKey = new Map();
+    for (const a of allAgents) {
+      const d = (a.division || '').trim().toLowerCase();
+      if (d) {
+        if (!agentsByDivKey.has(d)) agentsByDivKey.set(d, new Set());
+        agentsByDivKey.get(d).add(a.id || a._id || a);
+      }
+      const dist = (a.district || '').trim().toLowerCase();
+      if (dist) {
+        if (!agentsByDistKey.has(dist)) agentsByDistKey.set(dist, new Set());
+        agentsByDistKey.get(dist).add(a.id || a._id || a);
+      }
+    }
+
+    // Pre-index district-level counts for orders, bookings, jobs, technicians, executives, kyc, customers
+    const orderCountByDist = new Map();
+    for (const o of allOrders) {
+      const d = (o.district || '').trim().toLowerCase();
+      if (d) orderCountByDist.set(d, (orderCountByDist.get(d) || 0) + 1);
+    }
+    const bookingCountByDist = new Map();
+    for (const b of allBookings) {
+      const d = (b.district || '').trim().toLowerCase();
+      if (d) bookingCountByDist.set(d, (bookingCountByDist.get(d) || 0) + 1);
+    }
+    const jobCountByDist = new Map();
+    for (const j of allJobs) {
+      const d = (j.district || '').trim().toLowerCase();
+      if (d) jobCountByDist.set(d, (jobCountByDist.get(d) || 0) + 1);
+    }
+    const techCountByDist = new Map();
+    for (const t of allTechnicians) {
+      const d = (t.district || '').trim().toLowerCase();
+      if (d) techCountByDist.set(d, (techCountByDist.get(d) || 0) + 1);
+    }
+    const execCountByDist = new Map();
+    for (const e of allExecutives) {
+      const d = (e.district || '').trim().toLowerCase();
+      if (d) execCountByDist.set(d, (execCountByDist.get(d) || 0) + 1);
+    }
+    const kycCountByDist = new Map();
+    for (const k of allKYC) {
+      if (k.status === 'Pending') {
+        const d = (k.district || '').trim().toLowerCase();
+        if (d) kycCountByDist.set(d, (kycCountByDist.get(d) || 0) + 1);
+      }
+    }
+    const custCountByDist = new Map();
+    for (const c of allCustomers) {
+      const d = (c.district || '').trim().toLowerCase();
+      if (d) custCountByDist.set(d, (custCountByDist.get(d) || 0) + 1);
+    }
+
+    const hierarchyParentCache = new Map();
+    const getCachedHierarchyParent = (user) => {
+      const uId = String(user._id || user.id || '');
+      if (hierarchyParentCache.has(uId)) return hierarchyParentCache.get(uId);
+      const res = getHierarchyParent(user, allUsers);
+      hierarchyParentCache.set(uId, res);
+      return res;
+    };
+
     const enrichedDivisions = matchingDivisions.map(div => {
       const pDist = resolveDistrict(div);
       const pState = resolveState(div, pDist);
@@ -1250,28 +1404,29 @@ function getDivisions(req, res) {
       const stateId = String(pState?._id || pState?.id || div.stateId || '');
       const divId = String(div._id || div.id || div.divisionId);
       const divName = (div.name || div.divisionName || '').trim();
+      const divKey = divName.toLowerCase();
+      const distKey = distName.toLowerCase();
 
       // Match assigned Division Admin user (must be real onboarded admin)
-      const assigned = allUsers.find(u => {
-        const r = (u.role || '').toLowerCase();
-        const isDivAdmin = r === 'division admin' || r === 'divisional admin' || r.includes('division admin') || r.includes('divisional admin');
-        if (!isDivAdmin || !isRealAdminRecord(u)) return false;
-        if (u.divisionId && String(u.divisionId).toLowerCase() === divId.toLowerCase()) return true;
-        const uDiv = (u.division || '').trim().toLowerCase();
-        const uDist = (u.district || '').trim().toLowerCase();
-        return uDiv === divName.toLowerCase() && (!uDist || uDist === distName.toLowerCase());
-      });
+      let assigned = divAdminById.get(divId.toLowerCase());
+      if (!assigned) {
+        assigned = divAdminsList.find(u => {
+          const uDiv = (u.division || '').trim().toLowerCase();
+          const uDist = (u.district || '').trim().toLowerCase();
+          return uDiv === divKey && (!uDist || uDist === distKey);
+        });
+      }
 
       // Verify parent District Admin
-      const parent = assigned ? getHierarchyParent(assigned, allUsers) : null;
+      const parent = assigned ? getCachedHierarchyParent(assigned) : null;
 
-      // Match Pincodes for this division
-      const matchedPincodes = allPincodes.filter(p => {
-        if (p.divisionId && String(p.divisionId).toLowerCase() === divId.toLowerCase()) return true;
-        const pDiv = (p.division || p.divisionName || '').trim().toLowerCase();
+      // Fast match Pincodes for this division
+      const pById = pincodesByDivId.get(divId.toLowerCase()) || [];
+      const pByName = (pincodesByDivName.get(divKey) || []).filter(p => {
         const pDist = (p.district || p.districtName || '').trim().toLowerCase();
-        return pDiv === divName.toLowerCase() && (!pDist || pDist === distName.toLowerCase());
+        return !pDist || pDist === distKey;
       });
+      const matchedPincodes = Array.from(new Set([...pById, ...pByName]));
 
       // Combine with any pincodes listed on div metadata
       const pincodeCodes = Array.from(new Set([
@@ -1279,41 +1434,34 @@ function getDivisions(req, res) {
         ...matchedPincodes.map(p => String(p.code || p.pincode || '')).filter(Boolean)
       ]));
 
-      // Personnel and metric counts
-      const divKey = divName.toLowerCase();
-      const distKey = distName.toLowerCase();
+      // Personnel and metric counts in O(1)
+      const registeredPinCount = pinAdminsByDivDist.get(`${divKey}::${distKey}`) || 0;
 
-      const divPinAdmins = allUsers.filter(u => {
-        const r = (u.role || '').toLowerCase();
-        return (r === 'pincode admin' || r.includes('pincode admin')) &&
-          isRealAdminRecord(u) &&
-          (u.division || '').trim().toLowerCase() === divKey &&
-          (u.district || '').trim().toLowerCase() === distKey;
-      });
+      const divMgrSet = new Set([
+        ...(managersByDivKey.get(divKey) || []),
+        ...(managersByDistKey.get(distKey) || [])
+      ]);
+      const totalManagers = divMgrSet.size;
 
-      const divManagers = allManagers.filter(m => {
-        const d = (m.divisionName || m.division || '').trim().toLowerCase();
-        return d === divKey || (m.district || m.districtName || '').trim().toLowerCase() === distKey;
-      });
+      const divAgtSet = new Set([
+        ...(agentsByDivKey.get(divKey) || []),
+        ...(agentsByDistKey.get(distKey) || [])
+      ]);
+      const totalAgents = divAgtSet.size;
 
-      const divAgents = allAgents.filter(a => {
-        const d = (a.division || '').trim().toLowerCase();
-        return d === divKey || (a.district || '').trim().toLowerCase() === distKey;
-      });
-
-      const divVendors = allVendors.filter(v => {
+      const divVendorsCount = allVendors.filter(v => {
         const vDiv = (v.division || '').trim().toLowerCase();
         const vDist = (v.district || '').trim().toLowerCase();
         return vDiv.includes(divKey) || (vDist === distKey && (vDiv === '' || vDiv === divKey));
-      });
+      }).length;
 
-      const divOrders = allOrders.filter(o => (o.district || '').trim().toLowerCase() === distKey);
-      const divBookings = allBookings.filter(b => (b.district || '').trim().toLowerCase() === distKey);
-      const divJobs = allJobs.filter(j => (j.district || '').trim().toLowerCase() === distKey);
-      const divTechnicians = allTechnicians.filter(t => (t.district || '').trim().toLowerCase() === distKey);
-      const divExecutives = allExecutives.filter(e => (e.district || '').trim().toLowerCase() === distKey);
-      const divKYC = allKYC.filter(k => (k.district || '').trim().toLowerCase() === distKey && k.status === 'Pending');
-      const divCustomers = allCustomers.filter(c => (c.district || '').trim().toLowerCase() === distKey);
+      const totalOrders = orderCountByDist.get(distKey) || 0;
+      const totalBookings = bookingCountByDist.get(distKey) || 0;
+      const totalJobs = jobCountByDist.get(distKey) || 0;
+      const totalTechnicians = techCountByDist.get(distKey) || 0;
+      const totalExecutives = execCountByDist.get(distKey) || 0;
+      const totalPendingKYC = kycCountByDist.get(distKey) || 0;
+      const totalCustomers = custCountByDist.get(distKey) || 0;
 
       const status = assigned
         ? (assigned.status === 'inactive' ? 'Inactive' : 'Active')
@@ -1335,18 +1483,18 @@ function getDivisions(req, res) {
         district: distName,
         pincodes: pincodeCodes,
         pincodesCount: pincodeCodes.length,
-        registeredPincodeAdminsCount: divPinAdmins.length,
-        totalManagers: divManagers.length,
-        totalAgents: divAgents.length,
-        totalVendors: divVendors.length,
-        totalOrders: divOrders.length,
-        totalBookings: divBookings.length,
-        totalJobApplied: divJobs.length,
-        technician: divTechnicians.length,
-        executive: divExecutives.length,
-        pendingKYC: divKYC.length,
-        totalCustomers: divCustomers.length,
-        totalMembershipCards: divCustomers.length,
+        registeredPincodeAdminsCount: registeredPinCount,
+        totalManagers,
+        totalAgents,
+        totalVendors: divVendorsCount,
+        totalOrders,
+        totalBookings,
+        totalJobApplied: totalJobs,
+        technician: totalTechnicians,
+        executive: totalExecutives,
+        pendingKYC: totalPendingKYC,
+        totalCustomers,
+        totalMembershipCards: totalCustomers,
         adminId: assigned ? (assigned._id || assigned.id) : null,
         adminName: assigned ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : null,
         adminEmail: assigned ? (assigned.email || '-') : null,
@@ -1714,6 +1862,93 @@ function getPincodes(req, res) {
       return true;
     });
 
+    // Pre-index counts and lookups by pincode for high performance O(1) resolution
+    const vendorCountByPin = new Map();
+    for (const v of allVendors) {
+      const pin = String(v.pincode || '').trim();
+      if (pin) vendorCountByPin.set(pin, (vendorCountByPin.get(pin) || 0) + 1);
+    }
+
+    const orderCountByPin = new Map();
+    for (const o of allOrders) {
+      const pin = String(o.pincode || '').trim();
+      if (pin) orderCountByPin.set(pin, (orderCountByPin.get(pin) || 0) + 1);
+    }
+
+    const bookingCountByPin = new Map();
+    for (const b of allBookings) {
+      const pin = String(b.pincode || '').trim();
+      if (pin) bookingCountByPin.set(pin, (bookingCountByPin.get(pin) || 0) + 1);
+    }
+
+    const customerCountByPin = new Map();
+    for (const c of allCustomers) {
+      const pin = String(c.pincode || '').trim();
+      if (pin) customerCountByPin.set(pin, (customerCountByPin.get(pin) || 0) + 1);
+    }
+
+    const managerCountByPin = new Map();
+    for (const u of allUsers) {
+      if ((u.role || '').toLowerCase().includes('manager')) {
+        const pin = String(u.pincode || '').trim();
+        if (pin) managerCountByPin.set(pin, (managerCountByPin.get(pin) || 0) + 1);
+      }
+    }
+
+    const agentCountByPin = new Map();
+    for (const a of allAgents) {
+      const pin = String(a.pincode || '').trim();
+      if (pin) agentCountByPin.set(pin, (agentCountByPin.get(pin) || 0) + 1);
+    }
+
+    const techCountByPin = new Map();
+    for (const t of allTechnicians) {
+      const pin = String(t.pincode || '').trim();
+      if (pin) techCountByPin.set(pin, (techCountByPin.get(pin) || 0) + 1);
+    }
+
+    const execCountByPin = new Map();
+    for (const e of allExecutives) {
+      const pin = String(e.pincode || '').trim();
+      if (pin) execCountByPin.set(pin, (execCountByPin.get(pin) || 0) + 1);
+    }
+
+    const kycCountByPin = new Map();
+    for (const k of allKYC) {
+      if (k.status === 'Pending') {
+        const pin = String(k.pincode || '').trim();
+        if (pin) kycCountByPin.set(pin, (kycCountByPin.get(pin) || 0) + 1);
+      }
+    }
+
+    const jobCountByPin = new Map();
+    for (const j of allJobs) {
+      const pin = String(j.pincode || '').trim();
+      if (pin) jobCountByPin.set(pin, (jobCountByPin.get(pin) || 0) + 1);
+    }
+
+    // Pre-index real Pincode Admins
+    const pinAdminById = new Map();
+    const pinAdminByPin = new Map();
+    for (const u of allUsers) {
+      const r = (u.role || '').toLowerCase();
+      const isPinAdmin = r === 'pincode admin' || r.includes('pincode admin');
+      if (isPinAdmin && isRealAdminRecord(u)) {
+        if (u.pincodeId) pinAdminById.set(String(u.pincodeId).toLowerCase(), u);
+        const pin = String(u.pincode || '').trim();
+        if (pin && !pinAdminByPin.has(pin)) pinAdminByPin.set(pin, u);
+      }
+    }
+
+    const pinHierarchyCache = new Map();
+    const getCachedPinParent = (user) => {
+      const uId = String(user._id || user.id || '');
+      if (pinHierarchyCache.has(uId)) return pinHierarchyCache.get(uId);
+      const res = getHierarchyParent(user, allUsers);
+      pinHierarchyCache.set(uId, res);
+      return res;
+    };
+
     const enrichedPincodes = matchingPincodes.map(p => {
       const pinStr = String(p.code || p.pincode).trim();
       const pinId = String(p._id || p.id || p.pincodeId || `PIN-${pinStr}`);
@@ -1722,27 +1957,21 @@ function getPincodes(req, res) {
       const sName = p.state || p.stateName || targetState || 'Tamil Nadu';
 
       // Find assigned Pincode Admin (must be real onboarded admin)
-      const assigned = allUsers.find(u => {
-        const r = (u.role || '').toLowerCase();
-        const isPinAdmin = r === 'pincode admin' || r.includes('pincode admin');
-        if (!isPinAdmin || !isRealAdminRecord(u)) return false;
-        if (u.pincodeId && String(u.pincodeId).toLowerCase() === pinId.toLowerCase()) return true;
-        return String(u.pincode || '').trim() === pinStr;
-      });
+      const assigned = (p.pincodeId && pinAdminById.get(String(p.pincodeId).toLowerCase())) || pinAdminByPin.get(pinStr) || null;
 
       // Verify parent Divisional Admin
-      const parent = assigned ? getHierarchyParent(assigned, allUsers) : null;
+      const parent = assigned ? getCachedPinParent(assigned) : null;
 
-      const pinVendors = allVendors.filter(v => String(v.pincode || '').trim() === pinStr).length;
-      const pinOrders = allOrders.filter(o => String(o.pincode || '').trim() === pinStr).length;
-      const pinBookings = allBookings.filter(b => String(b.pincode || '').trim() === pinStr).length;
-      const pinCustomers = allCustomers.filter(c => String(c.pincode || '').trim() === pinStr).length;
-      const pinManagers = allUsers.filter(u => String(u.pincode || '').trim() === pinStr && (u.role || '').toLowerCase().includes('manager')).length;
-      const pinAgents = allAgents.filter(a => String(a.pincode || '').trim() === pinStr).length;
-      const pinTechnicians = allTechnicians.filter(t => String(t.pincode || '').trim() === pinStr).length;
-      const pinExecutives = allExecutives.filter(e => String(e.pincode || '').trim() === pinStr).length;
-      const pinKYC = allKYC.filter(k => String(k.pincode || '').trim() === pinStr && k.status === 'Pending').length;
-      const pinJobs = allJobs.filter(j => String(j.pincode || '').trim() === pinStr).length;
+      const pinVendors = vendorCountByPin.get(pinStr) || 0;
+      const pinOrders = orderCountByPin.get(pinStr) || 0;
+      const pinBookings = bookingCountByPin.get(pinStr) || 0;
+      const pinCustomers = customerCountByPin.get(pinStr) || 0;
+      const pinManagers = managerCountByPin.get(pinStr) || 0;
+      const pinAgents = agentCountByPin.get(pinStr) || 0;
+      const pinTechnicians = techCountByPin.get(pinStr) || 0;
+      const pinExecutives = execCountByPin.get(pinStr) || 0;
+      const pinKYC = kycCountByPin.get(pinStr) || 0;
+      const pinJobs = jobCountByPin.get(pinStr) || 0;
 
       return {
         id: pinId,

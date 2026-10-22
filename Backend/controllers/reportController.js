@@ -38,6 +38,39 @@ function getDashboardSummary(req, res) {
       return isValidAdminStatus(u.status);
     };
 
+    // Fast admin hierarchy index for O(1) parent resolution
+    let cachedSuperAdmin = null;
+    const stateAdminMap = new Map();
+    const distAdminMap = new Map();
+    const divAdminMap = new Map();
+
+    for (const u of allUsers) {
+      if (!isValidAdminStatus(u.status)) continue;
+      const r = (u.role || '').toLowerCase();
+      const ar = (u.adminRole || '').toLowerCase();
+      if (!cachedSuperAdmin && (r === 'super admin' || r === 'admin' || ar.includes('super'))) {
+        cachedSuperAdmin = u;
+      }
+      if (r === 'state admin' || r.includes('state admin')) {
+        const st = (u.state || '').trim().toLowerCase();
+        if (st && !stateAdminMap.has(st)) stateAdminMap.set(st, u);
+      } else if (r === 'district admin' || r.includes('district admin')) {
+        const dt = (u.district || '').trim().toLowerCase();
+        const st = (u.state || '').trim().toLowerCase();
+        if (dt) {
+          if (!distAdminMap.has(dt)) distAdminMap.set(dt, u);
+          if (st) distAdminMap.set(`${st}:${dt}`, u);
+        }
+      } else if (r === 'division admin' || r === 'divisional admin' || r.includes('division admin')) {
+        const dv = (u.division || '').trim().toLowerCase().replace(/\s+division/g, '');
+        const dt = (u.district || '').trim().toLowerCase();
+        if (dv) {
+          if (!divAdminMap.has(dv)) divAdminMap.set(dv, u);
+          if (dt) divAdminMap.set(`${dt}:${dv}`, u);
+        }
+      }
+    }
+
     const getHierarchyParent = (admin) => {
       if (!admin) return null;
       const role = (admin.role || '').toLowerCase();
@@ -45,43 +78,18 @@ function getDashboardSummary(req, res) {
       const district = (admin.district || '').trim().toLowerCase();
       const division = (admin.division || '').trim().toLowerCase();
 
-      const superAdmin = allUsers.find(u => {
-        const r = (u.role || '').toLowerCase();
-        return (r === 'super admin' || r === 'admin' || (u.adminRole || '').toLowerCase().includes('super')) && isValidAdminStatus(u.status);
-      });
-
       if (role === 'state admin' || role.includes('state admin')) {
-        return superAdmin || null;
+        return cachedSuperAdmin || null;
       }
       if (role === 'district admin' || role.includes('district admin')) {
-        const stateAdmin = allUsers.find(u => {
-          const r = (u.role || '').toLowerCase();
-          const st = (u.state || '').trim().toLowerCase();
-          return (r === 'state admin' || r.includes('state admin')) && st === state && isValidAdminStatus(u.status);
-        });
-        return stateAdmin || superAdmin || null;
+        return stateAdminMap.get(state) || cachedSuperAdmin || null;
       }
       if (role === 'division admin' || role === 'divisional admin' || role.includes('division admin') || role.includes('divisional admin')) {
-        const distAdmin = allUsers.find(u => {
-          const r = (u.role || '').toLowerCase();
-          const st = (u.state || '').trim().toLowerCase();
-          const dt = (u.district || '').trim().toLowerCase();
-          return (r === 'district admin' || r.includes('district admin')) && dt === district && (st === state || !st) && isValidAdminStatus(u.status);
-        });
-        return distAdmin || null;
+        return distAdminMap.get(`${state}:${district}`) || distAdminMap.get(district) || null;
       }
       if (role === 'pincode admin' || role.includes('pincode admin')) {
-        const divAdmin = allUsers.find(u => {
-          const r = (u.role || '').toLowerCase();
-          const st = (u.state || '').trim().toLowerCase();
-          const dt = (u.district || '').trim().toLowerCase();
-          const dv = (u.division || '').trim().toLowerCase().replace(/\s+division/g, '');
-          const targetDiv = division.replace(/\s+division/g, '');
-          return (r === 'division admin' || r === 'divisional admin' || r.includes('division admin')) &&
-            (dv === targetDiv || dv.includes(targetDiv) || targetDiv.includes(dv)) &&
-            dt === district && (st === state || !st) && isValidAdminStatus(u.status);
-        });
-        return divAdmin || null;
+        const targetDiv = division.replace(/\s+division/g, '');
+        return divAdminMap.get(`${district}:${targetDiv}`) || divAdminMap.get(targetDiv) || null;
       }
       return null;
     };
@@ -128,25 +136,34 @@ function getDashboardSummary(req, res) {
       Diamond: scopedCustomers.filter(c => c.membership && c.membership.tier === 'Diamond').length
     };
 
-    // Build real monthly revenue trend from actual order timestamps (last 6 months)
+    // Build real monthly revenue trend from actual order timestamps using single-pass O(N) bucketing
     const revenueTrend = (() => {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const now = new Date();
       const result = [];
+      const bucketMap = new Map();
       for (let i = 5; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const yr = d.getFullYear();
-        const mo = d.getMonth(); // 0-indexed
-        const label = monthNames[mo];
-        const monthOrders = scopedOrders.filter(o => {
-          const created = o.createdAt || o.orderDate || o.date;
-          if (!created) return false;
-          const od = new Date(created);
-          return !isNaN(od.getTime()) && od.getFullYear() === yr && od.getMonth() === mo;
-        });
-        const monthRevenue = monthOrders.reduce((sum, o) => sum + (o.netPayable || o.totalAmount || 0), 0);
-        result.push({ month: label, revenue: Math.round(monthRevenue), orders: monthOrders.length });
+        const mo = d.getMonth();
+        const key = `${yr}-${mo}`;
+        const item = { month: monthNames[mo], revenue: 0, orders: 0 };
+        result.push(item);
+        bucketMap.set(key, item);
       }
+      for (const o of scopedOrders) {
+        const created = o.createdAt || o.orderDate || o.date;
+        if (!created) continue;
+        const od = new Date(created);
+        if (isNaN(od.getTime())) continue;
+        const k = `${od.getFullYear()}-${od.getMonth()}`;
+        const bucket = bucketMap.get(k);
+        if (bucket) {
+          bucket.revenue += (o.netPayable || o.totalAmount || 0);
+          bucket.orders += 1;
+        }
+      }
+      result.forEach(r => { r.revenue = Math.round(r.revenue); });
       return result;
     })();
 
@@ -278,8 +295,8 @@ async function getBusinessReports(req, res) {
       let division = o.division || o.deliveryDivision || (customer ? customer.division : null);
       let state = o.state || o.deliveryState || (customer ? customer.state : null) || user.state || '';
 
-      if (pincode && db.pincodes) {
-        const pObj = Array.from(db.pincodes).find(p => String(p.code || p.pincode) === String(pincode));
+      if (pincode) {
+        const pObj = (db.pincodeMap && db.pincodeMap.get(String(pincode))) || (db.pincodes && Array.from(db.pincodes).find(p => String(p.code || p.pincode) === String(pincode)));
         if (pObj) {
           if (!district) district = pObj.district;
           if (!division) division = pObj.division;
