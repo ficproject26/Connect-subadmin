@@ -14,7 +14,7 @@ async function getMongoDb() {
       client = new MongoClient(uri, { serverSelectionTimeoutMS: 20000, connectTimeoutMS: 20000 });
       await client.connect();
     }
-    db = client.db();
+    db = client.db(process.env.DB_NAME || undefined);
     return db;
   } catch (err) {
     console.error('[MongoDB Atlas] Connection failed:', err.message);

