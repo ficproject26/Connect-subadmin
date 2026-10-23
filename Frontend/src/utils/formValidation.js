@@ -636,4 +636,6 @@ export const validateBankDetails = (form = {}) => {
   }
   return null;
 };
+// Alias validatePasswordPolicy as validatePassword for unified usage
+export const validatePassword = validatePasswordPolicy;
 

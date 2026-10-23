@@ -1,5 +1,6 @@
 const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 const { getMongoDb } = require('../config/mongo');
+const bcrypt = require('bcryptjs');
 
 // Executives & Support Team
 function getExecutives(req, res) {
@@ -589,18 +590,18 @@ async function addAgent(req, res) {
     const adminUserRole = String(req.user.adminRole || '').toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ').trim();
     const isSuperAdmin = (userRole.includes('super admin') || userRole === 'main admin' || (userRole === 'admin' && !adminUserRole.includes('state') && !adminUserRole.includes('district') && !adminUserRole.includes('division') && !adminUserRole.includes('pincode') && !req.user?.level?.includes('state'))) && (!req.user?.state || req.user?.state.toLowerCase() === 'all india');
 
-    // 1. Determine permitted administrative level
+    // 1. Determine permitted administrative level strictly from authenticated caller
     let permittedLevel = '';
     if (isSuperAdmin) {
       permittedLevel = req.body.level ? normalizeLevel(req.body.level) : 'state';
-    } else if (userRole.includes('state') || (userRole === 'admin' && req.user?.state)) {
-      permittedLevel = 'state';
-    } else if (userRole.includes('district')) {
-      permittedLevel = 'district';
-    } else if (userRole.includes('division') || userRole.includes('divisional')) {
-      permittedLevel = 'division';
     } else if (userRole.includes('pincode')) {
       permittedLevel = 'pincode';
+    } else if (userRole.includes('division') || userRole.includes('divisional')) {
+      permittedLevel = 'division';
+    } else if (userRole.includes('district')) {
+      permittedLevel = 'district';
+    } else if (userRole.includes('state') || (userRole === 'admin' && req.user?.state)) {
+      permittedLevel = 'state';
     } else {
       return res.status(403).json({
         success: false,
@@ -609,19 +610,31 @@ async function addAgent(req, res) {
       });
     }
 
-    // 2. Reject if requested level does not match caller's permitted administrative level
-    if (!isSuperAdmin && req.body.level) {
-      const requestedNorm = normalizeLevel(req.body.level);
-      if (requestedNorm !== permittedLevel) {
-        return res.status(403).json({
-          success: false,
-          code: 'UNAUTHORIZED_LEVEL',
-          message: `Unauthorized level. ${req.user.role || 'Your role'} can only onboard ${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agents.`
-        });
+    // 2. Reject if requested level or role does not match caller's permitted administrative level
+    if (!isSuperAdmin) {
+      if (req.body.level) {
+        const requestedNorm = normalizeLevel(req.body.level);
+        if (requestedNorm !== permittedLevel) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_LEVEL',
+            message: `Unauthorized level. Your account can only onboard ${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agents at your assigned territory level.`
+          });
+        }
+      }
+      if (req.body.role) {
+        const reqRoleNorm = normalizeLevel(req.body.role);
+        if (reqRoleNorm && reqRoleNorm !== permittedLevel) {
+          return res.status(403).json({
+            success: false,
+            code: 'UNAUTHORIZED_LEVEL',
+            message: `Unauthorized role. Your account can only onboard ${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agents.`
+          });
+        }
       }
     }
 
-    // 3. Resolve caller's trusted territory
+    // 3. Resolve caller's trusted assigned territory
     const callerState = (req.user?.state || req.user?.assignedState || '').trim();
     const callerDistrict = (req.user?.district || req.user?.assignedDistrict || '').trim();
     const callerDivision = (req.user?.division || req.user?.assignedDivision || '').trim();
@@ -635,13 +648,13 @@ async function addAgent(req, res) {
 
     // 4. Territory authorization checks (reject spoofed / manipulated payload territories)
     if (!isSuperAdmin) {
-      // State Admin
+      // State Admin -> Same assigned state only
       if (permittedLevel === 'state') {
         if (reqState && callerState && callerState.toLowerCase() !== 'all india' && reqState.toLowerCase().trim() !== callerState.toLowerCase()) {
           return res.status(403).json({
             success: false,
             code: 'UNAUTHORIZED_TERRITORY',
-            message: 'Unauthorized territory. State Admins cannot onboard agents outside their assigned state.'
+            message: `Unauthorized territory. State Admins cannot onboard agents outside their assigned state (${callerState}).`
           });
         }
         if (reqStateId && callerStateId && String(reqStateId).trim() !== callerStateId) {
@@ -652,7 +665,7 @@ async function addAgent(req, res) {
           });
         }
       }
-      // District Admin
+      // District Admin -> Same assigned district only
       else if (permittedLevel === 'district') {
         if (reqState && callerState && callerState.toLowerCase() !== 'all india' && reqState.toLowerCase().trim() !== callerState.toLowerCase()) {
           return res.status(403).json({
@@ -665,7 +678,7 @@ async function addAgent(req, res) {
           return res.status(403).json({
             success: false,
             code: 'UNAUTHORIZED_TERRITORY',
-            message: 'Unauthorized territory. District Admins cannot onboard agents outside their assigned district.'
+            message: `Unauthorized territory. District Admins cannot onboard agents outside their assigned district (${callerDistrict}).`
           });
         }
         if (reqDistrictId && callerDistrictId && String(reqDistrictId).trim() !== callerDistrictId) {
@@ -676,7 +689,7 @@ async function addAgent(req, res) {
           });
         }
       }
-      // Division Admin
+      // Division Admin -> Same assigned division only
       else if (permittedLevel === 'division') {
         if (reqState && callerState && callerState.toLowerCase() !== 'all india' && reqState.toLowerCase().trim() !== callerState.toLowerCase()) {
           return res.status(403).json({
@@ -696,7 +709,7 @@ async function addAgent(req, res) {
           return res.status(403).json({
             success: false,
             code: 'UNAUTHORIZED_TERRITORY',
-            message: 'Unauthorized territory. Division Admins cannot onboard agents outside their assigned division.'
+            message: `Unauthorized territory. Division Admins cannot onboard agents outside their assigned division (${callerDivision}).`
           });
         }
         if (reqDivisionId && callerDivisionId && String(reqDivisionId).trim() !== callerDivisionId) {
@@ -707,13 +720,13 @@ async function addAgent(req, res) {
           });
         }
       }
-      // Pincode Admin
+      // Pincode Admin -> Same assigned pincode only
       else if (permittedLevel === 'pincode') {
         if (reqPincode && callerPincode && callerPincode !== 'all' && String(reqPincode).trim() !== callerPincode) {
           return res.status(403).json({
             success: false,
             code: 'UNAUTHORIZED_TERRITORY',
-            message: 'Unauthorized territory. Pincode Admins cannot onboard agents outside their assigned pincode.'
+            message: `Unauthorized territory. Pincode Admins cannot onboard agents outside their assigned pincode (${callerPincode}).`
           });
         }
         if (reqPincodeId && callerPincodeId && String(reqPincodeId).trim() !== callerPincodeId) {
@@ -726,13 +739,12 @@ async function addAgent(req, res) {
       }
     }
 
-    // 5. Server-side authoritative territory assignment (never trust raw frontend values)
-    let assignedState = isSuperAdmin ? (reqState || 'Tamil Nadu') : callerState;
+    // 5. Server-side authoritative assigned territory
+    let assignedState = isSuperAdmin ? (reqState || 'Tamil Nadu') : (callerState || 'Tamil Nadu');
     let assignedDistrict = isSuperAdmin ? (reqDistrict || null) : (permittedLevel === 'state' ? null : callerDistrict);
     let assignedDivision = isSuperAdmin ? (reqDivision || null) : ((permittedLevel === 'division' || permittedLevel === 'pincode') ? callerDivision : null);
     let assignedPincode = isSuperAdmin ? (reqPincode ? String(reqPincode).trim() : null) : (permittedLevel === 'pincode' ? callerPincode : null);
 
-    // If pincode is set but district/division/state are missing, resolve from db.pincodes
     if (assignedPincode && (!assignedState || !assignedDistrict || !assignedDivision) && db.pincodes) {
       const pinDoc = Array.from(db.pincodes || []).find(p => String(p.code || p.pincode) === assignedPincode);
       if (pinDoc) {
@@ -742,7 +754,6 @@ async function addAgent(req, res) {
       }
     }
 
-    // Lookup stable territory IDs from database
     let stateId = callerStateId;
     let districtId = callerDistrictId;
     let divisionId = callerDivisionId;
@@ -765,61 +776,297 @@ async function addAgent(req, res) {
       if (pDoc) pincodeId = String(pDoc._id || pDoc.id || pDoc.pincodeId);
     }
 
-    // 6. Validate baseline agent fields
-    const { name, mobile, phone, email } = req.body;
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
-      return res.status(400).json({ success: false, message: 'Valid agent name (at least 2 characters) is required.' });
+    // ─────────────────────────────────────────────────────────────────
+    // STEP 1 VALIDATION — Account Credentials & Basic Info
+    // ─────────────────────────────────────────────────────────────────
+    const { name, mobile, phone, email, password, confirmPassword } = req.body;
+
+    // Full Name: 2-100 characters; letters and spaces only
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ success: false, message: 'Full Name is required.' });
+    }
+    const cleanName = name.trim().replace(/\s{2,}/g, ' ');
+    if (cleanName.length < 2 || cleanName.length > 100) {
+      return res.status(400).json({ success: false, message: 'Full Name must be between 2 and 100 characters.' });
+    }
+    if (!/^[a-zA-Z\s.'-]+$/.test(cleanName)) {
+      return res.status(400).json({ success: false, message: 'Full Name contains invalid characters. Letters and spaces only.' });
     }
 
+    // Primary Mobile: Exactly 10 digits; starts with 6, 7, 8, or 9
     const rawMobile = String(mobile || phone || '').replace(/\D/g, '');
-    if (!rawMobile || rawMobile.length !== 10) {
-      return res.status(400).json({ success: false, message: 'A valid 10-digit mobile number is required.' });
+    const cleanMobile = rawMobile.length === 12 && rawMobile.startsWith('91') ? rawMobile.slice(2) : (rawMobile.length === 11 && rawMobile.startsWith('0') ? rawMobile.slice(1) : rawMobile);
+    if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+      return res.status(400).json({ success: false, message: 'Primary Mobile Number must be exactly 10 digits starting with 6, 7, 8, or 9.' });
     }
 
+    // Email Address: Valid email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || typeof email !== 'string' || !emailRegex.test(email.trim())) {
-      return res.status(400).json({ success: false, message: 'A valid email address is required.' });
+      return res.status(400).json({ success: false, message: 'A valid Email Address is required.' });
+    }
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Password: Minimum 6 characters, at least one uppercase letter, one number, and one special symbol
+    const agentPassword = password || req.body.newPassword;
+    if (!agentPassword || typeof agentPassword !== 'string') {
+      return res.status(400).json({ success: false, message: 'Password is required.' });
+    }
+    if (agentPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
+    }
+    if (!/[A-Z]/.test(agentPassword)) {
+      return res.status(400).json({ success: false, message: 'Password must contain at least one uppercase letter.' });
+    }
+    if (!/\d/.test(agentPassword)) {
+      return res.status(400).json({ success: false, message: 'Password must contain at least one number.' });
+    }
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(agentPassword)) {
+      return res.status(400).json({ success: false, message: 'Password must contain at least one special symbol (e.g. !@#$%^&*).' });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
-    const cleanMobile = rawMobile;
+    if (confirmPassword && confirmPassword !== agentPassword) {
+      return res.status(400).json({ success: false, message: 'Confirm Password must match the password exactly.' });
+    }
 
-    // 7. Check for duplicate agent or user
+    // ─────────────────────────────────────────────────────────────────
+    // STEP 2 VALIDATION — Profile, Verification, Territory & Physical Address
+    // ─────────────────────────────────────────────────────────────────
+    const {
+      profilePhoto,
+      alternativeMobile,
+      dob,
+      gender,
+      aadhaarNumber,
+      panNumber,
+      highestQualification,
+      experienceLevel,
+      previousCompany,
+      physicalAddress,
+      address
+    } = req.body;
+
+    // Profile Photo: Mandatory, max 5 MB
+    const agentProfilePhoto = profilePhoto || req.body.avatar || req.body.photo;
+    if (!agentProfilePhoto || (typeof agentProfilePhoto === 'string' && !agentProfilePhoto.trim())) {
+      return res.status(400).json({ success: false, message: 'Profile Photo is mandatory.' });
+    }
+
+    // Alternative Mobile: Mandatory, 10 digits starting with 6-9, different from primary mobile
+    const rawAltMobile = String(alternativeMobile || req.body.altMobile || '').replace(/\D/g, '');
+    const cleanAltMobile = rawAltMobile.length === 12 && rawAltMobile.startsWith('91') ? rawAltMobile.slice(2) : (rawAltMobile.length === 11 && rawAltMobile.startsWith('0') ? rawAltMobile.slice(1) : rawAltMobile);
+    if (!/^[6-9]\d{9}$/.test(cleanAltMobile)) {
+      return res.status(400).json({ success: false, message: 'Alternative Mobile Number must be exactly 10 digits starting with 6, 7, 8, or 9.' });
+    }
+    if (cleanAltMobile === cleanMobile) {
+      return res.status(400).json({ success: false, message: 'Alternative Mobile Number cannot be the same as Primary Mobile Number.' });
+    }
+
+    // Date of Birth: Mandatory, applicant must be at least 18 years old
+    if (!dob || (typeof dob === 'string' && !dob.trim())) {
+      return res.status(400).json({ success: false, message: 'Date of Birth is mandatory.' });
+    }
+    const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid Date of Birth.' });
+    }
+    const today = new Date();
+    let calculatedAge = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      calculatedAge--;
+    }
+    if (calculatedAge < 18) {
+      return res.status(400).json({ success: false, message: 'Applicant must be at least 18 years of age.' });
+    }
+
+    // Gender: Mandatory, Male, Female, Other, or Prefer Not to Say
+    const validGenders = ['male', 'female', 'other', 'prefer not to say'];
+    const cleanGender = String(gender || '').trim();
+    if (!cleanGender || !validGenders.includes(cleanGender.toLowerCase())) {
+      return res.status(400).json({ success: false, message: 'Valid Gender (Male, Female, Other, or Prefer Not to Say) is required.' });
+    }
+
+    // Aadhaar Number: Exactly 12 numeric digits
+    const rawAadhaar = String(aadhaarNumber || req.body.aadharNumber || '').replace(/\D/g, '');
+    if (!/^\d{12}$/.test(rawAadhaar)) {
+      return res.status(400).json({ success: false, message: 'Aadhaar Number must be exactly 12 numeric digits.' });
+    }
+
+    // PAN Number: 5 letters, 4 digits, 1 letter
+    const cleanPAN = String(panNumber || '').trim().toUpperCase();
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(cleanPAN)) {
+      return res.status(400).json({ success: false, message: 'PAN Number must be valid format: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F).' });
+    }
+
+    // Qualification & Experience Level
+    const cleanQualification = String(highestQualification || req.body.qualification || '').trim();
+    if (!cleanQualification) {
+      return res.status(400).json({ success: false, message: 'Highest Qualification is mandatory.' });
+    }
+
+    const cleanExperienceLevel = String(experienceLevel || req.body.experience || '').trim();
+    if (!cleanExperienceLevel) {
+      return res.status(400).json({ success: false, message: 'Experience Level is mandatory.' });
+    }
+
+    // Previous Company Name: Mandatory for experienced, 'N/A' for Fresher
+    let cleanPreviousCompany = String(previousCompany || '').trim();
+    if (cleanExperienceLevel.toLowerCase().includes('fresher')) {
+      cleanPreviousCompany = 'N/A';
+    } else {
+      if (!cleanPreviousCompany || cleanPreviousCompany === 'N/A') {
+        return res.status(400).json({ success: false, message: 'Previous Company Name is mandatory for experienced candidates.' });
+      }
+    }
+
+    // Physical / Contact Address — All 8 fields are mandatory
+    const physAddr = physicalAddress || address || req.body;
+    const doorNo = String(physAddr.doorNo || physAddr.doorStreet || physAddr.buildingNo || physAddr.building || '').trim();
+    const street = String(physAddr.street || physAddr.streetName || physAddr.area || '').trim();
+    const village = String(physAddr.village || physAddr.locality || '').trim();
+    const postOffice = String(physAddr.postOffice || '').trim();
+    const taluk = String(physAddr.taluk || '').trim();
+    const physicalState = String(physAddr.physicalState || physAddr.state || '').trim();
+    const physicalDistrict = String(physAddr.physicalDistrict || physAddr.district || '').trim();
+    const rawPhysicalPincode = String(physAddr.physicalPincode || physAddr.pincode || '').replace(/\D/g, '');
+
+    if (!doorNo) return res.status(400).json({ success: false, message: 'Physical Address: Building No / Door No / Shop No is required.' });
+    if (!street) return res.status(400).json({ success: false, message: 'Physical Address: Street Name / Area is required.' });
+    if (!village) return res.status(400).json({ success: false, message: 'Physical Address: Village / Locality is required.' });
+    if (!postOffice) return res.status(400).json({ success: false, message: 'Physical Address: Post Office is required.' });
+    if (!taluk) return res.status(400).json({ success: false, message: 'Physical Address: Taluk is required.' });
+    if (!physicalState) return res.status(400).json({ success: false, message: 'Physical Address: State is required.' });
+    if (!physicalDistrict) return res.status(400).json({ success: false, message: 'Physical Address: District is required.' });
+    if (!/^[1-9][0-9]{5}$/.test(rawPhysicalPincode)) {
+      return res.status(400).json({ success: false, message: 'Physical Address: PIN code must be exactly 6 numeric digits.' });
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // STEP 3 VALIDATION — Bank Details (All 3 fields mandatory)
+    // ─────────────────────────────────────────────────────────────────
+    const bankData = req.body.bankDetails || req.body;
+    const bankName = String(bankData.bankName || '').trim();
+    const rawAccountNumber = String(bankData.accountNumber || '').replace(/\D/g, '');
+    const ifscCode = String(bankData.ifscCode || '').trim().toUpperCase();
+
+    if (!bankName) {
+      return res.status(400).json({ success: false, message: 'Bank Name is mandatory in Step 3.' });
+    }
+    if (!rawAccountNumber || rawAccountNumber.length < 9 || rawAccountNumber.length > 18) {
+      return res.status(400).json({ success: false, message: 'Bank Account Number must be between 9 and 18 numeric digits.' });
+    }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
+      return res.status(400).json({ success: false, message: 'IFSC Code must be valid format (11 characters, 5th character must be "0", e.g. SBIN0001234).' });
+    }
+
+    const maskedAccountNumber = `••••••••${rawAccountNumber.slice(-4)}`;
+
+    // ─────────────────────────────────────────────────────────────────
+    // STEP 4 VALIDATION — Documents Upload & Declarations
+    // ─────────────────────────────────────────────────────────────────
+    const docs = req.body.documents || req.body;
+    const aadhaarCard = docs.aadhaarCard || docs.aadhaarCardFront || docs.aadharPhoto || docs.aadharDocUrl;
+    const panCard = docs.panCard || docs.panPhoto || docs.panDocUrl;
+    const passportPhoto = docs.passportPhoto || agentProfilePhoto;
+    const digitalSignature = docs.digitalSignature || docs.signaturePhoto || docs.signatureDocUrl;
+    const educationalCertificate = docs.educationalCertificate || docs.educationalCertificates || null;
+    const bankProof = docs.bankProof || docs.cancelledCheque || docs.bankPassbookPhoto || null;
+
+    if (!aadhaarCard) {
+      return res.status(400).json({ success: false, message: 'Aadhaar Card document upload is mandatory.' });
+    }
+    if (!panCard) {
+      return res.status(400).json({ success: false, message: 'PAN Card document upload is mandatory.' });
+    }
+    if (!passportPhoto) {
+      return res.status(400).json({ success: false, message: 'Passport Photo is mandatory.' });
+    }
+    if (!digitalSignature) {
+      return res.status(400).json({ success: false, message: 'Digital Signature document upload is mandatory.' });
+    }
+
+    // 3 Legal Declarations must all be accepted
+    const decl = req.body.declarations || req.body;
+    const declTruth = decl.truthfulness === true || decl.declarationTruthfulness === true || String(decl.declarationTruthfulness) === 'true';
+    const declTerms = decl.termsAndPrivacy === true || decl.declarationTerms === true || String(decl.declarationTerms) === 'true';
+    const declApproval = decl.adminVerification === true || decl.declarationAdminVerification === true || String(decl.declarationAdminVerification) === 'true';
+
+    if (!declTruth) {
+      return res.status(400).json({ success: false, message: 'You must confirm that all submitted information is correct and true.' });
+    }
+    if (!declTerms) {
+      return res.status(400).json({ success: false, message: 'You must agree to the Terms & Conditions and Privacy Policy.' });
+    }
+    if (!declApproval) {
+      return res.status(400).json({ success: false, message: 'You must acknowledge that onboarding is subject to administration verification and approval.' });
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // DUPLICATE CHECKS
+    // ─────────────────────────────────────────────────────────────────
     const isDupAgent = Array.from(db.agents || []).some(a =>
       (a.email && a.email.toLowerCase().trim() === cleanEmail) ||
       (a.phone && a.phone.replace(/\D/g, '') === cleanMobile) ||
-      (a.mobile && a.mobile.replace(/\D/g, '') === cleanMobile)
+      (a.mobile && a.mobile.replace(/\D/g, '') === cleanMobile) ||
+      (a.aadhaarNumber && String(a.aadhaarNumber).replace(/\D/g, '') === rawAadhaar) ||
+      (a.panNumber && String(a.panNumber).toUpperCase().trim() === cleanPAN)
     );
     const isDupUser = Array.from(db.users || []).some(u =>
       (u.email && u.email.toLowerCase().trim() === cleanEmail) ||
-      (u.mobile && String(u.mobile).replace(/\D/g, '') === cleanMobile)
+      (u.mobile && String(u.mobile).replace(/\D/g, '') === cleanMobile) ||
+      (u.phone && String(u.phone).replace(/\D/g, '') === cleanMobile) ||
+      (u.aadhaarNumber && String(u.aadhaarNumber).replace(/\D/g, '') === rawAadhaar) ||
+      (u.panNumber && String(u.panNumber).toUpperCase().trim() === cleanPAN)
     );
 
     if (isDupAgent || isDupUser) {
       return res.status(409).json({
         success: false,
-        message: 'An agent with this mobile number or email already exists in the system.'
+        message: 'An agent with this mobile number, email, Aadhaar, or PAN already exists in the platform.'
       });
     }
 
-    // 8. Generate IDs and create agent record
+    // ─────────────────────────────────────────────────────────────────
+    // SECURE PASSWORD HASHING & RECORD CREATION
+    // ─────────────────────────────────────────────────────────────────
+    const passwordHash = await bcrypt.hash(agentPassword, 10);
+
     const randPart = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     const newId = `AGT-${Date.now().toString().slice(-6)}${randPart}`;
     const regId = `REG-AGT-${Date.now().toString().slice(-6)}`;
     const now = new Date().toISOString();
 
+    const roleString = `${permittedLevel}_agent`;
+    const roleTitleString = `${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agent`;
+
     const newAgent = {
       _id: newId,
       id: newId,
-      name: name.trim(),
-      applicantName: name.trim(),
+      name: cleanName,
+      applicantName: cleanName,
       email: cleanEmail,
       phone: cleanMobile,
       mobile: cleanMobile,
-      role: `${permittedLevel}_agent`,
+      alternativeMobile: cleanAltMobile,
+      password: passwordHash,
+      passwordHash: passwordHash,
+      dob: String(dob).split('T')[0],
+      age: calculatedAge,
+      gender: cleanGender,
+      aadhaarNumber: `••••••••${rawAadhaar.slice(-4)}`,
+      aadhaarNumberClean: rawAadhaar,
+      panNumber: cleanPAN,
+      highestQualification: cleanQualification,
+      qualification: cleanQualification,
+      experienceLevel: cleanExperienceLevel,
+      previousCompany: cleanPreviousCompany,
+      profilePhoto: agentProfilePhoto,
+      role: roleString,
       level: permittedLevel,
-      roleTitle: `${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agent`,
+      roleTitle: roleTitleString,
       registrationId: regId,
+      // Assigned Organizational Territory
       territory: {
         state: assignedState,
         district: assignedDistrict || null,
@@ -834,6 +1081,43 @@ async function addAgent(req, res) {
       districtId: districtId || null,
       divisionId: divisionId || null,
       pincodeId: pincodeId || null,
+      // Physical Contact Address (Kept separate from organizational territory)
+      address: {
+        doorNo,
+        street,
+        village,
+        postOffice,
+        taluk,
+        state: physicalState,
+        district: physicalDistrict,
+        pincode: rawPhysicalPincode
+      },
+      // Bank Details
+      bankDetails: {
+        bankName,
+        accountNumber: rawAccountNumber,
+        accountNumberMasked: maskedAccountNumber,
+        ifscCode,
+        accountHolderName: cleanName
+      },
+      // KYC Documents
+      documents: {
+        aadhaarCard,
+        aadhaarCardFront: docs.aadhaarCardFront || aadhaarCard,
+        aadhaarCardBack: docs.aadhaarCardBack || null,
+        panCard,
+        passportPhoto,
+        digitalSignature,
+        educationalCertificate,
+        bankProof
+      },
+      // Legal Declarations
+      declarations: {
+        truthfulness: true,
+        termsAndPrivacy: true,
+        adminVerification: true,
+        acceptedAt: now
+      },
       status: 'pending',
       adminApprovalStatus: 'pending',
       kycStatus: 'pending_verification',
@@ -893,10 +1177,13 @@ async function addAgent(req, res) {
       await db.users.insertOne({
         _id: newId,
         id: newId,
-        name: name.trim(),
+        name: cleanName,
         email: cleanEmail,
         mobile: cleanMobile,
-        role: `${permittedLevel}_agent`,
+        phone: cleanMobile,
+        password: passwordHash,
+        passwordHash: passwordHash,
+        role: roleString,
         level: permittedLevel,
         state: assignedState,
         district: assignedDistrict || null,
@@ -925,18 +1212,30 @@ async function addAgent(req, res) {
         userRole: req.user.role,
         action: 'AGENT_ONBOARDED',
         module: 'Agents',
-        details: `${req.user.role} "${req.user.name || req.user.email}" onboarded ${permittedLevel} agent "${name}" for territory ${[assignedPincode, assignedDivision, assignedDistrict, assignedState].filter(Boolean).join(', ')}.`,
+        details: `${req.user.role} "${req.user.name || req.user.email}" onboarded ${permittedLevel} agent "${cleanName}" for territory ${[assignedPincode, assignedDivision, assignedDistrict, assignedState].filter(Boolean).join(', ')}.`,
         ip: req.ip || '127.0.0.1',
         timestamp: now
       }).catch(() => {});
     }
 
+    // Sanitize response to protect confidential information
+    const sanitizedAgent = { ...newAgent };
+    delete sanitizedAgent.password;
+    delete sanitizedAgent.passwordHash;
+    if (sanitizedAgent.bankDetails) {
+      sanitizedAgent.bankDetails = {
+        ...sanitizedAgent.bankDetails,
+        accountNumber: maskedAccountNumber
+      };
+    }
+
     return res.status(201).json({
       success: true,
-      message: `${permittedLevel.charAt(0).toUpperCase() + permittedLevel.slice(1)} Agent onboarded successfully. Awaiting approval.`,
-      agent: newAgent
+      message: `${roleTitleString} onboarded successfully! Awaiting territory verification and approval.`,
+      agent: sanitizedAgent
     });
   } catch (error) {
+    console.error('Failed to onboard agent:', error);
     return res.status(500).json({ success: false, message: 'Failed to onboard agent', error: error.message });
   }
 }
