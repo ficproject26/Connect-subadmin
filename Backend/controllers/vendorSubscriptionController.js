@@ -38,20 +38,52 @@ function formatDate(dStr) {
 const getVendorSubscriptions = async (req, res) => {
   try {
     const user = req.user;
-    const allSubs = Array.from(db.subscriptions);
-    const allVendors = Array.from(db.vendors);
+    const allSubs = Array.from(db.subscriptions || []);
+    const allVendors = Array.from(db.vendors || []);
+    const allUsers = Array.from(db.users || []);
 
-    // Build vendor lookup map
+    // Build comprehensive vendor lookup map across db.vendors and db.users
     const vendorMap = new Map();
-    allVendors.forEach(v => {
-      const vid = String(v._id || v.id);
-      vendorMap.set(vid, v);
-    });
+    for (const v of allVendors) {
+      if (v._id) vendorMap.set(String(v._id).toLowerCase().trim(), v);
+      if (v.id) vendorMap.set(String(v.id).toLowerCase().trim(), v);
+      if (v.userId) vendorMap.set(String(v.userId).toLowerCase().trim(), v);
+      if (v.email) vendorMap.set(String(v.email).toLowerCase().trim(), v);
+    }
+    for (const u of allUsers) {
+      const uRole = String(u.role || '').toLowerCase();
+      if (uRole.includes('vendor') || uRole.includes('seller') || uRole.includes('merchant')) {
+        const uId = String(u._id || u.id || '').toLowerCase().trim();
+        const uEmail = String(u.email || '').toLowerCase().trim();
+        const uObj = {
+          _id: u._id,
+          id: u._id || u.id,
+          userId: u._id,
+          name: u.name,
+          businessName: u.businessName || u.name,
+          contactPerson: u.name,
+          phone: u.mobile || u.phone,
+          mobile: u.mobile || u.phone,
+          email: u.email,
+          category: u.category || 'Services',
+          state: u.state || u.assignedState,
+          district: u.district || u.assignedDistrict,
+          division: u.division || u.assignedDivision,
+          pincode: u.pincode || u.assignedPincode,
+          stateId: u.stateId || null,
+          districtId: u.districtId || null,
+          divisionId: u.divisionId || null,
+          pincodeId: u.pincodeId || null
+        };
+        if (uId && !vendorMap.has(uId)) vendorMap.set(uId, uObj);
+        if (uEmail && !vendorMap.has(uEmail)) vendorMap.set(uEmail, uObj);
+      }
+    }
 
     // Enrich subscriptions with vendor profile and location if missing
     const enrichedSubs = allSubs.map(s => {
-      const vid = String(s.vendorId || s.businessId);
-      const vendor = vendorMap.get(vid);
+      const vid = String(s.vendorId || s.businessId || s.vendorEmail || '').toLowerCase().trim();
+      const vendor = vendorMap.get(vid) || (s.vendorEmail ? vendorMap.get(String(s.vendorEmail).toLowerCase().trim()) : null);
 
       const rawPincode = s.pincode || vendor?.pincode || '';
       const resolvedGeo = rawPincode ? resolvePincodeHierarchy(rawPincode) : null;

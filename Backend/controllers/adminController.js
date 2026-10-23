@@ -340,6 +340,36 @@ function getStates(req, res) {
       });
     });
 
+    // Also include known states from db.states / db.hierarchy that don't yet have an onboarded admin
+    const knownStates = isSuperAdmin
+      ? Array.from(db.states || [])
+      : (req.user?.state && req.user.state !== 'All India'
+          ? Array.from(db.states || []).filter(s => (s.name || s.stateName || '').toLowerCase() === req.user.state.trim().toLowerCase())
+          : Array.from(db.states || []));
+
+    knownStates.forEach(s => {
+      const stateName = (s.name || s.stateName || '').trim();
+      const stateKey = stateName.toLowerCase();
+      if (!stateKey || statesWithAdmins.has(stateKey)) return;
+
+      const stateObj = (db.hierarchy?.states || []).find(hs => hs.name?.trim().toLowerCase() === stateKey) || {};
+      const maxLimit = SUB_ADMIN_LIMITS['State Admin'] || 4;
+      statesWithAdmins.set(stateKey, {
+        id: s._id || s.id || stateObj.id || `ST-${stateName.slice(0, 3).toUpperCase()}`,
+        name: stateName,
+        code: s.code || stateObj.code || stateName.slice(0, 2).toUpperCase(),
+        status: 'Vacant',
+        limit: maxLimit,
+        admins: [],
+        parentAdminId: null,
+        parentAdminName: null,
+        parentAdminRole: null,
+        onboardedBy: null,
+        onboardedByName: null,
+        onboardedByRole: null
+      });
+    });
+
     const enrichedStates = Array.from(statesWithAdmins.values()).map(s => {
       const primaryAdmin = s.admins[0] || null;
       const adminCount = s.admins.length;
@@ -349,13 +379,18 @@ function getStates(req, res) {
         isFull: adminCount >= s.limit,
         remainingSlots: Math.max(0, s.limit - adminCount),
         adminId: primaryAdmin?.id || null,
-        adminName: primaryAdmin?.name || null,
+        adminName: primaryAdmin ? (primaryAdmin.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : 'Unassigned',
         adminEmail: primaryAdmin?.email || null,
         adminPhone: primaryAdmin?.phone || null
       };
     });
 
-    return res.json({ success: true, count: enrichedStates.length, states: enrichedStates });
+    let resultStates = enrichedStates;
+    if (req.query.assignedOnly === 'true') {
+      resultStates = resultStates.filter(s => s.adminId && s.adminName !== 'Unassigned');
+    }
+
+    return res.json({ success: true, count: resultStates.length, states: resultStates });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch states', error: error.message });
   }
@@ -648,6 +683,13 @@ function getDistricts(req, res) {
       }
     });
 
+    // Also include all known districts from districtMetaMap matching state and user scope
+    districtMetaMap.forEach((distInfo, distKey) => {
+      if (matchesState(distInfo.state) && matchesUserScope(distInfo.name)) {
+        candidateDistKeys.add(distKey);
+      }
+    });
+
     if (candidateDistKeys.size === 0) {
       return res.json({ success: true, districts: [] });
     }
@@ -718,8 +760,6 @@ function getDistricts(req, res) {
       const distAdmins = realDistAdmins.filter(u =>
         (u.district || '').trim().toLowerCase() === distKey
       );
-
-      if (distAdmins.length === 0) return;
 
       // Division Admins
       const distDivAdmins = allUsers.filter(u => {
@@ -823,9 +863,9 @@ function getDistricts(req, res) {
 
       const totalCust = custsByDist.get(distKey) || 0;
 
-      const primaryAdmin = distAdmins[0];
-      const parent = getHierarchyParent(primaryAdmin, allUsers);
-      const status = primaryAdmin.status === 'inactive' ? 'Inactive' : 'Active';
+      const primaryAdmin = distAdmins[0] || null;
+      const parent = primaryAdmin ? getHierarchyParent(primaryAdmin, allUsers) : null;
+      const status = primaryAdmin ? (primaryAdmin.status === 'inactive' ? 'Inactive' : 'Active') : 'Vacant';
 
       assignedDistrictsMap.set(distKey, {
         id: distInfo.id || distMeta?.id || `DST-${distName.replace(/\s+/g, '-').toUpperCase()}`,
@@ -835,8 +875,8 @@ function getDistricts(req, res) {
         state: stateName,
         stateName: stateName,
         divisions: distMeta?.divisions || [],
-        divisionsCount: activeDivisionNames.size || distDivAdmins.length,
-        pincodesCount: activePincodeCodes.size || distPinAdmins.length,
+        divisionsCount: activeDivisionNames.size || distDivAdmins.length || (distMeta?.divisions?.length || 0),
+        pincodesCount: activePincodeCodes.size || distPinAdmins.length || (distMeta?.pincodesCount || 0),
         adminCount: distAdmins.length,
         limit: maxLimit,
         isFull: distAdmins.length >= maxLimit,
@@ -852,34 +892,37 @@ function getDistricts(req, res) {
         pendingKYC: kycByDist.get(distKey) || 0,
         totalCustomers: totalCust,
         totalMembershipCards: totalCust,
-        adminId: primaryAdmin._id || primaryAdmin.id,
-        adminName: (primaryAdmin.name || '').replace(/\s*\(.*?\)\s*/g, '').trim(),
-        adminEmail: primaryAdmin.email || null,
-        adminPhone: primaryAdmin.phone || primaryAdmin.mobile || null,
-        adminDob: primaryAdmin.dob || null,
-        adminAvatarUrl: primaryAdmin.avatarUrl || null,
-        adminAddress: primaryAdmin.address || null,
-        adminCity: primaryAdmin.city || null,
-        adminPincode: primaryAdmin.pincode || null,
-        adminAadharNumber: primaryAdmin.aadharNumber || null,
-        adminPanNumber: primaryAdmin.panNumber || null,
-        adminAccountHolder: primaryAdmin.accountHolderName || null,
-        adminBankName: primaryAdmin.bankName || null,
-        adminAccountNumber: primaryAdmin.accountNumber || null,
-        adminIfsc: primaryAdmin.ifscCode || null,
-        adminBranch: primaryAdmin.branchName || null,
-        adminLoginId: primaryAdmin.loginId || null,
-        adminCreatedAt: primaryAdmin.createdAt || null,
+        adminId: primaryAdmin ? (primaryAdmin._id || primaryAdmin.id) : null,
+        adminName: primaryAdmin ? (primaryAdmin.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : 'Unassigned',
+        adminEmail: primaryAdmin ? primaryAdmin.email || null : null,
+        adminPhone: primaryAdmin ? primaryAdmin.phone || primaryAdmin.mobile || null : null,
+        adminDob: primaryAdmin ? primaryAdmin.dob || null : null,
+        adminAvatarUrl: primaryAdmin ? primaryAdmin.avatarUrl || null : null,
+        adminAddress: primaryAdmin ? primaryAdmin.address || null : null,
+        adminCity: primaryAdmin ? primaryAdmin.city || null : null,
+        adminPincode: primaryAdmin ? primaryAdmin.pincode || null : null,
+        adminAadharNumber: primaryAdmin ? primaryAdmin.aadharNumber || null : null,
+        adminPanNumber: primaryAdmin ? primaryAdmin.panNumber || null : null,
+        adminAccountHolder: primaryAdmin ? primaryAdmin.accountHolderName || null : null,
+        adminBankName: primaryAdmin ? primaryAdmin.bankName || null : null,
+        adminAccountNumber: primaryAdmin ? primaryAdmin.accountNumber || null : null,
+        adminIfsc: primaryAdmin ? primaryAdmin.ifscCode || null : null,
+        adminBranch: primaryAdmin ? primaryAdmin.branchName || null : null,
+        adminLoginId: primaryAdmin ? primaryAdmin.loginId || null : null,
+        adminCreatedAt: primaryAdmin ? primaryAdmin.createdAt || null : null,
         parentAdminId: parent ? parent.id : null,
         parentAdminName: parent ? parent.name : null,
         parentAdminRole: parent ? parent.role : null,
-        onboardedBy: primaryAdmin.onboardedBy || (parent ? parent.id : null),
-        onboardedByName: primaryAdmin.onboardedByName || (parent ? parent.name : null),
-        onboardedByRole: primaryAdmin.onboardedByRole || (parent ? parent.role : 'State Admin'),
+        onboardedBy: primaryAdmin?.onboardedBy || (parent ? parent.id : null),
+        onboardedByName: primaryAdmin?.onboardedByName || (parent ? parent.name : null),
+        onboardedByRole: primaryAdmin?.onboardedByRole || (parent ? parent.role : 'State Admin'),
       });
     });
 
-    const enrichedDistricts = Array.from(assignedDistrictsMap.values());
+    let enrichedDistricts = Array.from(assignedDistrictsMap.values());
+    if (req.query.assignedOnly === 'true') {
+      enrichedDistricts = enrichedDistricts.filter(d => d.adminId && d.adminName !== 'Unassigned');
+    }
     return res.json({ success: true, districts: enrichedDistricts });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch districts', error: error.message });
@@ -1465,7 +1508,7 @@ function getDivisions(req, res) {
 
       const status = assigned
         ? (assigned.status === 'inactive' ? 'Inactive' : 'Active')
-        : (div.status || 'Active');
+        : (div.status || 'Vacant');
 
       return {
         id: divId,
@@ -1496,7 +1539,7 @@ function getDivisions(req, res) {
         totalCustomers,
         totalMembershipCards: totalCustomers,
         adminId: assigned ? (assigned._id || assigned.id) : null,
-        adminName: assigned ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : null,
+        adminName: assigned ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : 'Unassigned',
         adminEmail: assigned ? (assigned.email || '-') : null,
         adminPhone: assigned ? (assigned.phone || assigned.mobile || null) : null,
         adminDob: assigned ? (assigned.dob || null) : null,
@@ -1523,8 +1566,7 @@ function getDivisions(req, res) {
     });
 
     let finalDivisions = enrichedDivisions;
-    const includeUnassigned = req.query.includeUnassigned === 'true';
-    if (!includeUnassigned) {
+    if (req.query.assignedOnly === 'true') {
       finalDivisions = finalDivisions.filter(d =>
         d.adminId &&
         d.adminName &&
@@ -1991,7 +2033,7 @@ function getPincodes(req, res) {
         stateName: sName,
         stateId: String(p.stateId || ''),
         adminId: assigned ? (assigned._id || assigned.id) : null,
-        adminName: assigned ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : null,
+        adminName: assigned ? (assigned.name || '').replace(/\s*\(.*?\)\s*/g, '').trim() : 'Unassigned',
         adminEmail: assigned ? (assigned.email || '-') : null,
         adminPhone: assigned ? (assigned.phone || assigned.mobile || '-') : null,
         adminDob: assigned ? (assigned.dob || null) : null,
@@ -2012,7 +2054,7 @@ function getPincodes(req, res) {
         onboardedBy: assigned ? (assigned.onboardedBy || (parent ? parent.id : null)) : null,
         onboardedByName: assigned ? (assigned.onboardedByName || (parent ? parent.name : null)) : null,
         onboardedByRole: assigned ? (assigned.onboardedByRole || (parent ? parent.role : null)) : null,
-        status: assigned ? (assigned.status === 'inactive' ? 'Inactive' : 'Active') : (p.status || 'Active'),
+        status: assigned ? (assigned.status === 'inactive' ? 'Inactive' : 'Active') : (p.status || 'Vacant'),
         customerCount: pinCustomers,
         totalCustomers: pinCustomers,
         customers: pinCustomers,
@@ -2034,8 +2076,7 @@ function getPincodes(req, res) {
     });
 
     let finalPincodes = enrichedPincodes;
-    const includeUnassigned = req.query.includeUnassigned === 'true';
-    if (!includeUnassigned) {
+    if (req.query.assignedOnly === 'true') {
       finalPincodes = finalPincodes.filter(p =>
         p.adminId &&
         p.adminName &&

@@ -273,13 +273,7 @@ export function StateDistricts() {
             if (userDistrict && dName !== userDistrict && dId !== userDistrict) return false;
           }
 
-          // Strictly only show real onboarded District Admins
-          const hasDistAdmin = Boolean(
-            (d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A') &&
-            d.adminId && d.adminId !== 'Unassigned'
-          );
-
-          return hasDistAdmin;
+          return true;
         });
 
         setDistricts(qualifyingDistricts);

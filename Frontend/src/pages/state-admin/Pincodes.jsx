@@ -104,7 +104,7 @@ export function StatePincodes() {
       ]);
 
       let rawList = (res?.pincodes && Array.isArray(res.pincodes)) ? res.pincodes : [];
-      let list = rawList.filter(p => p.adminId && p.adminName && p.adminName !== 'Unassigned' && p.adminName !== '-' && p.adminName !== 'N/A');
+      let list = rawList;
 
       if (districtFilter) {
         list = list.filter(p => {

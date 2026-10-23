@@ -124,8 +124,8 @@ export function StateDivisions() {
 
       if (res?.success) {
         const rawList = Array.isArray(res.divisions) ? res.divisions : [];
-        const list = rawList.filter(d => d.adminId && d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A');
-        console.log(`[StateDivisions] Loaded ${list.length} onboarded division admins from database`);
+        const list = rawList;
+        console.log(`[StateDivisions] Loaded ${list.length} divisions from database`);
         setDivisions(list);
         setError(null);
       } else {

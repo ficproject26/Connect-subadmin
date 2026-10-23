@@ -451,7 +451,48 @@ const populateVendorLocations = (vendor, ctx = null) => {
 const getVendors = async (req, res) => {
   try {
     const user = req.user || {};
-    const allVendors = Array.from(db.vendors);
+    // Merge active vendors from db.vendors and db.users (single source of truth)
+    const vendorMap = new Map();
+    for (const v of (db.vendors || [])) {
+      const k = String(v._id || v.id || v.email || '').toLowerCase().trim();
+      if (k) vendorMap.set(k, v);
+    }
+    for (const u of (db.users || [])) {
+      const uRole = String(u.role || '').toLowerCase();
+      if (uRole.includes('vendor') || uRole.includes('seller') || uRole.includes('merchant')) {
+        const k = String(u._id || u.id || u.email || '').toLowerCase().trim();
+        if (k && !vendorMap.has(k)) {
+          vendorMap.set(k, {
+            _id: u._id,
+            id: u._id || u.id,
+            userId: u._id,
+            name: u.name,
+            businessName: u.businessName || u.name,
+            contactPerson: u.name,
+            phone: u.mobile || u.phone,
+            mobile: u.mobile || u.phone,
+            email: u.email,
+            category: u.category || 'Services',
+            subCategory: u.subCategory || 'General',
+            address: u.address || `${u.district || ''}, ${u.state || ''} - ${u.pincode || ''}`.trim(),
+            state: u.state || u.assignedState,
+            district: u.district || u.assignedDistrict,
+            division: u.division || u.assignedDivision,
+            pincode: u.pincode || u.assignedPincode,
+            stateId: u.stateId || null,
+            districtId: u.districtId || null,
+            divisionId: u.divisionId || null,
+            pincodeId: u.pincodeId || null,
+            status: u.status || 'Active',
+            kycStatus: u.kycStatus || 'Verified',
+            approvalStatus: 'Approved',
+            createdAt: u.createdAt,
+            updatedAt: u.updatedAt
+          });
+        }
+      }
+    }
+    const allVendors = Array.from(vendorMap.values());
 
     // PRE-POPULATE geo/location fields BEFORE filtering so filterByLocation
     // and territory query params can match against resolved district/division/state/pincode.
@@ -1096,7 +1137,86 @@ const pincodeAdminVerifyVendor = async (req, res) => {
     const { id } = req.params;
     const { action, rejectionReason } = req.body;
 
-    const vendor = await db.vendors.findById(id);
+    let vendor = await db.vendors.findById(id);
+    let bDoc = null;
+
+    if (!vendor) {
+      // 1. Try finding in MongoDB businessrequests
+      try {
+        const { getMongoDb } = require('../config/mongo');
+        const mongoDb = await getMongoDb();
+        if (mongoDb) {
+          const { ObjectId } = require('mongodb');
+          let q = { _id: id };
+          if (ObjectId.isValid(id)) {
+            q = { $or: [{ _id: id }, { _id: new ObjectId(id) }] };
+          }
+          bDoc = await mongoDb.collection('businessrequests').findOne(q);
+          if (bDoc) {
+            vendor = {
+              _id: String(bDoc._id),
+              id: String(bDoc._id),
+              vendorId: bDoc.vendorId || String(bDoc._id),
+              name: bDoc.vendorName || bDoc.businessName,
+              businessName: bDoc.businessName || bDoc.vendorName,
+              contactPerson: bDoc.vendorName,
+              phone: bDoc.vendorPhone || bDoc.phone,
+              mobile: bDoc.vendorPhone || bDoc.phone,
+              email: bDoc.vendorEmail,
+              category: bDoc.businessCategory || bDoc.vendorType || bDoc.subcategory || 'Services',
+              address: bDoc.address,
+              state: bDoc.state,
+              district: bDoc.district,
+              division: bDoc.division || '',
+              pincode: bDoc.pincode,
+              status: bDoc.status || 'Pending Pincode Admin Review',
+              approvalStatus: bDoc.status || 'Pending Pincode Admin Review',
+              registrationSource: 'Direct Registration',
+              source: 'Direct Registration',
+              createdAt: bDoc.submittedDate || bDoc.createdAt,
+              updatedAt: bDoc.updatedAt
+            };
+            await db.vendors.insertOne(vendor);
+          }
+        }
+      } catch (bErr) {
+        console.warn('Error checking businessrequests for verification:', bErr.message);
+      }
+    }
+
+    if (!vendor) {
+      // 2. Try finding in db.users
+      const u = (db.users || []).find(x => String(x._id || x.id) === String(id) || String(x.email || '').toLowerCase() === String(id).toLowerCase());
+      if (u) {
+        vendor = {
+          _id: u._id,
+          id: u._id || u.id,
+          userId: u._id,
+          name: u.name,
+          businessName: u.businessName || u.name,
+          contactPerson: u.name,
+          phone: u.mobile || u.phone,
+          mobile: u.mobile || u.phone,
+          email: u.email,
+          category: u.category || 'Services',
+          address: u.address || `${u.district || ''}, ${u.state || ''} - ${u.pincode || ''}`.trim(),
+          state: u.state,
+          district: u.district,
+          division: u.division,
+          pincode: u.pincode,
+          stateId: u.stateId || null,
+          districtId: u.districtId || null,
+          divisionId: u.divisionId || null,
+          pincodeId: u.pincodeId || null,
+          status: u.status || 'Pending Pincode Admin Review',
+          approvalStatus: u.approvalStatus || 'Pending Pincode Admin Review',
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt
+        };
+        await db.vendors.insertOne(vendor);
+      }
+    }
+
     if (!vendor) {
       return res.status(404).json({ success: false, message: 'Vendor not found' });
     }
@@ -1290,8 +1410,23 @@ const pincodeAdminVerifyVendor = async (req, res) => {
           }
         );
       }
+      if (mongoDb && bDoc) {
+        await mongoDb.collection('businessrequests').updateOne(
+          { _id: bDoc._id },
+          {
+            $set: {
+              status: isReject ? 'Rejected' : isPending ? 'Pending' : 'Approved',
+              approvalStatus: updates.approvalStatus,
+              pincodeAdminApproval: updates.pincodeAdminApproval,
+              rejectionReason: isReject ? effectiveReason : null,
+              pendingReason: isPending ? effectiveReason : null,
+              updatedAt: new Date()
+            }
+          }
+        );
+      }
     } catch (syncErr) {
-      console.warn('Sync vendor status to users collection warning:', syncErr.message);
+      console.warn('Sync vendor status to users/businessrequests collection warning:', syncErr.message);
     }
 
     // Audit log
@@ -1591,75 +1726,83 @@ const getVendorRequests = async (req, res) => {
       if (k) vendorMap.set(k, v);
     }
 
-    // 2. Pending vendor users in db.users (e.g. direct registrations or legacy users awaiting vendor record sync)
+    // 2. Pending vendor users in db.users (only if status is pending / under review)
     for (const u of (db.users || [])) {
       const uRole = String(u.role || '').toLowerCase();
       if (uRole.includes('vendor') || uRole.includes('seller') || uRole.includes('merchant')) {
-        const k = String(u._id || u.id || u.email || '').toLowerCase().trim();
-        if (k && !vendorMap.has(k)) {
-          vendorMap.set(k, {
-            _id: u._id,
-            id: u._id || u.id,
-            userId: u._id,
-            name: u.name,
-            businessName: u.businessName || u.name,
-            contactPerson: u.name,
-            phone: u.mobile || u.phone,
-            mobile: u.mobile || u.phone,
-            email: u.email,
-            category: u.category || 'Retail & Services',
-            address: u.address || `${u.district || ''}, ${u.state || ''} - ${u.pincode || ''}`.trim(),
-            state: u.state,
-            district: u.district,
-            division: u.division,
-            pincode: u.pincode,
-            stateId: u.stateId || null,
-            districtId: u.districtId || null,
-            divisionId: u.divisionId || null,
-            pincodeId: u.pincodeId || null,
-            status: u.status || 'Under Review',
-            approvalStatus: u.adminApprovalStatus === 'pending' ? 'Pending Pincode Admin Approval' : (u.status || 'Under Review'),
-            registrationSource: u.registrationType === 'direct' ? 'Direct Registration' : (u.registrationSource || 'Direct Registration'),
-            source: 'Direct Registration',
-            createdAt: u.createdAt,
-            updatedAt: u.updatedAt
-          });
+        const uStatus = String(u.status || '').toLowerCase();
+        const uApprStatus = String(u.approvalStatus || u.adminApprovalStatus || '').toLowerCase();
+        const isPending = !uStatus || uStatus === 'submitted' || uStatus.includes('pending') || uStatus.includes('review') ||
+                          uApprStatus.includes('pending') || uApprStatus.includes('review');
+        if (isPending) {
+          const k = String(u._id || u.id || u.email || '').toLowerCase().trim();
+          if (k && !vendorMap.has(k)) {
+            vendorMap.set(k, {
+              _id: u._id,
+              id: u._id || u.id,
+              userId: u._id,
+              name: u.name,
+              businessName: u.businessName || u.name,
+              contactPerson: u.name,
+              phone: u.mobile || u.phone,
+              mobile: u.mobile || u.phone,
+              email: u.email,
+              category: u.category || 'Retail & Services',
+              address: u.address || `${u.district || ''}, ${u.state || ''} - ${u.pincode || ''}`.trim(),
+              state: u.state,
+              district: u.district,
+              division: u.division,
+              pincode: u.pincode,
+              stateId: u.stateId || null,
+              districtId: u.districtId || null,
+              divisionId: u.divisionId || null,
+              pincodeId: u.pincodeId || null,
+              status: u.status || 'Under Review',
+              approvalStatus: u.adminApprovalStatus === 'pending' ? 'Pending Pincode Admin Approval' : (u.status || 'Under Review'),
+              registrationSource: u.registrationType === 'direct' ? 'Direct Registration' : (u.registrationSource || 'Direct Registration'),
+              source: 'Direct Registration',
+              createdAt: u.createdAt,
+              updatedAt: u.updatedAt
+            });
+          }
         }
       }
     }
 
-    // 3. Direct registration submissions from MongoDB Atlas businessrequests collection
+    // 3. Direct registration submissions from MongoDB Atlas businessrequests collection (uniquely keyed per request)
     try {
+      const { getMongoDb } = require('../config/mongo');
       const mongoDb = await getMongoDb();
       if (mongoDb) {
         const bReqs = await mongoDb.collection('businessrequests').find({}).toArray();
         for (const b of bReqs) {
-          const k = String(b.vendorId || b._id || b.vendorEmail || '').toLowerCase().trim();
-          if (k && !vendorMap.has(k)) {
-            vendorMap.set(k, {
-              _id: b._id,
-              id: b.vendorId || String(b._id),
-              userId: b.vendorId || String(b._id),
-              name: b.vendorName || b.businessName,
-              businessName: b.businessName || b.vendorName,
-              contactPerson: b.vendorName,
-              phone: b.vendorPhone || b.phone,
-              mobile: b.vendorPhone || b.phone,
-              email: b.vendorEmail,
-              category: b.businessCategory || b.vendorType || b.subcategory || 'Services',
-              address: b.address,
-              state: b.state,
-              district: b.district,
-              division: b.division || '',
-              pincode: b.pincode,
-              status: b.status || 'Pending Pincode Admin Review',
-              approvalStatus: b.status || 'Pending Pincode Admin Review',
-              registrationSource: 'Direct Registration',
-              source: 'Direct Registration',
-              createdAt: b.submittedDate || b.createdAt,
-              updatedAt: b.updatedAt
-            });
-          }
+          const reqId = String(b._id);
+          const k = `bizreq_${reqId.toLowerCase()}`;
+          vendorMap.set(k, {
+            _id: reqId,
+            id: reqId,
+            requestId: reqId,
+            vendorId: b.vendorId ? String(b.vendorId) : reqId,
+            userId: b.vendorId ? String(b.vendorId) : reqId,
+            name: b.vendorName || b.businessName,
+            businessName: b.businessName || b.vendorName,
+            contactPerson: b.vendorName,
+            phone: b.vendorPhone || b.phone,
+            mobile: b.vendorPhone || b.phone,
+            email: b.vendorEmail,
+            category: b.businessCategory || b.vendorType || b.subcategory || 'Services',
+            address: b.address,
+            state: b.state,
+            district: b.district,
+            division: b.division || '',
+            pincode: b.pincode,
+            status: b.status || 'Pending Pincode Admin Review',
+            approvalStatus: b.status || 'Pending Pincode Admin Review',
+            registrationSource: 'Direct Registration',
+            source: 'Direct Registration',
+            createdAt: b.submittedDate || b.createdAt,
+            updatedAt: b.updatedAt
+          });
         }
       }
     } catch (bErr) {

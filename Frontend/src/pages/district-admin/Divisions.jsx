@@ -193,7 +193,7 @@ export function DistrictDivisions() {
               (user.districtId && safeLowerCase(d.districtId) === safeLowerCase(user.districtId))
           );
         }
-        const realDivisionAdmins = list.filter(d => d.adminId && d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A');
+        const realDivisionAdmins = list;
         setAllDistrictDivisions(realDivisionAdmins);
         setDivisions(realDivisionAdmins);
         setError(null);
