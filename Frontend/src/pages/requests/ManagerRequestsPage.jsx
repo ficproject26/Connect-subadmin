@@ -178,7 +178,7 @@ export function ManagerRequestsPage() {
   // Handle Quick Approve - Directly executes without browser window.confirm
   const handleQuickApprove = async (mgr) => {
     const targetId = mgr.id || mgr._id;
-    if (!targetId || approvingId === targetId) return;
+    if (!targetId || approvingId === targetId || actionLoading) return;
 
     if (!canAdminApproveManagerRequest(user, mgr)) {
       showNotification('error', 'You do not have administrative authority to approve requests for this territory level.');
@@ -188,11 +188,14 @@ export function ManagerRequestsPage() {
     setApprovingId(targetId);
     try {
       const res = await dataService.approveManager(targetId);
-      if (res.success) {
-        showNotification('success', `Registration for "${mgr.name}" approved successfully! Forwarded to KYC team review queue.`);
+      if (res && res.success) {
+        showNotification('success', `Registration for "${mgr.name}" approved successfully! Forwarded to Main Admin authorization queue.`);
+        if (res.manager) {
+          setRequests(prev => prev.map(item => (String(item.id || item._id) === String(targetId) ? { ...item, ...res.manager, subAdminApprovalStatus: 'approved', status: 'PENDING_MAIN_ADMIN_APPROVAL', workflowStage: 'Awaiting Main Admin Review' } : item)));
+        }
         await loadRequests();
       } else {
-        showNotification('error', res.message || 'Failed to approve manager request');
+        showNotification('error', res?.message || 'Failed to approve manager request');
       }
     } catch (err) {
       showNotification('error', err.message || 'Error occurred while approving manager request');
@@ -203,7 +206,7 @@ export function ManagerRequestsPage() {
 
   // Handle Quick Reject Submit
   const handleQuickRejectSubmit = async () => {
-    if (!quickRejectTarget) return;
+    if (!quickRejectTarget || actionLoading) return;
     if (!canAdminApproveManagerRequest(user, quickRejectTarget)) {
       showNotification('error', 'You do not have administrative authority to reject requests for this territory level.');
       return;
@@ -212,18 +215,22 @@ export function ManagerRequestsPage() {
       showNotification('error', 'Please enter a rejection reason.');
       return;
     }
+    const rejTargetId = quickRejectTarget.id || quickRejectTarget._id;
     setActionLoading(true);
     try {
-      const res = await dataService.rejectManager(quickRejectTarget.id || quickRejectTarget._id, {
+      const res = await dataService.rejectManager(rejTargetId, {
         reason: quickRejectReason.trim()
       });
-      if (res.success) {
+      if (res && res.success) {
         showNotification('success', `Registration for "${quickRejectTarget.name}" rejected.`);
         setQuickRejectTarget(null);
         setQuickRejectReason('');
+        if (res.manager) {
+          setRequests(prev => prev.map(item => (String(item.id || item._id) === String(rejTargetId) ? { ...item, ...res.manager, status: 'rejected', workflowStage: 'Territory Rejected' } : item)));
+        }
         await loadRequests();
       } else {
-        showNotification('error', res.message || 'Failed to reject manager request');
+        showNotification('error', res?.message || 'Failed to reject manager request');
       }
     } catch (err) {
       showNotification('error', err.message || 'Error occurred while rejecting manager request');
@@ -234,7 +241,7 @@ export function ManagerRequestsPage() {
 
   // Handle Quick Pending Submit
   const handleQuickPendingSubmit = async () => {
-    if (!quickPendingTarget) return;
+    if (!quickPendingTarget || actionLoading) return;
     if (!canAdminApproveManagerRequest(user, quickPendingTarget)) {
       showNotification('error', 'You do not have administrative authority to manage requests for this territory level.');
       return;
@@ -243,18 +250,22 @@ export function ManagerRequestsPage() {
       showNotification('error', 'Please enter a pending reason or administrative note.');
       return;
     }
+    const pndTargetId = quickPendingTarget.id || quickPendingTarget._id;
     setActionLoading(true);
     try {
-      const res = await dataService.keepPendingManager(quickPendingTarget.id || quickPendingTarget._id, {
+      const res = await dataService.keepPendingManager(pndTargetId, {
         reason: quickPendingReason.trim()
       });
-      if (res.success) {
+      if (res && res.success) {
         showNotification('success', `Registration for "${quickPendingTarget.name}" kept pending. Note recorded.`);
         setQuickPendingTarget(null);
         setQuickPendingReason('');
+        if (res.manager) {
+          setRequests(prev => prev.map(item => (String(item.id || item._id) === String(pndTargetId) ? { ...item, ...res.manager, pendingReason: quickPendingReason.trim() } : item)));
+        }
         await loadRequests();
       } else {
-        showNotification('error', res.message || 'Failed to update manager request');
+        showNotification('error', res?.message || 'Failed to update manager request');
       }
     } catch (err) {
       showNotification('error', err.message || 'Error occurred while updating manager request');
@@ -533,13 +544,14 @@ export function ManagerRequestsPage() {
       key: 'actions',
       render: (row) => {
         const s = (row.status || '').toLowerCase();
-        const isPending = s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval';
+        const subApp = (row.subAdminApprovalStatus || '').toLowerCase();
+        const isPending = (s === 'under_review' || s === 'pending' || s === 'pending_admin_approval' || s === 'pending_sub_admin_approval') && subApp !== 'approved' && s !== 'pending_main_admin_approval';
         const canApprove = canAdminApproveManagerRequest(user, row);
         const isApprovingThis = approvingId === (row.id || row._id);
 
         return (
           <div className="flex items-center gap-1.5 justify-end">
-            {/* Quick Approve / Pending / Reject buttons ONLY if user is the designated territory admin for this level */}
+            {/* Quick Approve / Pending / Reject buttons ONLY if user is the designated territory admin and request is pending sub-admin review */}
             {isPending && canApprove && (
               <>
                 <button

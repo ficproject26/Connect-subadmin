@@ -356,7 +356,7 @@ export const dataService = {
   },
   getManagerRequests: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return apiRequest(`/managers/requests${qs ? `?${qs}` : ''}`);
+    return apiRequest(`/managers/requests${qs ? `?${qs}` : ''}`, { skipCache: true, fresh: true });
   },
   getManagerById: (id) => apiRequest(`/managers/${id}`),
   approveManager: (id, data = {}) => apiRequest(`/managers/${id}/approve`, {

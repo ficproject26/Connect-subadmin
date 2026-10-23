@@ -737,8 +737,8 @@ export function RegisterVendorModal({ isOpen, onClose, onVendorCreated, initialP
   /* ── Render ── */
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
-      {/* backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      {/* persistent backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-hidden="true" />
 
       {/* card */}
       <div className="relative w-full max-w-[640px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col"

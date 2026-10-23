@@ -21,8 +21,8 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' 
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-6 sm:pt-8 bg-black/65 backdrop-blur-md overflow-y-auto animate-fadeIn">
-      {/* Click outside backdrop to close */}
-      <div className="fixed inset-0 -z-10" onClick={onClose} />
+      {/* Persistent backdrop overlay: clicking outside does not dismiss modal/form to protect entered data */}
+      <div className="fixed inset-0 -z-10" aria-hidden="true" />
 
       <div className={`relative w-full ${maxWidth} my-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-colors dashboard-modal`}>
         {/* Header */}

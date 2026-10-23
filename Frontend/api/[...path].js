@@ -59,7 +59,7 @@ export default async function handler(req, res) {
 
     let bodyBuffer = null;
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      if (req.body && (typeof req.body === 'string' || Buffer.isBuffer(req.body) || Object.keys(req.body).length > 0)) {
+      if (req.body !== undefined && req.body !== null) {
         if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
           bodyBuffer = Buffer.from(req.body);
         } else {
@@ -79,6 +79,10 @@ export default async function handler(req, res) {
         } catch (streamErr) {
           console.warn('Proxy req stream read warning:', streamErr.message);
         }
+      }
+
+      if (!bodyBuffer) {
+        delete requestHeaders['content-length'];
       }
     }
 

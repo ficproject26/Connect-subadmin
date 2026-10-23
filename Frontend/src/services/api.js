@@ -126,6 +126,13 @@ function invalidateRelatedCaches(endpoint) {
   } else if (ep.includes('/customer')) {
     clearApiCache('/customers');
     clearApiCache('/reports');
+  } else if (ep.includes('/manager')) {
+    clearApiCache('/managers');
+    clearApiCache('/reports');
+  } else if (ep.includes('/agent')) {
+    clearApiCache('/agents');
+    clearApiCache('/operations/agents');
+    clearApiCache('/reports');
   } else if (ep.includes('/admin') || ep.includes('/territory')) {
     clearApiCache('/admin');
     clearApiCache('/territory');

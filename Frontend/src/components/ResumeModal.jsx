@@ -98,8 +98,8 @@ Verification: Verified Candidate Application
 
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex flex-col bg-[#323639]/90 backdrop-blur-md overflow-hidden animate-fadeIn">
-      {/* Click outside backdrop to close */}
-      <div className="fixed inset-0 -z-10" onClick={onClose} />
+      {/* Persistent backdrop overlay: modal closes only via explicit controls */}
+      <div className="fixed inset-0 -z-10" aria-hidden="true" />
 
       {/* Realistic PDF Viewer Toolbar (Chrome / Adobe Style) */}
       <div className="w-full h-14 bg-[#212426] border-b border-black/40 text-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-md select-none z-10">

@@ -345,10 +345,10 @@ const populateManager = async (m, relation, user) => {
     workflowStage = 'KYC Rejected';
   } else if ((s === 'active' || s === 'approved') && (kycStat === 'verified' || kycStat === 'approved' || m.isActive)) {
     workflowStage = 'Activated';
+  } else if (s === 'pending_kyc' || s === 'pending_kyc_approval' || s === 'pending_kyc_verification' || mainAdmApp === 'approved' || appStage === 'kyc_review') {
+    workflowStage = 'Awaiting KYC Review';
   } else if (s === 'pending_main_admin_approval' || subAdmApp === 'approved' || appStage === 'mainadmin_review' || (admApp === 'approved' && mainAdmApp === 'pending')) {
     workflowStage = 'Awaiting Main Admin Review';
-  } else if (s === 'pending_kyc' || s === 'pending_kyc_approval' || admApp === 'approved') {
-    workflowStage = 'Awaiting KYC Review';
   } else if (s === 'active' || s === 'approved') {
     workflowStage = 'Activated';
   }
@@ -895,7 +895,19 @@ const getManagerRequests = async (req, res) => {
             assignedPincode: reqDoc.assignedPincode || reqDoc.pincode || existing?.assignedPincode || '',
             address: reqDoc.address || existing?.address || '',
             status: normStatus,
-            approvalStage: reqDoc.approvalStage || 'pending',
+            approvalStage: reqDoc.approvalStage || existing?.approvalStage || 'subadmin_review',
+            subAdminApprovalStatus: reqDoc.subAdminApprovalStatus || existing?.subAdminApprovalStatus || 'pending',
+            mainAdminApprovalStatus: reqDoc.mainAdminApprovalStatus || existing?.mainAdminApprovalStatus || 'waiting_subadmin',
+            kycVerificationStatus: reqDoc.kycVerificationStatus || existing?.kycVerificationStatus || 'not_started',
+            adminApprovalStatus: reqDoc.adminApprovalStatus || (reqDoc.subAdminApprovalStatus === 'approved' ? 'approved' : (normStatus === 'approved' ? 'approved' : (existing?.adminApprovalStatus || 'pending'))),
+            subadminApprovedByName: reqDoc.subadminApprovedByName || existing?.subadminApprovedByName || null,
+            subadminApprovedAt: reqDoc.subadminApprovedAt || existing?.subadminApprovedAt || null,
+            mainadminApprovedByName: reqDoc.mainadminApprovedByName || existing?.mainadminApprovedByName || null,
+            mainadminApprovedAt: reqDoc.mainadminApprovedAt || existing?.mainadminApprovedAt || null,
+            pendingReason: reqDoc.pendingReason || reqDoc.adminPendingReason || existing?.pendingReason || null,
+            rejectionReason: reqDoc.rejectionReason || existing?.rejectionReason || null,
+            reviewerReason: reqDoc.pendingReason || reqDoc.adminPendingReason || reqDoc.rejectionReason || existing?.reviewerReason || null,
+            reviewHistory: Array.isArray(reqDoc.reviewHistory) ? reqDoc.reviewHistory : (existing?.reviewHistory || []),
             documents: reqDoc.documents || existing?.documents || {},
             createdAt: reqDoc.createdAt || existing?.createdAt,
             updatedAt: reqDoc.updatedAt || existing?.updatedAt
@@ -1170,6 +1182,7 @@ const approveManager = async (req, res) => {
         if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
         if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
 
+        await mongoDb.collection('users').updateMany({ $or: orClauses }, { $set: approveUpdates }).catch(() => {});
         const updateResult = await mongoDb.collection('managerrequests').updateMany(
           { $or: orClauses },
           {
@@ -1273,18 +1286,20 @@ const approveManager = async (req, res) => {
     }
 
     // Audit log entry
-    await db.auditLogs.insertOne({
-      action: 'MANAGER_TERRITORY_APPROVED_FORWARDED_TO_KYC',
-      adminId: req.user.id || req.user._id,
-      adminName: req.user.name,
-      adminRole: req.user.role,
-      targetUserId: manager._id || manager.id,
-      targetUserName: manager.name,
-      targetUserRole: manager.role,
-      details: `${manager.role.replace('_', ' ')} "${manager.name}" territory registration approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team queue. Account restricted pending KYC verification.`,
-      ip: req.ip || '127.0.0.1',
-      timestamp: now
-    });
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        action: 'MANAGER_TERRITORY_APPROVED_FORWARDED_TO_KYC',
+        adminId: req.user.id || req.user._id,
+        adminName: req.user.name,
+        adminRole: req.user.role,
+        targetUserId: manager._id || manager.id,
+        targetUserName: manager.name,
+        targetUserRole: manager.role,
+        details: `${manager.role.replace('_', ' ')} "${manager.name}" territory registration approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team queue. Account restricted pending KYC verification.`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      }).catch(() => {});
+    }
 
     const populated = await populateManager(manager, 'subordinate', req.user);
 
@@ -1366,6 +1381,7 @@ const rejectManager = async (req, res) => {
         if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
         if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
 
+        await mongoDb.collection('users').updateMany({ $or: orClauses }, { $set: rejectUpdates }).catch(() => {});
         const updateResult = await mongoDb.collection('managerrequests').updateMany(
           { $or: orClauses },
           {
@@ -1374,7 +1390,12 @@ const rejectManager = async (req, res) => {
               approvalStage: 'rejected',
               overallRegistrationStatus: 'REJECTED_BY_SUB_ADMIN',
               subAdminApprovalStatus: 'rejected',
+              adminApprovalStatus: 'rejected',
               rejectionReason,
+              adminRejectedBy: req.user.name || req.user.email,
+              adminRejectedById: req.user.id || req.user._id,
+              adminRejectedByRole: req.user.role,
+              adminRejectedAt: now,
               updatedAt: now
             }
           }
@@ -1453,18 +1474,20 @@ const rejectManager = async (req, res) => {
     }
 
     // Audit log entry
-    await db.auditLogs.insertOne({
-      action: 'MANAGER_REGISTRATION_REJECTED',
-      adminId: req.user.id || req.user._id,
-      adminName: req.user.name,
-      adminRole: req.user.role,
-      targetUserId: manager._id || manager.id,
-      targetUserName: manager.name,
-      targetUserRole: manager.role,
-      details: `${manager.role.replace('_', ' ')} "${manager.name}" registration rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
-      ip: req.ip || '127.0.0.1',
-      timestamp: new Date().toISOString()
-    });
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        action: 'MANAGER_REGISTRATION_REJECTED',
+        adminId: req.user.id || req.user._id,
+        adminName: req.user.name,
+        adminRole: req.user.role,
+        targetUserId: manager._id || manager.id,
+        targetUserName: manager.name,
+        targetUserRole: manager.role,
+        details: `${manager.role.replace('_', ' ')} "${manager.name}" registration rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: new Date().toISOString()
+      }).catch(() => {});
+    }
 
     const populated = await populateManager(manager, 'subordinate', req.user);
 
@@ -1553,6 +1576,7 @@ const keepPendingManager = async (req, res) => {
         if (ObjectId.isValid(mgrIdStr)) orClauses.push({ _id: new ObjectId(mgrIdStr) });
         if (manager._id && typeof manager._id === 'object') orClauses.push({ _id: manager._id });
 
+        await mongoDb.collection('users').updateMany({ $or: orClauses }, { $set: pendingUpdates }).catch(() => {});
         const updateResult = await mongoDb.collection('managerrequests').updateMany(
           { $or: orClauses },
           {
@@ -1625,18 +1649,20 @@ const keepPendingManager = async (req, res) => {
       }
     }
 
-    await db.auditLogs.insertOne({
-      action: 'MANAGER_REGISTRATION_KEPT_PENDING',
-      adminId: req.user.id || req.user._id,
-      adminName: req.user.name,
-      adminRole: req.user.role,
-      targetUserId: manager._id || manager.id,
-      targetUserName: manager.name,
-      targetUserRole: manager.role,
-      details: `${manager.role.replace('_', ' ')} "${manager.name}" registration kept pending by ${req.user.role} "${req.user.name}". Reason: ${pendingReason}`,
-      ip: req.ip || '127.0.0.1',
-      timestamp: now
-    });
+    if (db.auditLogs) {
+      await db.auditLogs.insertOne({
+        action: 'MANAGER_REGISTRATION_KEPT_PENDING',
+        adminId: req.user.id || req.user._id,
+        adminName: req.user.name,
+        adminRole: req.user.role,
+        targetUserId: manager._id || manager.id,
+        targetUserName: manager.name,
+        targetUserRole: manager.role,
+        details: `${manager.role.replace('_', ' ')} "${manager.name}" registration kept pending by ${req.user.role} "${req.user.name}". Reason: ${pendingReason}`,
+        ip: req.ip || '127.0.0.1',
+        timestamp: now
+      }).catch(() => {});
+    }
 
     const populated = await populateManager(manager, 'subordinate', req.user);
 

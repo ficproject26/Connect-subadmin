@@ -8,11 +8,14 @@ const heartbeatInterval = setInterval(() => {
   for (const [clientId, client] of clients.entries()) {
     try {
       client.res.write(': keep-alive\n\n');
+      if (typeof client.res.flush === 'function') {
+        client.res.flush();
+      }
     } catch (err) {
       clients.delete(clientId);
     }
   }
-}, 25000);
+}, 15000);
 if (typeof heartbeatInterval.unref === 'function') heartbeatInterval.unref();
 
 /**
@@ -24,6 +27,9 @@ function registerClient(clientId, res, user) {
   // Send immediate initial ping
   try {
     res.write(`data: ${JSON.stringify({ type: 'connected', clientId, timestamp: new Date().toISOString() })}\n\n`);
+    if (typeof res.flush === 'function') {
+      res.flush();
+    }
   } catch (err) {
     clients.delete(clientId);
   }
