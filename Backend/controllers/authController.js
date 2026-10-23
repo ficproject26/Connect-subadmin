@@ -297,7 +297,7 @@ const login = async (req, res) => {
       console.warn("MongoDB lookup in login warning:", mErr.message);
     }
 
-    // 2. Fallback lookup: Check local db.users (data/users.json)
+    // 2. Lookup in memory users collection loaded from MongoDB
     if (db.users) {
       const allUsers = Array.from(db.users);
       const localMatches = allUsers.filter(u => 

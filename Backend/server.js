@@ -211,21 +211,28 @@ initRedis().then(() => {
 });
 
 if (require.main === module) {
-  // Start HTTP listener immediately so Nginx / Vercel proxy never encounters a 502 Bad Gateway
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log('================================================================');
-    console.log('🚀 Unified Sub-Admin & Field Manager Backend is running!');
-    console.log('📡 Local URL:   http://localhost:' + PORT);
-    console.log('⚡ WebSocket:   ws://localhost:' + PORT + '/ws');
-    console.log('🩺 Health Check: http://localhost:' + PORT + '/api/health');
-    console.log('📊 Telemetry:   http://localhost:' + PORT + '/api/realtime/metrics');
-    console.log('================================================================');
+  async function startServer() {
+    try {
+      console.log('[Sub Admin Backend] Connecting to MongoDB Atlas single source of truth...');
+      await initDatabase();
+      console.log('✅ MongoDB Atlas connected and all collections ready.');
 
-    // Connect to MongoDB Atlas in background
-    initDatabase()
-      .then(() => console.log('✅ MongoDB Atlas connected and all collections ready.'))
-      .catch((err) => console.error('CRITICAL: Database initialization failed:', err.message));
-  });
+      server.listen(PORT, '0.0.0.0', () => {
+        console.log('================================================================');
+        console.log('🚀 Unified Sub-Admin & Field Manager Backend is running!');
+        console.log('📡 Local URL:   http://localhost:' + PORT);
+        console.log('⚡ WebSocket:   ws://localhost:' + PORT + '/ws');
+        console.log('🩺 Health Check: http://localhost:' + PORT + '/api/health');
+        console.log('📊 Telemetry:   http://localhost:' + PORT + '/api/realtime/metrics');
+        console.log('================================================================');
+      });
+    } catch (err) {
+      console.error('FATAL: Sub Admin database initialization failed:', err.message);
+      process.exit(1);
+    }
+  }
+
+  startServer();
 }
 
 // Unified API Server - Clean Production Ready Data Store
