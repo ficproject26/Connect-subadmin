@@ -3,6 +3,45 @@ const { db } = require('../config/db');
 const { getMongoDb } = require('../config/mongo');
 const { validateBankAndAddress, validateKycDocuments, formatCapitalizedName, validateName } = require('../utils/validation');
 
+/**
+ * Safely format any date-like input into a YYYY-MM-DD string for submittedDate.
+ * Handles Date objects, ISO strings, timestamp numbers, and date strings.
+ * Falls back consistently to fallbackDate or the current date if missing or invalid.
+ * Never throws and never calls .split() on an unvalidated non-string value.
+ *
+ * @param {Date|string|number|null|undefined} dateInput - Primary date value
+ * @param {Date|string|number|null|undefined} [fallbackDate] - Optional fallback date (e.g. now)
+ * @returns {string} Date formatted as YYYY-MM-DD
+ */
+const formatSubmittedDate = (dateInput, fallbackDate = new Date()) => {
+  const toValidDate = (val) => {
+    if (!val) return null;
+    if (val instanceof Date) {
+      return !isNaN(val.getTime()) ? val : null;
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) return null;
+      const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match) {
+        const d = new Date(match[1]);
+        if (!isNaN(d.getTime())) return d;
+      }
+      const d = new Date(trimmed);
+      return !isNaN(d.getTime()) ? d : null;
+    }
+    if (typeof val === 'number') {
+      const d = new Date(val);
+      return !isNaN(d.getTime()) ? d : null;
+    }
+    return null;
+  };
+
+  const validDate = toValidDate(dateInput) || toValidDate(fallbackDate) || new Date();
+  return validDate.toISOString().split('T')[0];
+};
+
+
 // Format human-readable role labels
 const formatRoleTitle = (role) => {
   switch (role) {
@@ -1276,7 +1315,7 @@ const approveManager = async (req, res) => {
           pincodeId: manager.pincodeId,
           status: 'Pending',
           kycStatus: 'Pending Verification',
-          submittedDate: (manager.createdAt || now).split('T')[0],
+          submittedDate: formatSubmittedDate(manager.createdAt, now),
           documents: manager.documents || {},
           notes: `Territory approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team for verification.`,
           createdAt: now,
@@ -1464,7 +1503,7 @@ const rejectManager = async (req, res) => {
           pincodeId: manager.pincodeId,
           status: 'Pending',
           kycStatus: 'Pending Verification',
-          submittedDate: (manager.createdAt || now).split('T')[0],
+          submittedDate: formatSubmittedDate(manager.createdAt, now),
           documents: manager.documents || {},
           notes: `Territory-rejected by ${req.user.role} "${req.user.name}". Reason: ${rejectionReason}`,
           createdAt: now,
@@ -2196,7 +2235,7 @@ const addManager = async (req, res) => {
         pincodeId: newManager.pincodeId,
         status: 'Pending',
         kycStatus: 'Pending Verification',
-        submittedDate: now.split('T')[0],
+        submittedDate: formatSubmittedDate(now),
         documents: newManager.documents || {},
         notes: `Registered and territory-approved by ${req.user.role} "${req.user.name}". Forwarded to KYC Team for verification.`,
         createdAt: now,
