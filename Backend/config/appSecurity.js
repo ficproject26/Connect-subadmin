@@ -95,11 +95,31 @@ const isAccountApproved = (user) => {
   if (!user) return false;
   const status = String(user.status || '').toLowerCase().trim();
   const adminApprovalStatus = String(user.adminApprovalStatus || '').toLowerCase().trim();
+  const subAdminApprovalStatus = String(user.subAdminApprovalStatus || '').toLowerCase().trim();
+  const mainAdminApprovalStatus = String(user.mainAdminApprovalStatus || '').toLowerCase().trim();
   const kycStatus = String(user.kycStatus || '').toLowerCase().trim();
+  const role = String(user.role || '').toLowerCase().trim();
 
-  // If explicitly flagged as requiring approval, or isActive is false
-  if (user.requiresApproval === true || user.isActive === false) {
+  // If explicitly flagged as requiring approval, or isActive is false, or not fully approved
+  if (user.requiresApproval === true || user.isActive === false || user.isFullyApproved === false) {
     return false;
+  }
+
+  // Any pending status string denies access
+  if (
+    status.includes('pending') ||
+    status === 'rejected' ||
+    status === 'suspended' ||
+    status === 'inactive'
+  ) {
+    return false;
+  }
+
+  // Agents & Managers strictly require Main Admin approval & KYC approval
+  if (role.includes('agent') || role.includes('manager')) {
+    if (mainAdminApprovalStatus && mainAdminApprovalStatus !== 'approved') return false;
+    if (subAdminApprovalStatus && subAdminApprovalStatus !== 'approved') return false;
+    if (kycStatus && !['verified', 'approved'].includes(kycStatus)) return false;
   }
 
   // Must have active or approved status

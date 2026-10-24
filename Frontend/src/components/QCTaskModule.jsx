@@ -512,7 +512,7 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
     const selDivision = (form.division || '').trim().toLowerCase();
     const selPincode = String(form.pincode || '').trim();
 
-    return allManagers.filter(mgr => {
+    const matched = allManagers.filter(mgr => {
       // Must be active and eligible
       const status = String(mgr.status || '').toLowerCase().trim();
       if (status && status !== 'active' && status !== 'approved') return false;
@@ -588,6 +588,21 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
 
       return false;
     });
+
+    const seenKeys = new Set();
+    const uniqueManagers = [];
+    matched.forEach(mgr => {
+      const mId = String(mgr.id || mgr._id || '').trim();
+      const mEmail = String(mgr.email || '').trim().toLowerCase();
+      const mPhone = String(mgr.phone || mgr.mobile || '').replace(/\D/g, '').slice(-10);
+      const key = mEmail || mPhone || mId;
+      if (key && !seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniqueManagers.push(mgr);
+      }
+    });
+
+    return uniqueManagers;
   }, [allManagers, form.state, form.district, form.division, form.pincode]);
 
   const handleManagerChange = (e) => {
@@ -625,6 +640,13 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
     if (!form.state) {
       setErr('State territory is required.');
       return;
+    }
+    if (form.dueDate) {
+      const today = new Date().toISOString().split('T')[0];
+      if (form.dueDate < today) {
+        setErr('Due date cannot be in the past.');
+        return;
+      }
     }
     setLoading(true);
     setErr('');
@@ -683,7 +705,23 @@ function CreateTaskModal({ isDark, onClose, onSuccess, linkedIssue }) {
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
         <Field label="Due Date" isDark={isDark}>
-          <Input isDark={isDark} type="date" value={form.dueDate} onChange={e=>set('dueDate',e.target.value)}/>
+          <Input
+            isDark={isDark}
+            type="date"
+            min={new Date().toISOString().split('T')[0]}
+            value={form.dueDate}
+            onChange={e => {
+              const val = e.target.value;
+              const today = new Date().toISOString().split('T')[0];
+              if (val && val < today) {
+                setErr('Due date cannot be in the past.');
+                set('dueDate', today);
+              } else {
+                setErr('');
+                set('dueDate', val);
+              }
+            }}
+          />
         </Field>
       </div>
 

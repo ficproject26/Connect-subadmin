@@ -86,30 +86,31 @@ export function DistrictPincodes() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const params = {};
+      if (user?.district) params.district = user.district;
+      if (divisionFilter) params.division = divisionFilter;
+
       const [res, mgrRes, agentRes] = await Promise.all([
-        dataService.getPincodes(divisionFilter ? { division: divisionFilter } : {}),
+        dataService.getPincodes(params),
         dataService.getManagers().catch(() => ({ subordinates: [] })),
         dataService.getAgents().catch(() => ({ agents: [] }))
       ]);
 
-      let list = (res?.pincodes && res.pincodes.length > 0) ? res.pincodes : FALLBACK_STATE_PINCODES;
+      let list = (res?.pincodes && Array.isArray(res.pincodes)) ? res.pincodes : [];
 
       // Filter only registered pincode administrators
       list = list.filter(p => {
         const name = p.adminName || p.assignedAdmin || p.admin;
-        return name && name !== 'Unassigned' && name !== '-';
+        return name && name !== 'Unassigned' && name !== '-' && name !== 'N/A';
       });
 
       if (divisionFilter) {
         const normFilter = divisionFilter.toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
-        const filtered = list.filter(p => {
+        list = list.filter(p => {
           const pDiv = (p.division || p.divisionName || '').toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
           const pDivId = (p.divisionId || '').toLowerCase().replace(/^div-/, '').trim();
           return pDiv === normFilter || pDivId === normFilter || pDiv.includes(normFilter) || normFilter.includes(pDiv);
         });
-        if (filtered.length > 0) {
-          list = filtered;
-        }
       }
 
       const allManagers = mgrRes?.subordinates || mgrRes?.data || mgrRes?.managers || [];

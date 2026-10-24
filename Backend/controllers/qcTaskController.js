@@ -365,6 +365,14 @@ const createTask = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Task title and assigned manager are required.' });
     }
 
+    if (dueDate) {
+      const today = new Date().toISOString().split('T')[0];
+      const taskDueDate = String(dueDate).split('T')[0];
+      if (taskDueDate < today) {
+        return res.status(400).json({ success: false, message: 'Due date cannot be in the past.' });
+      }
+    }
+
     const adminJuris = getAdminJurisdiction(user);
 
     // ── 1. VALIDATE ADMIN JURISDICTION BOUNDARIES ──────────────────────────────
@@ -671,6 +679,12 @@ function isTaskInAdminScope(task, user) {
 // GET /api/qc-tasks/tasks — RBAC-scoped task list
 const getTasks = async (req, res) => {
   try {
+    if (db.qcTasks && typeof db.qcTasks.reloadFromMongo === 'function') {
+      try {
+        await db.qcTasks.reloadFromMongo(true);
+      } catch (_) {}
+    }
+
     const user = req.user;
     const { status, priority, category, search, issueId } = req.query;
     let allTasks = Array.from(db.qcTasks || []);
@@ -719,8 +733,16 @@ const getTasks = async (req, res) => {
         }
       }
 
+      // Accurately determine completed status from persistent data
+      const isCompleted = t.status === 'Completed' ||
+                          String(t.executionStatus || '').toUpperCase() === 'COMPLETED' ||
+                          Boolean(t.completionDetails?.completedAt) ||
+                          Boolean(t.completedDate);
+      const effectiveStatus = isCompleted ? 'Completed' : (t.status || 'Pending Acceptance');
+
       return {
         ...t,
+        status: effectiveStatus,
         state,
         district,
         division,
@@ -1149,7 +1171,7 @@ const getManagersForScope = async (req, res) => {
     const adminJuris = getAdminJurisdiction(user);
     const { state, district, division, pincode } = req.query;
 
-    // Collect all managers from both users and managers collections (deduplicating by ID)
+    // Collect all managers from both users and managers collections (deduplicating by ID, email, and phone)
     const userMgrs = Array.from(db.users || []).filter(u => {
       const r = (u.role || '').toLowerCase();
       return r.includes('manager');
@@ -1157,11 +1179,26 @@ const getManagersForScope = async (req, res) => {
     const directMgrs = Array.from(db.managers || []);
 
     const seenIds = new Set();
+    const seenEmails = new Set();
+    const seenPhones = new Set();
     const allManagers = [];
+
+    const cleanEmail = (em) => String(em || '').trim().toLowerCase();
+    const cleanPhone = (ph) => String(ph || '').replace(/\D/g, '').slice(-10);
+
     for (const m of [...userMgrs, ...directMgrs]) {
-      const mId = String(m._id || m.id || '');
-      if (mId && !seenIds.has(mId)) {
-        seenIds.add(mId);
+      const mId = String(m._id || m.id || '').trim();
+      const em = cleanEmail(m.email);
+      const ph = cleanPhone(m.mobile || m.phone);
+
+      const isDuplicate = (mId && seenIds.has(mId)) ||
+                          (em && seenEmails.has(em)) ||
+                          (ph && seenPhones.has(ph));
+
+      if (!isDuplicate) {
+        if (mId) seenIds.add(mId);
+        if (em) seenEmails.add(em);
+        if (ph) seenPhones.add(ph);
         allManagers.push(m);
       }
     }

@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { authService } from '../services/authService';
+import { apiRequest } from '../services/api';
 import {
   Shield,
   MapPin,
@@ -13,11 +15,73 @@ import {
   Lock,
   Globe,
   FileText,
-  Smartphone
+  Smartphone,
+  Camera,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 export function SubAdminProfileView({ title = 'Administrator Profile', subtitle = 'Authenticated administrator credentials, territorial jurisdiction, and verified registration dossier.' }) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState({ type: '', text: '' });
+  const fileInputRef = useRef(null);
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadMsg({ type: 'error', text: 'Please select a valid image file (JPEG, PNG, WebP).' });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadMsg({ type: 'error', text: 'Profile photo size must be less than 5 MB.' });
+      return;
+    }
+
+    setUploading(true);
+    setUploadMsg({ type: '', text: '' });
+
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const uploadRes = await apiRequest('/auth/upload-avatar', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadRes.success || !uploadRes.avatarUrl) {
+        throw new Error(uploadRes.message || 'Failed to upload profile photo');
+      }
+
+      const photoUrl = uploadRes.avatarUrl;
+
+      // Persist to user profile
+      const updateRes = await authService.updateProfile({ avatar: photoUrl });
+
+      if (updateRes.success && updateRes.user) {
+        updateUser(updateRes.user);
+      } else {
+        updateUser({
+          ...user,
+          avatar: photoUrl,
+          avatarUrl: photoUrl
+        });
+      }
+
+      setUploadMsg({ type: 'success', text: 'Profile photo updated successfully.' });
+      setTimeout(() => setUploadMsg({ type: '', text: '' }), 4000);
+    } catch (err) {
+      console.error('Profile photo upload error:', err);
+      setUploadMsg({ type: 'error', text: err.message || 'Failed to update profile photo.' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   // Helper to mask sensitive numbers
   const maskAadhaar = (num) => {
@@ -57,16 +121,53 @@ export function SubAdminProfileView({ title = 'Administrator Profile', subtitle 
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>
       </div>
 
+      {uploadMsg.text && (
+        <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+          uploadMsg.type === 'error'
+            ? 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900'
+            : 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900'
+        }`}>
+          {uploadMsg.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+          <span>{uploadMsg.text}</span>
+        </div>
+      )}
+
       {/* Main Profile Header Card */}
       <div className="admin-card p-6 bg-white dark:bg-[#131f37] border border-slate-200/90 dark:border-[#1f3358] shadow-sm rounded-2xl">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-          <div className="relative">
-            <img
-              src={user?.avatar || user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'}
-              alt={user?.name || 'Administrator'}
-              className="w-24 h-24 rounded-2xl object-cover border-2 border-blue-500/50 shadow-md ring-4 ring-blue-50 dark:ring-blue-950/40"
+          <div className="relative group">
+            {user?.avatar || user?.avatarUrl ? (
+              <img
+                src={user.avatar || user.avatarUrl}
+                alt={user?.name || 'Administrator'}
+                className="w-24 h-24 rounded-2xl object-cover border-2 border-blue-500/50 shadow-md ring-4 ring-blue-50 dark:ring-blue-950/40"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 border-2 border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center shadow-md ring-4 ring-blue-50 dark:ring-blue-950/40 text-slate-400 dark:text-slate-500">
+                <User className="w-10 h-10" />
+                <span className="text-[10px] font-semibold mt-0.5">No Photo</span>
+              </div>
+            )}
+
+            {/* Upload / Change Photo trigger button */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/jpg"
+              className="hidden"
+              onChange={handlePhotoUpload}
             />
-            <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white p-1 rounded-full shadow-md" title="Active Verified Session">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title="Change profile photo"
+              className="absolute -bottom-2 -left-2 bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-full shadow-md transition cursor-pointer border-2 border-white dark:border-[#131f37] disabled:opacity-50"
+            >
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+            </button>
+
+            <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white p-1 rounded-full shadow-md border-2 border-white dark:border-[#131f37]" title="Active Verified Session">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>

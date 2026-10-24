@@ -25,7 +25,9 @@ import {
   Loader2,
   User,
   Tag,
-  Share2
+  Share2,
+  CreditCard,
+  FileText
 } from 'lucide-react';
 
 export function VendorRequestsPage() {
@@ -736,26 +738,165 @@ export function VendorRequestsPage() {
 
             {/* Content */}
             <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Overview grid */}
+              {/* Primary Overview Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: 16, background: isDark ? '#1e293b' : '#f8fafc', borderRadius: 12 }}>
                 <div>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Vendor Owner</div>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>{selectedRequest.vendorName}</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>{selectedRequest.vendorName || selectedRequest.name || '—'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Category</div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0284c7', marginTop: 2 }}>{selectedRequest.category}</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0284c7', marginTop: 2 }}>{selectedRequest.category || '—'}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Registration Source</div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#7c3aed', marginTop: 2 }}>{selectedRequest.registrationSource}</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#7c3aed', marginTop: 2 }}>{selectedRequest.registrationSource || '—'}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Territory</div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
-                    PIN {selectedRequest.pincode} · {selectedRequest.district}
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Registration Date</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Calendar size={13} style={{ color: '#64748b' }} />
+                    {selectedRequest.registrationDate || selectedRequest.requestDateTime || '—'}
                   </div>
                 </div>
+              </div>
+
+              {/* Onboarding & Territory Scope (Onboarded Agent/Manager, Division, Territory) */}
+              <div style={{ padding: 16, background: isDark ? '#1e293b' : '#f8fafc', borderRadius: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Onboarded By</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: isDark ? '#38bdf8' : '#0284c7', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <User size={14} />
+                    <span>{selectedRequest.onboardedByName || 'Direct Application'}</span>
+                  </div>
+                  {selectedRequest.onboardedByRole && selectedRequest.onboardedByRole !== 'Direct' && (
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 1 }}>Role: {selectedRequest.onboardedByRole}</div>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Division</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Building2 size={14} style={{ color: '#64748b' }} />
+                    <span>{selectedRequest.division || '—'}</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Territory / Jurisdiction</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <MapPin size={14} style={{ color: '#64748b' }} />
+                    <span>PIN {selectedRequest.pincode || '—'} · {selectedRequest.district || '—'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Details & Vendor Address */}
+              <div style={{ padding: 16, background: isDark ? '#1e293b' : '#f8fafc', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: isDark ? '#e2e8f0' : '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Contact Details & Address
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Phone Number</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Phone size={13} style={{ color: '#10b981' }} />
+                      <span>{selectedRequest.phone || selectedRequest.contactDetails?.phone || selectedRequest.mobile || '—'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Email Address</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <Mail size={13} style={{ color: '#3b82f6' }} />
+                      <span>{selectedRequest.email || selectedRequest.contactDetails?.email || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Vendor Address</div>
+                  <div style={{ fontSize: '0.82rem', color: isDark ? '#cbd5e1' : '#334155', marginTop: 3, padding: '8px 12px', background: isDark ? '#0f172a' : '#ffffff', borderRadius: 8, border: isDark ? '1px solid #334155' : '1px solid #e2e8f0' }}>
+                    {selectedRequest.address || '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bank Details */}
+              <div style={{ padding: 16, background: isDark ? '#1e293b' : '#f8fafc', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: isDark ? '#e2e8f0' : '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <CreditCard size={15} style={{ color: '#6366f1' }} />
+                  Bank Details
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Bank Name</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
+                      {selectedRequest.bankDetails?.bankName || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Account Holder</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
+                      {selectedRequest.bankDetails?.accountHolderName || selectedRequest.vendorName || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Account Number</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, fontFamily: 'monospace', color: isDark ? '#38bdf8' : '#0369a1', marginTop: 2 }}>
+                      {selectedRequest.bankDetails?.accountNumber || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>IFSC Code</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, fontFamily: 'monospace', color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
+                      {selectedRequest.bankDetails?.ifscCode || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Branch</div>
+                    <div style={{ fontSize: '0.82rem', color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
+                      {selectedRequest.bankDetails?.branchName || '—'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submitted Documents */}
+              <div style={{ padding: 16, background: isDark ? '#1e293b' : '#f8fafc', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: isDark ? '#e2e8f0' : '#334155', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FileText size={15} style={{ color: '#0ea5e9' }} />
+                  Documents Submitted by Vendor
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>PAN Number</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, fontFamily: 'monospace', color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
+                      {selectedRequest.panNumber || selectedRequest.documents?.panNumber || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>Aadhaar Number</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, fontFamily: 'monospace', color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
+                      {selectedRequest.aadharNumber || selectedRequest.documents?.aadharNumber || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b' }}>GST Number</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, fontFamily: 'monospace', color: isDark ? '#ffffff' : '#0f172a', marginTop: 2 }}>
+                      {selectedRequest.gst || selectedRequest.documents?.gstNumber || '—'}
+                    </div>
+                  </div>
+                </div>
+                {/* Uploaded File Attachments if present */}
+                {selectedRequest.documents?.submittedDocs && selectedRequest.documents.submittedDocs.length > 0 && (
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Uploaded Files:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {selectedRequest.documents.submittedDocs.map((doc, dIdx) => (
+                        <div key={dIdx} style={{ fontSize: '0.75rem', padding: '4px 10px', borderRadius: 6, background: isDark ? '#0f172a' : '#ffffff', border: isDark ? '1px solid #334155' : '1px solid #cbd5e1', color: isDark ? '#cbd5e1' : '#334155' }}>
+                          📄 {typeof doc === 'string' ? doc : (doc.name || doc.type || `Document ${dIdx + 1}`)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Status and Reviewer Info */}
@@ -815,7 +956,7 @@ export function VendorRequestsPage() {
                 onClick={() => setShowDetailModal(false)}
                 style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#0f172a', color: '#ffffff', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer' }}
               >
-                Close Dossier
+                Close
               </button>
             </div>
           </div>

@@ -1,3 +1,4 @@
+const { uploadToS3 } = require('../config/s3');
 const { db, filterByLocation, resolveStateFromDistrict } = require('../config/db');
 const { getMongoDb } = require('../config/mongo');
 const bcrypt = require('bcryptjs');
@@ -966,12 +967,33 @@ async function addAgent(req, res) {
     // STEP 4 VALIDATION — Documents Upload & Declarations
     // ─────────────────────────────────────────────────────────────────
     const docs = req.body.documents || req.body;
-    const aadhaarCard = docs.aadhaarCard || docs.aadhaarCardFront || docs.aadharPhoto || docs.aadharDocUrl;
-    const panCard = docs.panCard || docs.panPhoto || docs.panDocUrl;
-    const passportPhoto = docs.passportPhoto || agentProfilePhoto;
-    const digitalSignature = docs.digitalSignature || docs.signaturePhoto || docs.signatureDocUrl;
-    const educationalCertificate = docs.educationalCertificate || docs.educationalCertificates || null;
-    const bankProof = docs.bankProof || docs.cancelledCheque || docs.bankPassbookPhoto || null;
+    let aadhaarCard = docs.aadhaarCard || docs.aadhaarCardFront || docs.aadharPhoto || docs.aadharDocUrl;
+    let panCard = docs.panCard || docs.panPhoto || docs.panDocUrl;
+    let passportPhoto = docs.passportPhoto || agentProfilePhoto;
+    let digitalSignature = docs.digitalSignature || docs.signaturePhoto || docs.signatureDocUrl;
+    let educationalCertificate = docs.educationalCertificate || docs.educationalCertificates || null;
+    let bankProof = docs.bankProof || docs.cancelledCheque || docs.bankPassbookPhoto || null;
+
+    // Upload base64 KYC documents to AWS S3
+    const uploadKycDoc = async (docVal, name) => {
+      if (docVal && typeof docVal === 'string' && docVal.startsWith('data:')) {
+        try {
+          const s3Res = await uploadToS3(docVal, 'agent_docs/kyc', `exec_${Date.now()}_${name}`);
+          return s3Res.url || s3Res.key;
+        } catch (e) {
+          console.error(`Failed to upload ${name} to S3:`, e);
+          return docVal;
+        }
+      }
+      return docVal;
+    };
+
+    aadhaarCard = await uploadKycDoc(aadhaarCard, 'aadhaar');
+    panCard = await uploadKycDoc(panCard, 'pan');
+    passportPhoto = await uploadKycDoc(passportPhoto, 'passport');
+    digitalSignature = await uploadKycDoc(digitalSignature, 'signature');
+    if (educationalCertificate) educationalCertificate = await uploadKycDoc(educationalCertificate, 'education');
+    if (bankProof) bankProof = await uploadKycDoc(bankProof, 'bankProof');
 
     if (!aadhaarCard) {
       return res.status(400).json({ success: false, message: 'Aadhaar Card document upload is mandatory.' });
@@ -2030,12 +2052,15 @@ async function approveAgent(req, res) {
       });
     }
 
+    const adminRoleLower = (req.user.role || '').toLowerCase().replace(/_/g, ' ');
+    const isGlobalSuper = adminRoleLower === 'super admin' || adminRoleLower === 'main admin' || (adminRoleLower === 'admin' && (!req.user.state || req.user.state.toLowerCase() === 'all india'));
+
     const now = new Date().toISOString();
     const terr = getAgentTerritory(agent);
     const existingHistory = Array.isArray(agent.reviewHistory) ? agent.reviewHistory : [];
     const reviewEntry = {
-      action: 'APPROVED',
-      status: 'Active',
+      action: isGlobalSuper ? 'APPROVED' : 'SUB_ADMIN_APPROVED',
+      status: isGlobalSuper ? 'Active' : 'PENDING_MAIN_ADMIN_APPROVAL',
       reviewerId: req.user.id || req.user._id,
       reviewerName: req.user.name || req.user.email,
       reviewerRole: req.user.role,
@@ -2044,25 +2069,62 @@ async function approveAgent(req, res) {
     };
     const updatedHistory = [...existingHistory, reviewEntry];
 
-    const approveUpdates = {
-      status: 'Active',
-      overallRegistrationStatus: 'Active',
-      adminApprovalStatus: 'approved',
-      kycStatus: 'Verified',
-      isActive: true,
-      isApproved: true,
-      requiresApproval: false,
-      adminApprovedBy: req.user.name || req.user.email,
-      adminApprovedById: req.user.id || req.user._id,
-      adminApprovedByRole: req.user.role,
-      adminApprovedAt: now,
-      rejectionReason: null,
-      pendingReason: null,
-      reviewerReason: null,
-      adminNotes: null,
-      reviewHistory: updatedHistory,
-      updatedAt: now
-    };
+    let approveUpdates;
+    if (isGlobalSuper) {
+      approveUpdates = {
+        status: 'Active',
+        overallRegistrationStatus: 'Active',
+        subAdminApprovalStatus: agent.subAdminApprovalStatus || 'approved',
+        mainAdminApprovalStatus: 'approved',
+        adminApprovalStatus: 'approved',
+        kycStatus: 'Verified',
+        isActive: true,
+        isApproved: true,
+        requiresApproval: false,
+        isFullyApproved: true,
+        mainadminApprovedBy: req.user.id || req.user._id,
+        mainadminApprovedByName: req.user.name || req.user.email,
+        mainadminApprovedAt: now,
+        adminApprovedBy: req.user.name || req.user.email,
+        adminApprovedById: req.user.id || req.user._id,
+        adminApprovedByRole: req.user.role,
+        adminApprovedAt: now,
+        rejectionReason: null,
+        pendingReason: null,
+        reviewerReason: null,
+        adminNotes: null,
+        reviewHistory: updatedHistory,
+        updatedAt: now
+      };
+    } else {
+      // Sub Admin territory approval -> forwards to Main Admin and KYC approval
+      approveUpdates = {
+        status: 'PENDING_MAIN_ADMIN_APPROVAL',
+        overallRegistrationStatus: 'PENDING_MAIN_ADMIN_APPROVAL',
+        subAdminApprovalStatus: 'approved',
+        mainAdminApprovalStatus: 'pending',
+        adminApprovalStatus: 'approved',
+        kycStatus: agent.kycStatus || 'pending_verification',
+        isActive: false,
+        isApproved: false,
+        requiresApproval: true,
+        isFullyApproved: false,
+        subAdminApprovedBy: req.user.name || req.user.email,
+        subAdminApprovedById: req.user.id || req.user._id,
+        subAdminApprovedByRole: req.user.role,
+        subAdminApprovedAt: now,
+        adminApprovedBy: req.user.name || req.user.email,
+        adminApprovedById: req.user.id || req.user._id,
+        adminApprovedByRole: req.user.role,
+        adminApprovedAt: now,
+        rejectionReason: null,
+        pendingReason: null,
+        reviewerReason: null,
+        adminNotes: null,
+        reviewHistory: updatedHistory,
+        updatedAt: now
+      };
+    }
     Object.assign(agent, approveUpdates);
 
     await db.agents.findByIdAndUpdate(agent._id || agent.id, approveUpdates);
@@ -2087,20 +2149,20 @@ async function approveAgent(req, res) {
           district: terr.district,
           division: terr.division,
           pincode: terr.pincode,
-          status: 'Active',
-          kycStatus: 'Verified',
+          status: isGlobalSuper ? 'Active' : 'Pending',
+          kycStatus: isGlobalSuper ? 'Verified' : 'pending_verification',
           submittedDate: (agent.createdAt || now).split('T')[0],
           documents: agent.documents || agent.kycDocs || {},
-          notes: `Agent registration territory-approved and activated by ${req.user.role} "${req.user.name}".`,
+          notes: `Agent registration territory-approved by ${req.user.role} "${req.user.name}". Awaiting Main Admin and KYC approval.`,
           createdAt: now,
           updatedAt: now
         });
       } else {
         await db.kycRecords.findByIdAndUpdate(existingKyc._id || existingKyc.id, {
-          status: 'Active',
-          kycStatus: 'Verified',
-          approvalStatus: 'approved',
-          notes: `Agent registration territory-approved and activated by ${req.user.role} "${req.user.name}".`,
+          status: isGlobalSuper ? 'Active' : 'Pending',
+          kycStatus: isGlobalSuper ? 'Verified' : (existingKyc.kycStatus || 'pending_verification'),
+          approvalStatus: isGlobalSuper ? 'approved' : 'pending_main_admin',
+          notes: `Agent registration territory-approved by ${req.user.role} "${req.user.name}".`,
           updatedAt: now
         });
       }
@@ -2111,35 +2173,9 @@ async function approveAgent(req, res) {
       const user = (await db.users.findById(agent._id || agent.id)) ||
         Array.from(db.users || []).find(u => String(u._id || u.id) === String(agent._id || agent.id) || (u.email && agent.email && u.email.toLowerCase() === agent.email.toLowerCase()));
       if (user) {
-        user.status = 'Active';
-        user.isActive = true;
-        user.isApproved = true;
-        user.adminApprovalStatus = 'approved';
-        user.kycStatus = 'Verified';
-        user.adminApprovedBy = req.user.name;
-        user.adminApprovedAt = now;
-        user.pendingReason = null;
-        user.reviewerReason = null;
-        user.adminNotes = null;
-        user.rejectionReason = null;
-        user.adminRejectionReason = null;
-        user.reviewHistory = updatedHistory;
-        user.updatedAt = now;
+        Object.assign(user, approveUpdates);
         await db.users.findByIdAndUpdate(user._id || user.id, {
-          status: 'Active',
-          isActive: true,
-          isApproved: true,
-          adminApprovalStatus: 'approved',
-          kycStatus: 'Verified',
-          adminApprovedBy: req.user.name,
-          adminApprovedAt: now,
-          pendingReason: null,
-          reviewerReason: null,
-          adminNotes: null,
-          rejectionReason: null,
-          adminRejectionReason: null,
-          reviewHistory: updatedHistory,
-          updatedAt: now
+          ...approveUpdates
         });
       }
     }

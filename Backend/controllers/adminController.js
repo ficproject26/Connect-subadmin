@@ -920,8 +920,8 @@ function getDistricts(req, res) {
     });
 
     let enrichedDistricts = Array.from(assignedDistrictsMap.values());
-    if (req.query.assignedOnly === 'true') {
-      enrichedDistricts = enrichedDistricts.filter(d => d.adminId && d.adminName !== 'Unassigned');
+    if (req.query.allTerritories !== 'true') {
+      enrichedDistricts = enrichedDistricts.filter(d => d.adminId && d.adminName && d.adminName !== 'Unassigned' && d.adminName !== '-' && d.adminName !== 'N/A');
     }
     return res.json({ success: true, districts: enrichedDistricts });
   } catch (error) {
@@ -1566,7 +1566,7 @@ function getDivisions(req, res) {
     });
 
     let finalDivisions = enrichedDivisions;
-    if (req.query.assignedOnly === 'true') {
+    if (req.query.allTerritories !== 'true') {
       finalDivisions = finalDivisions.filter(d =>
         d.adminId &&
         d.adminName &&
@@ -2076,7 +2076,7 @@ function getPincodes(req, res) {
     });
 
     let finalPincodes = enrichedPincodes;
-    if (req.query.assignedOnly === 'true') {
+    if (req.query.allTerritories !== 'true') {
       finalPincodes = finalPincodes.filter(p =>
         p.adminId &&
         p.adminName &&

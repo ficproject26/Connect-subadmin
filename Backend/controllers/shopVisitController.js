@@ -1,3 +1,4 @@
+const { uploadToS3 } = require('../config/s3');
 const { db, filterByLocation } = require('../config/db');
 
 exports.createShopVisit = async (req, res) => {
@@ -34,12 +35,33 @@ exports.createShopVisit = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Audio voice note explaining reason is mandatory.' });
     }
 
+    let finalShopPhoto = shopPhoto || null;
+    let finalVoiceNote = voiceNote || null;
+
+    if (finalShopPhoto && typeof finalShopPhoto === 'string' && finalShopPhoto.startsWith('data:')) {
+      try {
+        const s3Res = await uploadToS3(finalShopPhoto, 'shop_visits', `shop_${Date.now()}`);
+        finalShopPhoto = s3Res.url || s3Res.key;
+      } catch (err) {
+        console.error('Failed to upload shopPhoto to S3:', err);
+      }
+    }
+
+    if (finalVoiceNote && typeof finalVoiceNote === 'string' && finalVoiceNote.startsWith('data:')) {
+      try {
+        const s3Res = await uploadToS3(finalVoiceNote, 'voice_notes', `voice_${Date.now()}`);
+        finalVoiceNote = s3Res.url || s3Res.key;
+      } catch (err) {
+        console.error('Failed to upload voiceNote to S3:', err);
+      }
+    }
+
     const newVisit = {
       _id: `visit_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       shopName: shopName.trim(),
       category: category || 'Products',
-      shopPhoto: shopPhoto || null,
-      voiceNote: voiceNote || null,
+      shopPhoto: finalShopPhoto,
+      voiceNote: finalVoiceNote,
       interestedStatus: interestedStatus.toUpperCase(), // 'YES' | 'NO'
       notInterestedReason: interestedStatus.toUpperCase() === 'NO' ? (notInterestedReason || 'Not specified') : null,
       vendorId: vendorId || null,

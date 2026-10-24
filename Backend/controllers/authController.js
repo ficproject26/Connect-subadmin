@@ -1722,6 +1722,11 @@ const updateProfile = async (req, res) => {
     if (address !== undefined) updates.address = String(address).trim();
     if (city !== undefined) updates.city = String(city).trim();
     if (preferredLanguage !== undefined) updates.preferredLanguage = String(preferredLanguage).trim();
+    if (req.body.avatar !== undefined || req.body.avatarUrl !== undefined) {
+      const cleanAvatar = String(req.body.avatar || req.body.avatarUrl || '').trim();
+      updates.avatar = cleanAvatar;
+      updates.avatarUrl = cleanAvatar;
+    }
 
     updates.updatedAt = now;
 

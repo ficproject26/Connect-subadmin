@@ -344,14 +344,6 @@ export default function NotificationsPage() {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleNavigate(n)}
-                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-xl transition flex items-center gap-1 cursor-pointer"
-                      >
-                        View <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   </div>
                 </div>

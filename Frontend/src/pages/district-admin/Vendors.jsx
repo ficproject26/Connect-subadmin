@@ -131,7 +131,17 @@ export function DistrictVendors() {
           const dNorm = districtName.toLowerCase().trim();
           list = list.filter(item => (item.district || item.districtName || '').toLowerCase().trim() === dNorm);
         }
-        setVendors(list.filter(isFullyOnboardedVendor));
+        // Deduplicate vendors by unique identity
+        const seenV = new Set();
+        const uniqueList = [];
+        for (const vItem of list) {
+          const vKey = (vItem.email || vItem.phone || vItem.mobile || vItem._id || vItem.id || '').trim().toLowerCase();
+          if (vKey && !seenV.has(vKey)) {
+            seenV.add(vKey);
+            uniqueList.push(vItem);
+          }
+        }
+        setVendors(uniqueList.filter(isFullyOnboardedVendor));
       } else {
         setVendors([]);
       }

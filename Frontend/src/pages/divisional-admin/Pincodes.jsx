@@ -181,13 +181,10 @@ export function DivisionalPincodes() {
 
       if (divisionName) {
         const normDiv = divisionName.toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
-        const divFiltered = list.filter(p => {
+        list = list.filter(p => {
           const pd = (p.division || p.divisionName || '').toLowerCase().replace(/tth/g, 'tt').replace(/\s+division/g, '').replace(/^div-/, '').trim();
           return pd === normDiv || pd.includes(normDiv) || normDiv.includes(pd);
         });
-        if (divFiltered.length > 0) {
-          list = divFiltered;
-        }
       }
 
       const allManagers = mgrRes?.subordinates || mgrRes?.data || mgrRes?.managers || [];

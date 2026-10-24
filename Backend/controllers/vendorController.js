@@ -451,18 +451,38 @@ const populateVendorLocations = (vendor, ctx = null) => {
 const getVendors = async (req, res) => {
   try {
     const user = req.user || {};
-    // Merge active vendors from db.vendors and db.users (single source of truth)
+    // Merge active vendors from db.vendors and db.users (single source of truth with strict deduplication)
     const vendorMap = new Map();
+    const vendorEmailMap = new Map();
+    const vendorPhoneMap = new Map();
+
+    const cleanEmail = (em) => String(em || '').trim().toLowerCase();
+    const cleanPhone = (ph) => String(ph || '').replace(/\D/g, '').slice(-10);
+
     for (const v of (db.vendors || [])) {
-      const k = String(v._id || v.id || v.email || '').toLowerCase().trim();
-      if (k) vendorMap.set(k, v);
+      const vId = String(v._id || v.id || '').trim();
+      const em = cleanEmail(v.email);
+      const ph = cleanPhone(v.phone || v.mobile);
+
+      if (vId) vendorMap.set(vId, v);
+      if (em) vendorEmailMap.set(em, v);
+      if (ph) vendorPhoneMap.set(ph, v);
     }
+
     for (const u of (db.users || [])) {
       const uRole = String(u.role || '').toLowerCase();
       if (uRole.includes('vendor') || uRole.includes('seller') || uRole.includes('merchant')) {
-        const k = String(u._id || u.id || u.email || '').toLowerCase().trim();
-        if (k && !vendorMap.has(k)) {
-          vendorMap.set(k, {
+        const uId = String(u._id || u.id || '').trim();
+        const em = cleanEmail(u.email);
+        const ph = cleanPhone(u.mobile || u.phone);
+
+        // Check if vendor already exists by ID, email, or phone
+        const existing = (uId && vendorMap.get(uId)) ||
+                         (em && vendorEmailMap.get(em)) ||
+                         (ph && vendorPhoneMap.get(ph));
+
+        if (!existing) {
+          const newV = {
             _id: u._id,
             id: u._id || u.id,
             userId: u._id,
@@ -488,11 +508,14 @@ const getVendors = async (req, res) => {
             approvalStatus: 'Approved',
             createdAt: u.createdAt,
             updatedAt: u.updatedAt
-          });
+          };
+          if (uId) vendorMap.set(uId, newV);
+          if (em) vendorEmailMap.set(em, newV);
+          if (ph) vendorPhoneMap.set(ph, newV);
         }
       }
     }
-    const allVendors = Array.from(vendorMap.values());
+    const allVendors = Array.from(new Set(vendorMap.values()));
 
     // PRE-POPULATE geo/location fields BEFORE filtering so filterByLocation
     // and territory query params can match against resolved district/division/state/pincode.
@@ -1886,22 +1909,61 @@ const getVendorRequests = async (req, res) => {
         day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
       }) : '—';
 
+      const rawBank = pop.bankDetails || {};
+      const accountNumberRaw = pop.accountNumber || rawBank.accountNumber || '';
+      const maskedAcc = accountNumberRaw ? maskAccount(accountNumberRaw) : '—';
+      const bankDetails = {
+        accountHolderName: pop.accountHolderName || rawBank.accountHolderName || pop.name || '—',
+        bankName: pop.bankName || rawBank.bankName || '—',
+        accountNumber: maskedAcc,
+        ifscCode: pop.ifscCode || rawBank.ifscCode || pop.ifsc || '—',
+        branchName: pop.branchName || rawBank.branchName || '—'
+      };
+
+      const rawDocs = pop.documents || pop.kycDocs || {};
+      const documents = {
+        aadharNumber: pop.aadharNumber || pop.aadhaarNumber ? ('XXXX-XXXX-' + String(pop.aadharNumber || pop.aadhaarNumber).slice(-4)) : null,
+        panNumber: pop.panNumber ? maskPan(pop.panNumber) : null,
+        gstNumber: pop.gst || pop.gstNumber ? maskGst(pop.gst || pop.gstNumber) : null,
+        submittedDocs: Array.isArray(rawDocs) ? rawDocs : (rawDocs.submittedDocs || rawDocs.files || []),
+        kycDocs: typeof rawDocs === 'object' ? rawDocs : {}
+      };
+
+      const onboardedByName = pop.onboardedByName || pop.addedBy?.name || pop.onboardingAgentName || (pop.agentName) || srcInfo.creatorName || (srcInfo.type === 'Direct' ? 'Direct Application' : 'Not Available');
+      const onboardedByRole = pop.onboardedByRole || pop.addedBy?.role || pop.onboardingAgentRole || srcInfo.creatorRole || srcInfo.type;
+
       deduplicated.push({
         id: vId,
         _id: vId,
         canonicalId: vId,
         createdAt: reqDate,
         requestDateTime: formattedDate,
+        registrationDate: formattedDate,
         vendorName: pop.contactPerson || pop.ownerName || pop.name || 'Vendor Owner',
         businessName: pop.businessName || pop.name || 'Store / Enterprise',
         category: pop.category || pop.businessType || 'Retail & Services',
         registrationSource: srcInfo.type,
         sourceLabel: srcInfo.label,
         sourceDetails: srcInfo,
+        onboardedByName,
+        onboardedByRole,
+        address: pop.address || pop.storeAddress || pop.businessAddress || (pop.location ? pop.location : `${pop.division || ''}, ${pop.district || ''} - ${pop.pincode || ''}`.trim()) || '—',
         state: pop.state || 'Tamil Nadu',
         district: pop.district || '—',
         division: pop.division || '—',
         pincode: pop.pincode || '—',
+        phone: pop.phone || pop.mobile || '—',
+        email: pop.email || '—',
+        contactDetails: {
+          phone: pop.phone || pop.mobile || '—',
+          email: pop.email || '—',
+          contactPerson: pop.contactPerson || pop.ownerName || pop.name || '—'
+        },
+        bankDetails,
+        documents,
+        panNumber: pop.panNumber ? maskPan(pop.panNumber) : null,
+        aadharNumber: pop.aadharNumber || pop.aadhaarNumber ? ('XXXX-XXXX-' + String(pop.aadharNumber || pop.aadhaarNumber).slice(-4)) : null,
+        gst: pop.gst || pop.gstNumber ? maskGst(pop.gst || pop.gstNumber) : null,
         approvalStatus: pop.approvalStatus || pop.status || 'Pending Pincode Admin Approval',
         status: pop.status || 'Under Review',
         approvedByAdminName: pop.approvedByName || (pop.pincodeAdminApproval?.adminName) || null,
@@ -1909,9 +1971,7 @@ const getVendorRequests = async (req, res) => {
         lastReviewDate: formattedReviewDate,
         reviewerReason: pop.reviewerReason || pop.pendingReason || pop.rejectionReason || null,
         reviewHistory: Array.isArray(pop.reviewHistory) ? pop.reviewHistory : [],
-        canApprove,
-        phone: pop.phone || pop.mobile,
-        email: pop.email
+        canApprove
       });
     });
 
